@@ -1,0 +1,169 @@
+import { useState } from 'react';
+import {
+  Alert,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+} from 'react-native';
+import { router } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { supabase } from '../lib/supabase';
+import { useAuthStore } from '../stores/auth';
+import { Colors, GOALS, HANDICAP_LEVELS, PLAY_FREQUENCIES } from '../constants';
+import { DecorativeBackground } from '../components/ui/DecorativeBackground';
+import { AppCard } from '../components/ui/AppCard';
+import { AppInput } from '../components/ui/AppInput';
+import { AppButton } from '../components/ui/AppButton';
+import { ChoiceTile } from '../components/ui/ChoiceTile';
+import { PageHeader } from '../components/ui/PageHeader';
+
+export default function EditProfileScreen() {
+  const { profile, fetchProfile } = useAuthStore();
+  const insets = useSafeAreaInsets();
+
+  const [displayName, setDisplayName] = useState(profile?.display_name ?? '');
+  const [handicap, setHandicap] = useState<number>(profile?.handicap ?? 36);
+  const [playFrequency, setPlayFrequency] = useState(profile?.play_frequency ?? 'monthly');
+  const [goal, setGoal] = useState(profile?.goal ?? 'lower_handicap');
+  const [saving, setSaving] = useState(false);
+
+  const handleSave = async () => {
+    if (!displayName.trim()) {
+      return;
+    }
+
+    setSaving(true);
+
+    const { error } = await supabase
+      .from('profiles')
+      .update({
+        display_name: displayName.trim(),
+        handicap,
+        play_frequency: playFrequency,
+        goal,
+      })
+      .eq('user_id', profile?.user_id);
+
+    setSaving(false);
+
+    if (error) {
+      Alert.alert('Erreur', error.message);
+      return;
+    }
+
+    await fetchProfile();
+    router.back();
+  };
+
+  return (
+    <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <DecorativeBackground />
+      <ScrollView contentContainerStyle={[styles.content, { paddingTop: insets.top + 16 }]} keyboardShouldPersistTaps="handled">
+        <PageHeader
+          eyebrow="Profil"
+          title="Modifier le profil"
+          subtitle="Ajuste les réglages qui pilotent la personnalisation du produit."
+          trailing={(
+            <TouchableOpacity onPress={() => router.back()}>
+              <Text style={styles.closeText}>Fermer</Text>
+            </TouchableOpacity>
+          )}
+        />
+
+        <AppCard style={styles.section}>
+          <Text style={styles.sectionLabel}>Identité</Text>
+          <AppInput
+            label="Prénom"
+            value={displayName}
+            onChangeText={setDisplayName}
+            placeholder="Ton prénom"
+            autoCapitalize="words"
+          />
+        </AppCard>
+
+        <AppCard style={styles.section}>
+          <Text style={styles.sectionLabel}>Handicap</Text>
+          {HANDICAP_LEVELS.map((level) => (
+            <ChoiceTile
+              key={level.value}
+              label={level.label}
+              selected={handicap === level.value}
+              onPress={() => setHandicap(level.value)}
+            />
+          ))}
+        </AppCard>
+
+        <AppCard style={styles.section}>
+          <Text style={styles.sectionLabel}>Fréquence de jeu</Text>
+          {PLAY_FREQUENCIES.map((frequency) => (
+            <ChoiceTile
+              key={frequency.value}
+              label={frequency.label}
+              selected={playFrequency === frequency.value}
+              onPress={() => setPlayFrequency(frequency.value)}
+            />
+          ))}
+        </AppCard>
+
+        <AppCard style={styles.section}>
+          <Text style={styles.sectionLabel}>Objectif principal</Text>
+          {GOALS.map((currentGoal) => (
+            <ChoiceTile
+              key={currentGoal.value}
+              label={currentGoal.label}
+              selected={goal === currentGoal.value}
+              onPress={() => setGoal(currentGoal.value)}
+            />
+          ))}
+        </AppCard>
+
+        <AppButton
+          label="Sauvegarder les modifications"
+          onPress={() => void handleSave()}
+          disabled={!displayName.trim()}
+          loading={saving}
+          style={styles.primaryAction}
+        />
+
+        <AppButton
+          label="Annuler"
+          variant="secondary"
+          onPress={() => router.back()}
+        />
+      </ScrollView>
+    </KeyboardAvoidingView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: Colors.background,
+  },
+  content: {
+    paddingHorizontal: 24,
+    paddingBottom: 40,
+  },
+  closeText: {
+    color: Colors.textMuted,
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  section: {
+    marginBottom: 16,
+  },
+  sectionLabel: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: Colors.textDim,
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+    marginBottom: 12,
+  },
+  primaryAction: {
+    marginBottom: 10,
+  },
+});
