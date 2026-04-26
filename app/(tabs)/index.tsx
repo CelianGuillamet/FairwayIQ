@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   ScrollView,
@@ -13,6 +13,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { useAuthStore } from '../../stores/auth';
+import { useDrillsStore } from '../../stores/drills';
 import { useRoundsStore } from '../../stores/rounds';
 import { Colors, Radius, Spacing, Typography } from '../../constants';
 import { ChartCard, LineChart } from '../../components/ui/LineChart';
@@ -21,7 +22,14 @@ import { AppCard } from '../../components/ui/AppCard';
 import { AppButton } from '../../components/ui/AppButton';
 import { AppBadge } from '../../components/ui/AppBadge';
 import { PageHeader } from '../../components/ui/PageHeader';
-import type { Round } from '../../types';
+import type { Diagnostic, Drill, Round } from '../../types';
+import { fetchLatestDiagnostic } from '../../lib/diagnostics';
+import {
+  DRILL_CATEGORY_LABELS,
+  DRILL_DIFFICULTY_LABELS,
+  getDailyFocusDrill,
+  isDrillDoneToday,
+} from '../../lib/drill-library';
 import {
   getAveragePenaltyCount,
   getBestRound,
@@ -126,16 +134,55 @@ function getTrendLabel(rounds: Round[]) {
 }
 
 export default function DashboardScreen() {
-  const { profile } = useAuthStore();
+  const { profile, user } = useAuthStore();
   const { rounds, fetchRounds, loading, initialized, error } = useRoundsStore();
+  const { completions, fetchCompletions, markDone, setRecommendedCategories } = useDrillsStore();
   const { width } = useWindowDimensions();
   const insets = useSafeAreaInsets();
+  const [latestDiagnostic, setLatestDiagnostic] = useState<Diagnostic | null>(null);
+  const [diagnosticLoading, setDiagnosticLoading] = useState(false);
+  const [diagnosticError, setDiagnosticError] = useState<string | null>(null);
+  const [markingFocusDone, setMarkingFocusDone] = useState(false);
+  const [focusCompletionError, setFocusCompletionError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!initialized) {
       void fetchRounds();
     }
   }, [fetchRounds, initialized]);
+
+  useEffect(() => {
+    void fetchCompletions().catch((currentError: any) => {
+      console.warn('[drills] Completion fetch failed', currentError?.message ?? currentError);
+    });
+  }, [fetchCompletions]);
+
+  const loadLatestDiagnostic = useCallback(async () => {
+    if (rounds.length === 0) {
+      setLatestDiagnostic(null);
+      setDiagnosticError(null);
+      return;
+    }
+
+    setDiagnosticLoading(true);
+    setDiagnosticError(null);
+
+    try {
+      const diagnostic = await fetchLatestDiagnostic();
+      setLatestDiagnostic(diagnostic);
+      setRecommendedCategories(diagnostic?.recommended_categories ?? []);
+    } catch (currentError: any) {
+      setDiagnosticError(currentError?.message ?? 'Impossible de charger le dernier diagnostic.');
+    } finally {
+      setDiagnosticLoading(false);
+    }
+  }, [rounds.length, setRecommendedCategories]);
+
+  useEffect(() => {
+    if (initialized) {
+      void loadLatestDiagnostic();
+    }
+  }, [initialized, loadLatestDiagnostic]);
 
   const chartWidth = width - 32;
   const latestRound = rounds[0] ?? null;
@@ -168,6 +215,32 @@ export default function DashboardScreen() {
       .map((round) => Math.round(((round.fairways_hit as number) / (round.fairways_total as number)) * 100))
   );
   const recentRounds = rounds.slice(0, 6);
+  const focusDrill = useMemo(() => (
+    latestDiagnostic
+      ? getDailyFocusDrill({
+          categories: latestDiagnostic.recommended_categories ?? [],
+          completions,
+        })
+      : null
+  ), [completions, latestDiagnostic]);
+  const focusDrillDoneToday = focusDrill ? isDrillDoneToday(focusDrill.id, completions) : false;
+
+  const handleMarkFocusDrillDone = async () => {
+    if (!user || !focusDrill || focusDrillDoneToday || markingFocusDone) {
+      return;
+    }
+
+    setMarkingFocusDone(true);
+    setFocusCompletionError(null);
+
+    try {
+      await markDone(focusDrill.id, user.id);
+    } catch (currentError: any) {
+      setFocusCompletionError(currentError?.message ?? 'Impossible de valider ce drill.');
+    } finally {
+      setMarkingFocusDone(false);
+    }
+  };
 
   if (loading && !initialized) {
     return (
@@ -231,6 +304,26 @@ export default function DashboardScreen() {
           </AppCard>
         ) : (
           <>
+            <PracticeFocusCard
+              loading={diagnosticLoading}
+              error={diagnosticError}
+              diagnostic={latestDiagnostic}
+              drill={focusDrill}
+              doneToday={focusDrillDoneToday}
+              markingDone={markingFocusDone}
+              completionError={focusCompletionError}
+              onRetry={() => void loadLatestDiagnostic()}
+              onMarkDone={() => void handleMarkFocusDrillDone()}
+              onOpenDrills={() => router.push('/(tabs)/drills')}
+              onOpenDiagnostic={() => {
+                if (latestDiagnostic?.round_id) {
+                  router.push({ pathname: '/diagnostic', params: { roundId: latestDiagnostic.round_id } });
+                } else {
+                  router.push('/(tabs)/round');
+                }
+              }}
+            />
+
             <View style={styles.statsGrid}>
               <PrimaryStatCard label="Handicap estimé" value={estimatedHandicap != null ? estimatedHandicap.toString() : '--'} helper="calcul récent" />
               <PrimaryStatCard label="Moyenne vs par" value={averageScoreToPar != null ? `${averageScoreToPar > 0 ? '+' : ''}${averageScoreToPar}` : '--'} helper="sur les rounds" />
@@ -325,6 +418,126 @@ function PrimaryStatCard({ label, value, helper }: { label: string; value: strin
   );
 }
 
+function PracticeFocusCard({
+  loading,
+  error,
+  diagnostic,
+  drill,
+  doneToday,
+  markingDone,
+  completionError,
+  onRetry,
+  onMarkDone,
+  onOpenDrills,
+  onOpenDiagnostic,
+}: {
+  loading: boolean;
+  error: string | null;
+  diagnostic: Diagnostic | null;
+  drill: Drill | null;
+  doneToday: boolean;
+  markingDone: boolean;
+  completionError: string | null;
+  onRetry: () => void;
+  onMarkDone: () => void;
+  onOpenDrills: () => void;
+  onOpenDiagnostic: () => void;
+}) {
+  if (loading) {
+    return (
+      <AppCard style={styles.practiceCard}>
+        <View style={styles.practiceLoadingRow}>
+          <ActivityIndicator color={Colors.primary} />
+          <Text style={styles.practiceLoadingText}>Préparation de ton focus du jour...</Text>
+        </View>
+      </AppCard>
+    );
+  }
+
+  if (error) {
+    return (
+      <AppCard style={styles.practiceCard}>
+        <Text style={styles.practiceEyebrow}>Focus du jour</Text>
+        <Text style={styles.practiceTitle}>Impossible de charger le plan</Text>
+        <Text style={styles.practiceText}>{error}</Text>
+        <AppButton label="Réessayer" variant="secondary" onPress={onRetry} style={styles.practicePrimaryAction} />
+      </AppCard>
+    );
+  }
+
+  if (!diagnostic) {
+    return (
+      <AppCard style={styles.practiceCard}>
+        <Text style={styles.practiceEyebrow}>Focus du jour</Text>
+        <Text style={styles.practiceTitle}>Aucun diagnostic exploitable</Text>
+        <Text style={styles.practiceText}>
+          Enregistre ou relance un diagnostic pour transformer ton prochain round en plan d'entraînement concret.
+        </Text>
+        <AppButton label="Analyser un round" onPress={onOpenDiagnostic} style={styles.practicePrimaryAction} />
+      </AppCard>
+    );
+  }
+
+  if (!drill) {
+    return (
+      <AppCard style={styles.practiceCard}>
+        <Text style={styles.practiceEyebrow}>Focus du jour</Text>
+        <Text style={styles.practiceTitle}>Plan à clarifier</Text>
+        <Text style={styles.practiceText}>{diagnostic.weekly_plan}</Text>
+        <AppButton label="Voir le diagnostic" variant="secondary" onPress={onOpenDiagnostic} style={styles.practicePrimaryAction} />
+      </AppCard>
+    );
+  }
+
+  const categoryLabel = DRILL_CATEGORY_LABELS[drill.category];
+
+  return (
+    <AppCard accent={doneToday ? 'highlight' : 'default'} style={styles.practiceCard}>
+      <View style={styles.practiceHeader}>
+        <View style={styles.practiceHeaderCopy}>
+          <Text style={styles.practiceEyebrow}>Focus du jour</Text>
+          <Text style={styles.practiceTitle}>{doneToday ? 'Routine validée' : drill.title}</Text>
+        </View>
+        <AppBadge label={doneToday ? 'Fait' : `${drill.duration_minutes} min`} tone={doneToday ? 'primary' : 'warning'} />
+      </View>
+
+      <View style={styles.practiceMetaRow}>
+        <View style={styles.practiceMetaPill}>
+          <Text style={styles.practiceMetaText}>{categoryLabel}</Text>
+        </View>
+        <View style={styles.practiceMetaPill}>
+          <Text style={styles.practiceMetaText}>{DRILL_DIFFICULTY_LABELS[drill.difficulty]}</Text>
+        </View>
+      </View>
+
+      <Text style={styles.practiceText}>
+        {doneToday
+          ? 'Objectif du jour enregistré. Tu gardes la dynamique sans ajouter de complexité.'
+          : drill.description}
+      </Text>
+
+      {completionError ? (
+        <Text style={styles.practiceError}>{completionError}</Text>
+      ) : null}
+
+      <View style={styles.practiceActions}>
+        <AppButton
+          label={doneToday ? 'Voir les drills' : markingDone ? 'Validation...' : 'Marquer fait'}
+          onPress={doneToday ? onOpenDrills : onMarkDone}
+          loading={markingDone}
+          style={styles.practiceActionButton}
+        />
+        <AppButton
+          label="Diagnostic"
+          variant="secondary"
+          onPress={onOpenDiagnostic}
+          style={styles.practiceActionButton}
+        />
+      </View>
+    </AppCard>
+  );
+}
+
 function MiniStatCard({ label, value }: { label: string; value: string }) {
   return (
     <AppCard style={styles.miniStatCard} accent="soft">
@@ -410,6 +623,82 @@ const styles = StyleSheet.create({
   },
   emptyButton: {
     marginTop: Spacing.md,
+  },
+  practiceCard: {
+    marginHorizontal: Spacing.md,
+    marginBottom: Spacing.md,
+  },
+  practiceLoadingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+  },
+  practiceLoadingText: {
+    ...Typography.body,
+    color: Colors.textMuted,
+    flex: 1,
+  },
+  practiceHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: Spacing.md,
+  },
+  practiceHeaderCopy: {
+    flex: 1,
+  },
+  practiceEyebrow: {
+    ...Typography.caption,
+    color: Colors.textDim,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+    marginBottom: Spacing.xs,
+  },
+  practiceTitle: {
+    ...Typography.titleMd,
+    color: Colors.text,
+  },
+  practiceText: {
+    ...Typography.body,
+    color: Colors.textMuted,
+    marginTop: Spacing.sm,
+  },
+  practiceMetaRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Spacing.xs,
+    marginTop: Spacing.md,
+  },
+  practiceMetaPill: {
+    borderRadius: Radius.full,
+    borderWidth: 1,
+    borderColor: Colors.borderStrong,
+    backgroundColor: Colors.backgroundSoft,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 6,
+  },
+  practiceMetaText: {
+    ...Typography.caption,
+    color: Colors.textMuted,
+  },
+  practiceError: {
+    ...Typography.caption,
+    color: Colors.error,
+    marginTop: Spacing.sm,
+  },
+  practiceActions: {
+    flexDirection: 'row',
+    gap: Spacing.sm,
+    marginTop: Spacing.md,
+  },
+  practiceActionButton: {
+    flex: 1,
+    minHeight: 48,
+  },
+  practicePrimaryAction: {
+    marginTop: Spacing.md,
+    alignSelf: 'flex-start',
+    minWidth: 160,
   },
   statsGrid: {
     flexDirection: 'row',

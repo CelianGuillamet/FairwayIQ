@@ -28,56 +28,47 @@ export const HoleNavigation = memo(function HoleNavigation({
 }: Props) {
   const progress = getScorecardProgress(scorecard);
   const activeHole = scorecard[currentHole - 1];
-  const activeDescriptor = activeHole ? getScoreDescriptor(activeHole.score, activeHole.par) : null;
+  const liveLabel =
+    progress.completedHoles > 0
+      ? `${progress.liveScore} · ${formatScoreToPar(progress.liveScoreToPar)}`
+      : 'Prêt';
 
   return (
     <AppCard accent="soft" style={styles.card}>
       <View style={styles.headerRow}>
-        <View style={styles.headerCopy}>
-          <Text style={styles.eyebrow}>Round control</Text>
-          <Text style={styles.title}>Trou {currentHole}</Text>
-          <Text style={styles.subtitle}>
-            {activeHole?.completed && activeDescriptor
-              ? `${activeDescriptor.label} · ${activeDescriptor.diffLabel}`
-              : 'Trou en préparation'}
-          </Text>
-        </View>
-
-        <View style={styles.headerBadges}>
-          <AppBadge label={`${progress.completedHoles}/${progress.totalHoles} saisis`} />
-          <AppBadge
-            label={progress.completedHoles > 0 ? `Live ${formatScoreToPar(progress.liveScoreToPar)}` : 'Live —'}
-            tone="primary"
-          />
-        </View>
-      </View>
-
-      <View style={styles.controlRow}>
         <TouchableOpacity
-          style={[styles.arrowButton, currentHole === 1 && styles.arrowButtonDisabled]}
+          style={[styles.edgeButton, currentHole === 1 && styles.edgeButtonDisabled]}
           onPress={onPreviousHole}
           disabled={currentHole === 1}
         >
-          <Text style={styles.arrowText}>←</Text>
+          <Text style={styles.edgeButtonLabel}>‹</Text>
         </TouchableOpacity>
 
-        <View style={styles.progressPanel}>
-          <View style={styles.progressTrack}>
-            <View style={[styles.progressFill, { width: `${progress.progressPercentage}%` }]} />
-          </View>
-          <View style={styles.progressMetaRow}>
-            <Text style={styles.progressMeta}>Progression {progress.progressPercentage}%</Text>
-            <Text style={styles.progressMeta}>{progress.remainingHoles} restants</Text>
-          </View>
+        <View style={styles.headerCenter}>
+          <Text style={styles.eyebrow}>Navigation rapide</Text>
+          <Text style={styles.title}>Trou {currentHole}</Text>
+          <Text style={styles.subtitle}>
+            {activeHole?.completed ? `${getScoreDescriptor(activeHole.score, activeHole.par).label} sauvegardé` : 'Tape un score ou swipe pour avancer'}
+          </Text>
         </View>
 
         <TouchableOpacity
-          style={[styles.arrowButton, currentHole === scorecard.length && styles.arrowButtonDisabled]}
+          style={[styles.edgeButton, currentHole === scorecard.length && styles.edgeButtonDisabled]}
           onPress={onNextHole}
           disabled={currentHole === scorecard.length}
         >
-          <Text style={styles.arrowText}>→</Text>
+          <Text style={styles.edgeButtonLabel}>›</Text>
         </TouchableOpacity>
+      </View>
+
+      <View style={styles.summaryRow}>
+        <AppBadge label={`${progress.completedHoles}/${progress.totalHoles} trous`} tone="primary" />
+        <AppBadge label={`Live ${liveLabel}`} />
+        <AppBadge label={`${progress.remainingHoles} restants`} tone="warning" />
+      </View>
+
+      <View style={styles.progressTrack}>
+        <View style={[styles.progressFill, { width: `${progress.progressPercentage}%` }]} />
       </View>
 
       <ScrollView
@@ -102,7 +93,9 @@ export const HoleNavigation = memo(function HoleNavigation({
               <Text style={[styles.holeChipNumber, isActive && styles.holeChipNumberActive]}>
                 {hole.hole_number}
               </Text>
-              <Text style={[styles.holeChipPar, isActive && styles.holeChipParActive]}>Par {hole.par}</Text>
+              <Text style={[styles.holeChipMeta, isActive && styles.holeChipMetaActive]}>
+                Par {hole.par}
+              </Text>
               <Text
                 style={[
                   styles.holeChipStatus,
@@ -110,7 +103,7 @@ export const HoleNavigation = memo(function HoleNavigation({
                   isActive && styles.holeChipStatusActive,
                 ]}
               >
-                {hole.completed ? descriptor.diffLabel : 'À saisir'}
+                {hole.completed ? descriptor.diffLabel : '—'}
               </Text>
             </TouchableOpacity>
           );
@@ -128,17 +121,37 @@ const styles = StyleSheet.create({
   },
   headerRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: Spacing.md,
+    alignItems: 'center',
+    gap: Spacing.sm,
   },
-  headerCopy: {
+  edgeButton: {
+    width: 52,
+    height: 52,
+    borderRadius: Radius.full,
+    borderWidth: 1,
+    borderColor: Colors.borderStrong,
+    backgroundColor: Colors.surfaceElevated,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  edgeButtonDisabled: {
+    opacity: 0.35,
+  },
+  edgeButtonLabel: {
+    color: Colors.text,
+    fontSize: 28,
+    lineHeight: 28,
+    fontWeight: '900',
+  },
+  headerCenter: {
     flex: 1,
+    alignItems: 'center',
   },
   eyebrow: {
     ...Typography.caption,
     color: Colors.textDim,
     textTransform: 'uppercase',
-    letterSpacing: 1.1,
+    letterSpacing: 0.9,
   },
   title: {
     ...Typography.titleMd,
@@ -148,88 +161,49 @@ const styles = StyleSheet.create({
   subtitle: {
     ...Typography.body,
     color: Colors.textMuted,
-    marginTop: Spacing.xs,
+    marginTop: 2,
+    textAlign: 'center',
   },
-  headerBadges: {
-    alignItems: 'flex-end',
-    gap: Spacing.xs,
-  },
-  controlRow: {
+  summaryRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.sm,
+    flexWrap: 'wrap',
+    gap: Spacing.xs,
     marginTop: Spacing.lg,
   },
-  arrowButton: {
-    width: 50,
-    height: 50,
-    borderRadius: Radius.lg,
-    backgroundColor: Colors.surfaceElevated,
-    borderWidth: 1,
-    borderColor: Colors.borderStrong,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  arrowButtonDisabled: {
-    opacity: 0.35,
-  },
-  arrowText: {
-    color: Colors.text,
-    fontSize: 20,
-    fontWeight: '900',
-  },
-  progressPanel: {
-    flex: 1,
-    backgroundColor: Colors.background,
-    borderRadius: Radius.lg,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
-  },
   progressTrack: {
-    height: 8,
+    height: 10,
     borderRadius: Radius.full,
     backgroundColor: Colors.surfaceElevated,
     overflow: 'hidden',
+    marginTop: Spacing.md,
   },
   progressFill: {
     height: '100%',
     borderRadius: Radius.full,
     backgroundColor: Colors.primary,
   },
-  progressMetaRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    gap: Spacing.sm,
-    marginTop: Spacing.xs,
-  },
-  progressMeta: {
-    ...Typography.caption,
-    color: Colors.textMuted,
-  },
   holesRow: {
     gap: Spacing.sm,
-    paddingTop: Spacing.lg,
+    paddingTop: Spacing.md,
     paddingRight: Spacing.xs,
   },
   holeChip: {
-    width: 76,
+    minWidth: 68,
     borderRadius: Radius.lg,
     paddingVertical: Spacing.sm,
     paddingHorizontal: Spacing.sm,
     backgroundColor: Colors.background,
     borderWidth: 1,
     borderColor: Colors.border,
+    alignItems: 'center',
   },
   holeChipCompleted: {
     borderColor: Colors.borderStrong,
     backgroundColor: Colors.surfaceElevated,
   },
   holeChipActive: {
-    backgroundColor: Colors.surfaceAccent,
     borderColor: Colors.primary,
+    backgroundColor: Colors.surfaceAccent,
   },
   holeChipNumber: {
     ...Typography.heading,
@@ -238,23 +212,23 @@ const styles = StyleSheet.create({
   holeChipNumberActive: {
     color: Colors.primary,
   },
-  holeChipPar: {
+  holeChipMeta: {
     ...Typography.caption,
     color: Colors.textDim,
     marginTop: 2,
   },
-  holeChipParActive: {
+  holeChipMetaActive: {
     color: Colors.textMuted,
   },
   holeChipStatus: {
-    ...Typography.caption,
-    marginTop: Spacing.sm,
+    ...Typography.bodyStrong,
+    marginTop: Spacing.xs,
   },
   holeChipStatusDone: {
     color: Colors.primary,
   },
   holeChipStatusPending: {
-    color: Colors.warning,
+    color: Colors.textDim,
   },
   holeChipStatusActive: {
     color: Colors.text,

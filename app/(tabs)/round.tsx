@@ -2,11 +2,14 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   KeyboardAvoidingView,
+  LayoutAnimation,
+  PanResponder,
   Platform,
   ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
+  UIManager,
   View,
 } from 'react-native';
 import { router } from 'expo-router';
@@ -21,11 +24,9 @@ import { DecorativeBackground } from '../../components/ui/DecorativeBackground';
 import { HoleNavigation } from '../../components/rounds/HoleNavigation';
 import { HoleOverviewCard } from '../../components/rounds/HoleOverviewCard';
 import { HoleScoringPanel } from '../../components/rounds/HoleScoringPanel';
-import { AppBadge } from '../../components/ui/AppBadge';
 import { AppButton } from '../../components/ui/AppButton';
 import { AppCard } from '../../components/ui/AppCard';
 import { AppInput } from '../../components/ui/AppInput';
-import { PageHeader } from '../../components/ui/PageHeader';
 import {
   getCourseById,
   getCourseParSequence,
@@ -55,12 +56,20 @@ import {
   validateScorecard,
 } from '../../lib/rounds';
 
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
+
 function getDefaultPar(holes: 9 | 18) {
   return holes === 18 ? 72 : 36;
 }
 
 function formatScoreToPar(value: number) {
   return value === 0 ? 'E' : `${value > 0 ? '+' : ''}${value}`;
+}
+
+function animateLayout() {
+  LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
 }
 
 export default function RoundScreen() {
@@ -75,12 +84,13 @@ export default function RoundScreen() {
   const [currentHoleNumber, setCurrentHoleNumber] = useState(1);
   const [scorecard, setScorecard] = useState<RoundDraftHole[]>(() => createDefaultScorecard(18));
   const [notes, setNotes] = useState('');
-  const [metricsExpanded, setMetricsExpanded] = useState(false);
   const [loading, setLoading] = useState(false);
   const [courseLoading, setCourseLoading] = useState(false);
   const [draftHydrated, setDraftHydrated] = useState(false);
   const [restoredDraftAt, setRestoredDraftAt] = useState<string | null>(null);
+  const [setupExpanded, setSetupExpanded] = useState(true);
   const courseRequestRef = useRef(0);
+  const autoAdvanceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const progress = useMemo(() => getScorecardProgress(scorecard), [scorecard]);
   const aggregate = useMemo(() => aggregateScorecard(scorecard), [scorecard]);
@@ -99,6 +109,15 @@ export default function RoundScreen() {
   const canGoPrevious = currentHoleNumber > 1;
   const canGoNext = currentHoleNumber < scorecard.length;
   const canSave = progress.completedHoles === scorecard.length && scorecard.length > 0;
+  const setupLocked = progress.completedHoles > 0;
+  const missingHoleNumbers = useMemo(
+    () => scorecard.filter((hole) => !hole.completed).map((hole) => hole.hole_number),
+    [scorecard]
+  );
+  const nextMissingHole = useMemo(
+    () => scorecard.find((hole) => !hole.completed) ?? null,
+    [scorecard]
+  );
   const hasMeaningfulDraft = useMemo(
     () => (
       courseName.trim().length > 0
@@ -129,6 +148,12 @@ export default function RoundScreen() {
     });
   }, [restoredDraftAt]);
 
+  useEffect(() => () => {
+    if (autoAdvanceTimerRef.current) {
+      clearTimeout(autoAdvanceTimerRef.current);
+    }
+  }, []);
+
   useEffect(() => {
     if (currentHoleNumber > holes) {
       setCurrentHoleNumber(holes);
@@ -136,12 +161,15 @@ export default function RoundScreen() {
   }, [currentHoleNumber, holes]);
 
   useEffect(() => {
-    setMetricsExpanded(false);
-  }, [currentHoleNumber]);
-
-  useEffect(() => {
     setTeeKey((currentTeeKey) => getValidTeeKey(selectedCourse, currentTeeKey));
   }, [selectedCourse]);
+
+  useEffect(() => {
+    if (setupExpanded && progress.completedHoles > 0) {
+      animateLayout();
+      setSetupExpanded(false);
+    }
+  }, [progress.completedHoles, setupExpanded]);
 
   useEffect(() => {
     let isMounted = true;
@@ -222,7 +250,24 @@ export default function RoundScreen() {
     user?.id,
   ]);
 
+  const cancelAutoAdvance = () => {
+    if (autoAdvanceTimerRef.current) {
+      clearTimeout(autoAdvanceTimerRef.current);
+      autoAdvanceTimerRef.current = null;
+    }
+  };
+
+  const goToHole = (holeNumber: number) => {
+    cancelAutoAdvance();
+    animateLayout();
+    setCurrentHoleNumber(Math.max(1, Math.min(holeNumber, scorecard.length)));
+  };
+
   const handleCourseNameChange = (text: string) => {
+    if (setupLocked) {
+      return;
+    }
+
     setCourseName(text);
 
     if (selectedCourse && text.trim() !== selectedCourse.name) {
@@ -246,6 +291,12 @@ export default function RoundScreen() {
   };
 
   const handleCourseSelect = async (course: GolfCourse) => {
+    if (setupLocked) {
+      return;
+    }
+
+    cancelAutoAdvance();
+
     const requestId = courseRequestRef.current + 1;
     courseRequestRef.current = requestId;
 
@@ -277,11 +328,18 @@ export default function RoundScreen() {
   };
 
   const handleHolesToggle = (nextHoles: 9 | 18) => {
+    if (setupLocked || holes === nextHoles) {
+      return;
+    }
+
+    cancelAutoAdvance();
     setHoles(nextHoles);
     handleApplyCoursePar(nextHoles, selectedCourse);
   };
 
   const handleChangeCurrentHole = (patch: Partial<RoundDraftHole>) => {
+    cancelAutoAdvance();
+
     setScorecard((currentScorecard) => {
       const currentDraftHole = currentScorecard[currentHoleNumber - 1];
 
@@ -299,7 +357,9 @@ export default function RoundScreen() {
     });
   };
 
-  const handleApplyScore = (score: number) => {
+  const handleApplyScore = (score: number, options?: { autoAdvance?: boolean }) => {
+    cancelAutoAdvance();
+
     setScorecard((currentScorecard) => {
       const hole = currentScorecard[currentHoleNumber - 1];
 
@@ -313,25 +373,38 @@ export default function RoundScreen() {
         completed: true,
       });
     });
+
+    if (!options?.autoAdvance || currentHoleNumber >= scorecard.length) {
+      return;
+    }
+
+    autoAdvanceTimerRef.current = setTimeout(() => {
+      autoAdvanceTimerRef.current = null;
+      animateLayout();
+      setCurrentHoleNumber((currentValue) => Math.min(scorecard.length, currentValue + 1));
+    }, 650);
   };
 
   const handleResetCurrentHole = () => {
+    cancelAutoAdvance();
     setScorecard((currentScorecard) => resetDraftHole(currentScorecard, currentHoleNumber));
   };
 
-  const handleSave = async () => {
+  const handleSave = async (scorecardOverride?: RoundDraftHole[]) => {
     if (!user || !profile) {
       Alert.alert('Erreur', 'Session introuvable. Reconnecte-toi puis réessaie.');
       return;
     }
 
-    const validationError = validateScorecard(scorecard);
+    const effectiveScorecard = scorecardOverride ?? scorecard;
+    const validationError = validateScorecard(effectiveScorecard);
 
     if (validationError) {
       Alert.alert('Erreur', validationError);
       return;
     }
 
+    cancelAutoAdvance();
     setLoading(true);
 
     try {
@@ -349,11 +422,11 @@ export default function RoundScreen() {
         teeName: selectedTeeOption?.label ?? null,
         teeColor: selectedTeeOption?.color ?? null,
         notes: notes.trim() || null,
-        scorecard,
+        scorecard: effectiveScorecard,
       });
 
       const round = await addRound(roundPayload);
-      const roundHoleInserts = buildRoundHoleInserts(round.id, user.id, scorecard);
+      const roundHoleInserts = buildRoundHoleInserts(round.id, user.id, effectiveScorecard);
 
       const { error: roundHolesError } = await supabase.from('round_holes').insert(roundHoleInserts);
 
@@ -363,8 +436,8 @@ export default function RoundScreen() {
         throw roundHolesError;
       }
 
-      const diagnosis = await analyzeRound(round, profile, rounds.slice(0, 5), scorecard)
-        .catch(() => buildFallbackDiagnostic(round, profile, rounds.slice(0, 5), scorecard));
+      const diagnosis = await analyzeRound(round, profile, rounds.slice(0, 5), effectiveScorecard)
+        .catch(() => buildFallbackDiagnostic(round, profile, rounds.slice(0, 5), effectiveScorecard));
 
       await saveDiagnostic({ userId: user.id, roundId: round.id, result: diagnosis }).catch((error: any) => {
         console.warn('[diagnostic] save failed', error?.message ?? error);
@@ -394,6 +467,8 @@ export default function RoundScreen() {
           text: 'Effacer',
           style: 'destructive',
           onPress: () => {
+            cancelAutoAdvance();
+
             if (user?.id) {
               void clearRoundDraft(user.id);
             }
@@ -405,227 +480,249 @@ export default function RoundScreen() {
             setCurrentHoleNumber(1);
             setScorecard(createDefaultScorecard(18));
             setNotes('');
-            setMetricsExpanded(false);
             setRestoredDraftAt(null);
+            setSetupExpanded(true);
           },
         },
       ]
     );
   };
 
-  const handlePrimaryAction = () => {
-    if (canSave && !canGoNext) {
-      void handleSave();
-      return;
-    }
+  const swipeResponder = useMemo(
+    () => PanResponder.create({
+      onMoveShouldSetPanResponder: (_, gestureState) => (
+        Math.abs(gestureState.dx) > 14 && Math.abs(gestureState.dx) > Math.abs(gestureState.dy) * 1.2
+      ),
+      onPanResponderRelease: (_, gestureState) => {
+        if (gestureState.dx <= -50 && canGoNext) {
+          goToHole(currentHoleNumber + 1);
+          return;
+        }
 
-    if (canGoNext) {
-      setCurrentHoleNumber((currentValue) => Math.min(scorecard.length, currentValue + 1));
-    }
-  };
+        if (gestureState.dx >= 50 && canGoPrevious) {
+          goToHole(currentHoleNumber - 1);
+        }
+      },
+    }),
+    [canGoNext, canGoPrevious, currentHoleNumber, scorecard.length]
+  );
 
-  const primaryActionLabel =
-    canSave && !canGoNext
-      ? loading
-        ? 'Enregistrement...'
-        : 'Finaliser le round'
-      : 'Trou suivant';
+  const headerSubtitle =
+    courseName.trim().length > 0
+      ? `${courseName.trim()} · ${holes} trous · départ ${teeLabel}`
+      : `Scoring express · ${holes} trous · départ ${teeLabel}`;
 
   return (
     <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <DecorativeBackground />
-      <ScrollView contentContainerStyle={[styles.content, { paddingTop: insets.top + 16 }]} keyboardShouldPersistTaps="handled">
-        <PageHeader
-          eyebrow="Performance scoring"
-          title="Round control center"
-          subtitle={
-            courseName.trim()
-              ? `${courseName.trim()} · ${holes} trous · départ ${teeLabel}`
-              : `Scoring trou par trou · ${holes} trous · départ ${teeLabel}`
-          }
-          trailing={<AppBadge label={`${progress.completedHoles}/${progress.totalHoles}`} tone="primary" />}
-        />
+
+      <ScrollView
+        contentContainerStyle={[styles.content, { paddingTop: insets.top + 14 }]}
+        keyboardShouldPersistTaps="handled"
+      >
+        <View style={styles.header}>
+          <View style={styles.headerCopy}>
+            <Text style={styles.headerEyebrow}>Round scoring</Text>
+            <Text style={styles.headerTitle} numberOfLines={1}>
+              {courseName.trim() || 'Fast score'}
+            </Text>
+            <Text style={styles.headerSubtitle}>{headerSubtitle}</Text>
+          </View>
+
+          <TouchableOpacity
+            style={styles.headerAction}
+            onPress={() => {
+              cancelAutoAdvance();
+              animateLayout();
+              setSetupExpanded((currentValue) => !currentValue);
+            }}
+          >
+            <Text style={styles.headerActionLabel}>{setupExpanded ? 'Masquer' : 'Setup'}</Text>
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.liveMetricsRow}>
+          <HeaderMetric label="Live" value={progress.completedHoles > 0 ? `${progress.liveScore}` : '--'} accent />
+          <HeaderMetric label="Vs par" value={progress.completedHoles > 0 ? formatScoreToPar(progress.liveScoreToPar) : '—'} />
+          <HeaderMetric label="Trous" value={`${progress.completedHoles}/${progress.totalHoles}`} />
+        </View>
 
         {restoredDraftAt ? (
-          <AppCard accent="soft" style={styles.draftCard}>
-            <View style={styles.draftHeader}>
-              <View style={styles.draftCopy}>
-                <Text style={styles.draftTitle}>Brouillon restauré</Text>
-                <Text style={styles.draftText}>
+          <AppCard accent="soft" style={styles.bannerCard}>
+            <View style={styles.bannerRow}>
+              <View style={styles.bannerCopy}>
+                <Text style={styles.bannerTitle}>Brouillon restauré</Text>
+                <Text style={styles.bannerText}>
                   {restoredDraftLabel
-                    ? `Reprise automatique de la carte sauvegardée le ${restoredDraftLabel}.`
-                    : 'Reprise automatique de la dernière carte enregistrée sur cet appareil.'}
+                    ? `Carte reprise automatiquement le ${restoredDraftLabel}.`
+                    : 'Carte reprise automatiquement sur cet appareil.'}
                 </Text>
               </View>
-
-              <TouchableOpacity style={styles.draftResetButton} onPress={handleDiscardDraft}>
-                <Text style={styles.draftResetLabel}>Effacer</Text>
+              <TouchableOpacity style={styles.bannerAction} onPress={handleDiscardDraft}>
+                <Text style={styles.bannerActionLabel}>Effacer</Text>
               </TouchableOpacity>
             </View>
           </AppCard>
         ) : null}
 
-        <AppCard accent="highlight" style={styles.setupCard}>
-          <View style={styles.setupHeader}>
-            <View style={styles.setupCopy}>
-              <Text style={styles.setupEyebrow}>Préparation</Text>
-              <Text style={styles.setupTitle}>Configure le round et garde la même référence pendant toute la partie.</Text>
-            </View>
-
-            <View style={styles.modeToggle}>
-              {([9, 18] as const).map((value) => (
-                <TouchableOpacity
-                  key={value}
-                  style={[styles.modeToggleButton, holes === value && styles.modeToggleButtonActive]}
-                  onPress={() => handleHolesToggle(value)}
-                >
-                  <Text style={[styles.modeToggleLabel, holes === value && styles.modeToggleLabelActive]}>
-                    {value}
-                  </Text>
+        {setupExpanded ? (
+          <AppCard accent="soft" style={styles.setupCard}>
+            <View style={styles.setupHeader}>
+              <View style={styles.setupHeaderCopy}>
+                <Text style={styles.setupEyebrow}>Round setup</Text>
+                <Text style={styles.setupTitle}>
+                  {setupLocked ? 'Le cadre du round est verrouillé pour protéger la carte.' : 'Prépare le round une fois, puis laisse l’écran vivre la partie.'}
+                </Text>
+              </View>
+              {!setupLocked && hasMeaningfulDraft ? (
+                <TouchableOpacity style={styles.setupGhostButton} onPress={handleDiscardDraft}>
+                  <Text style={styles.setupGhostButtonLabel}>Réinitialiser</Text>
                 </TouchableOpacity>
-              ))}
+              ) : null}
             </View>
-          </View>
 
-          <View style={styles.setupTelemetry}>
-            <SetupTelemetryTile label="Départ" value={teeLabel} />
-            <SetupTelemetryTile label="Live" value={progress.completedHoles > 0 ? formatScoreToPar(progress.liveScoreToPar) : '—'} />
-            <SetupTelemetryTile label="Restants" value={`${progress.remainingHoles}`} />
-          </View>
+            {!setupLocked ? (
+              <>
+                <View style={styles.modeToggle}>
+                  {([9, 18] as const).map((value) => (
+                    <TouchableOpacity
+                      key={value}
+                      style={[styles.modeToggleButton, holes === value && styles.modeToggleButtonActive]}
+                      onPress={() => handleHolesToggle(value)}
+                    >
+                      <Text style={[styles.modeToggleLabel, holes === value && styles.modeToggleLabelActive]}>
+                        {value} trous
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
 
-          <View style={styles.fieldGroup}>
-            <Text style={styles.fieldLabel}>Parcours</Text>
-            <CourseSearch
-              value={courseName}
-              onChangeText={handleCourseNameChange}
-              onSelect={handleCourseSelect}
+                <View style={styles.fieldGroup}>
+                  <Text style={styles.fieldLabel}>Parcours</Text>
+                  <CourseSearch
+                    value={courseName}
+                    onChangeText={handleCourseNameChange}
+                    onSelect={handleCourseSelect}
+                  />
+                  <Text style={styles.fieldHint}>
+                    {courseLoading
+                      ? 'Synchronisation du parcours...'
+                      : selectedCourse
+                        ? `${selectedCourse.city} · ${selectedCourse.region} · ${courseHasOfficialHoleData ? 'données officielles complètes' : 'fallback premium'}`
+                        : 'Parcours optionnel. Si absent, la saisie reste immédiate.'}
+                  </Text>
+                </View>
+              </>
+            ) : (
+              <View style={styles.lockedSetupPanel}>
+                <LockedSetupPill label="Parcours" value={courseName.trim() || 'Libre'} />
+                <LockedSetupPill label="Format" value={`${holes} trous`} />
+                <LockedSetupPill label="Départ" value={teeLabel} />
+              </View>
+            )}
+
+            <AppInput
+              label="Notes"
+              hint="Vent, stratégie, feeling. Optionnel."
+              value={notes}
+              onChangeText={setNotes}
+              multiline
+              style={styles.notesInput}
             />
-            <Text style={styles.fieldHint}>
-              {courseLoading
-                ? 'Synchronisation du parcours et de ses départs...'
-                : selectedCourse
-                ? `${selectedCourse.city} · ${selectedCourse.region} · ${courseHasOfficialHoleData ? 'tees et distances officiels' : 'tees standards, distances estimées'}`
-                : 'Si le parcours manque, saisis-le manuellement. La vue de trou reste crédible avec fallback premium.'}
-            </Text>
-          </View>
 
-          <AppInput
-            label="Notes de round"
-            hint="Vent, stratégie, feeling du jour."
-            value={notes}
-            onChangeText={setNotes}
-            multiline
-            style={styles.notesInput}
-          />
-        </AppCard>
+            {setupLocked ? (
+              <Text style={styles.setupLockHint}>
+                Le parcours et le nombre de trous sont figés après le premier trou saisi pour éviter les incohérences de par.
+              </Text>
+            ) : null}
+          </AppCard>
+        ) : null}
 
         <HoleNavigation
           currentHole={currentHoleNumber}
           scorecard={scorecard}
-          onSelectHole={setCurrentHoleNumber}
-          onPreviousHole={() => setCurrentHoleNumber((value) => Math.max(1, value - 1))}
-          onNextHole={() => setCurrentHoleNumber((value) => Math.min(scorecard.length, value + 1))}
+          onSelectHole={goToHole}
+          onPreviousHole={() => goToHole(currentHoleNumber - 1)}
+          onNextHole={() => goToHole(currentHoleNumber + 1)}
         />
 
-        <View style={styles.summaryGrid}>
-          <SummaryTile label="Score live" value={progress.completedHoles > 0 ? `${progress.liveScore}` : '--'} />
-          <SummaryTile label="Vs par" value={progress.completedHoles > 0 ? formatScoreToPar(progress.liveScoreToPar) : '--'} accent />
-          <SummaryTile label="Putt moy." value={`${aggregate.average_putts_per_hole}`} />
-          <SummaryTile label="GIR" value={`${aggregate.gir_percentage}%`} />
-        </View>
-
         {currentHole && currentHoleView ? (
-          <>
+          <View {...swipeResponder.panHandlers}>
             <HoleOverviewCard
               courseName={courseName.trim() || 'Parcours non précisé'}
               hole={currentHole}
               holeView={currentHoleView}
               teeKey={teeKey}
               teeOptions={teeOptions}
-              onSelectTee={setTeeKey}
+              onSelectTee={(nextTeeKey) => {
+                cancelAutoAdvance();
+                setTeeKey(nextTeeKey);
+              }}
             />
 
             <HoleScoringPanel
               hole={currentHole}
-              metricsExpanded={metricsExpanded}
-              onToggleMetrics={() => setMetricsExpanded((value) => !value)}
               onApplyScore={handleApplyScore}
               onChangeHole={handleChangeCurrentHole}
               onResetHole={handleResetCurrentHole}
             />
-          </>
-        ) : null}
-
-        <AppCard accent="soft" style={styles.aggregateCard}>
-          <View style={styles.aggregateHeader}>
-            <View>
-              <Text style={styles.aggregateEyebrow}>Carte globale</Text>
-              <Text style={styles.aggregateTitle}>Projection du round</Text>
-            </View>
-            <AppBadge label={formatScoreToPar(aggregate.score_to_par)} tone={aggregate.score_to_par <= 0 ? 'primary' : 'warning'} />
           </View>
-
-          <Text style={styles.aggregateScore}>
-            {aggregate.total_score} coups · Par {aggregate.par}
-          </Text>
-          <Text style={styles.aggregateSplit}>
-            Aller {aggregate.front_nine_score} ({formatScoreToPar(aggregate.front_nine_to_par)})
-            {aggregate.back_nine_score != null && aggregate.back_nine_to_par != null
-              ? ` · Retour ${aggregate.back_nine_score} (${formatScoreToPar(aggregate.back_nine_to_par)})`
-              : ''}
-          </Text>
-        </AppCard>
-
-        {!canSave ? (
-          <Text style={styles.helperText}>
-            Finalisation débloquée quand tous les trous sont validés.
-          </Text>
         ) : null}
 
-        <View style={styles.footerRow}>
-          <AppButton
-            label="Trou précédent"
-            variant="secondary"
-            onPress={() => setCurrentHoleNumber((value) => Math.max(1, value - 1))}
-            disabled={!canGoPrevious}
-            style={styles.footerButton}
-          />
-          <AppButton
-            label={primaryActionLabel}
-            onPress={handlePrimaryAction}
-            disabled={loading}
-            style={styles.footerPrimaryButton}
-          />
-        </View>
+        {canSave ? (
+          <AppCard accent="highlight" style={styles.finishCard}>
+            <Text style={styles.finishEyebrow}>Round prêt</Text>
+            <Text style={styles.finishTitle}>
+              {aggregate.total_score} coups · {formatScoreToPar(aggregate.score_to_par)}
+            </Text>
+            <Text style={styles.finishSubtitle}>
+              {aggregate.putts} putts · {aggregate.gir} GIR · {aggregate.fairways_hit}/{aggregate.fairways_total} fairways · {aggregate.penalties} pénalités
+            </Text>
+          </AppCard>
+        ) : null}
 
-        {canSave && canGoNext ? (
+        {!canSave && nextMissingHole && nextMissingHole.hole_number !== currentHoleNumber ? (
           <AppButton
-            label="Finaliser maintenant"
+            label={`Reprendre au trou ${nextMissingHole.hole_number}`}
             variant="secondary"
+            onPress={() => goToHole(nextMissingHole.hole_number)}
+            style={styles.secondaryActionButton}
+          />
+        ) : null}
+
+        {canSave ? (
+          <AppButton
+            label={loading ? 'Enregistrement...' : 'Finaliser le round'}
             onPress={() => void handleSave()}
             disabled={loading}
-            style={styles.finalizeButton}
+            style={styles.primaryActionButton}
           />
-        ) : null}
+        ) : (
+          <Text style={styles.helperText}>
+            {missingHoleNumbers.length > 0
+              ? `Score rapide actif. Trous restants : ${missingHoleNumbers.join(', ')}.`
+              : 'Score rapide actif.'}
+          </Text>
+        )}
       </ScrollView>
     </KeyboardAvoidingView>
   );
 }
 
-function SetupTelemetryTile({ label, value }: { label: string; value: string }) {
+function HeaderMetric({ label, value, accent = false }: { label: string; value: string; accent?: boolean }) {
   return (
-    <View style={styles.setupTelemetryTile}>
-      <Text style={styles.setupTelemetryLabel}>{label}</Text>
-      <Text style={styles.setupTelemetryValue}>{value}</Text>
+    <View style={[styles.headerMetricTile, accent && styles.headerMetricTileAccent]}>
+      <Text style={[styles.headerMetricValue, accent && styles.headerMetricValueAccent]}>{value}</Text>
+      <Text style={styles.headerMetricLabel}>{label}</Text>
     </View>
   );
 }
 
-function SummaryTile({ label, value, accent = false }: { label: string; value: string; accent?: boolean }) {
+function LockedSetupPill({ label, value }: { label: string; value: string }) {
   return (
-    <View style={[styles.summaryTile, accent && styles.summaryTileAccent]}>
-      <Text style={[styles.summaryValue, accent && styles.summaryValueAccent]}>{value}</Text>
-      <Text style={styles.summaryLabel}>{label}</Text>
+    <View style={styles.lockedSetupTile}>
+      <Text style={styles.lockedSetupLabel}>{label}</Text>
+      <Text style={styles.lockedSetupValue}>{value}</Text>
     </View>
   );
 }
@@ -638,37 +735,109 @@ const styles = StyleSheet.create({
   content: {
     paddingBottom: 126,
   },
-  draftCard: {
+  header: {
     marginHorizontal: Spacing.md,
-    marginBottom: Spacing.md,
-  },
-  draftHeader: {
     flexDirection: 'row',
+    alignItems: 'flex-start',
     justifyContent: 'space-between',
     gap: Spacing.md,
-    alignItems: 'center',
   },
-  draftCopy: {
+  headerCopy: {
     flex: 1,
   },
-  draftTitle: {
+  headerEyebrow: {
+    ...Typography.caption,
+    color: Colors.textDim,
+    textTransform: 'uppercase',
+    letterSpacing: 1.1,
+  },
+  headerTitle: {
+    ...Typography.title,
+    color: Colors.text,
+    marginTop: 4,
+  },
+  headerSubtitle: {
+    ...Typography.body,
+    color: Colors.textMuted,
+    marginTop: Spacing.xs,
+  },
+  headerAction: {
+    minHeight: 44,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: 12,
+    borderRadius: Radius.full,
+    borderWidth: 1,
+    borderColor: Colors.borderStrong,
+    backgroundColor: Colors.surfaceElevated,
+  },
+  headerActionLabel: {
+    ...Typography.label,
+    color: Colors.text,
+  },
+  liveMetricsRow: {
+    flexDirection: 'row',
+    gap: Spacing.sm,
+    marginHorizontal: Spacing.md,
+    marginTop: Spacing.md,
+    marginBottom: Spacing.md,
+  },
+  headerMetricTile: {
+    flex: 1,
+    borderRadius: Radius.lg,
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    padding: Spacing.md,
+  },
+  headerMetricTileAccent: {
+    backgroundColor: Colors.surfaceAccent,
+    borderColor: Colors.primary,
+  },
+  headerMetricValue: {
     ...Typography.heading,
     color: Colors.text,
   },
-  draftText: {
+  headerMetricValueAccent: {
+    color: Colors.primary,
+  },
+  headerMetricLabel: {
+    ...Typography.caption,
+    color: Colors.textDim,
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+    marginTop: 6,
+  },
+  bannerCard: {
+    marginHorizontal: Spacing.md,
+    marginBottom: Spacing.md,
+  },
+  bannerRow: {
+    flexDirection: 'row',
+    gap: Spacing.md,
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  bannerCopy: {
+    flex: 1,
+  },
+  bannerTitle: {
+    ...Typography.heading,
+    color: Colors.text,
+  },
+  bannerText: {
     ...Typography.body,
     color: Colors.textMuted,
     marginTop: 4,
   },
-  draftResetButton: {
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
+  bannerAction: {
     borderRadius: Radius.full,
     borderWidth: 1,
     borderColor: Colors.borderStrong,
     backgroundColor: Colors.backgroundSoft,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: 10,
   },
-  draftResetLabel: {
+  bannerActionLabel: {
     ...Typography.label,
     color: Colors.text,
   },
@@ -680,71 +849,59 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     gap: Spacing.md,
+    alignItems: 'flex-start',
   },
-  setupCopy: {
+  setupHeaderCopy: {
     flex: 1,
   },
   setupEyebrow: {
     ...Typography.caption,
     color: Colors.textDim,
     textTransform: 'uppercase',
-    letterSpacing: 1.1,
+    letterSpacing: 1,
   },
   setupTitle: {
     ...Typography.heading,
     color: Colors.text,
     marginTop: 6,
   },
-  modeToggle: {
-    flexDirection: 'row',
-    alignSelf: 'flex-start',
-    backgroundColor: Colors.backgroundSoft,
+  setupGhostButton: {
+    paddingHorizontal: Spacing.md,
+    paddingVertical: 10,
     borderRadius: Radius.full,
     borderWidth: 1,
     borderColor: Colors.borderStrong,
-    padding: 4,
-    gap: 4,
   },
-  modeToggleButton: {
-    minWidth: 48,
-    borderRadius: Radius.full,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: 10,
-    alignItems: 'center',
+  setupGhostButtonLabel: {
+    ...Typography.label,
+    color: Colors.text,
   },
-  modeToggleButtonActive: {
-    backgroundColor: Colors.primary,
-  },
-  modeToggleLabel: {
-    ...Typography.bodyStrong,
-    color: Colors.textMuted,
-  },
-  modeToggleLabelActive: {
-    color: Colors.background,
-  },
-  setupTelemetry: {
+  modeToggle: {
     flexDirection: 'row',
     gap: Spacing.sm,
     marginTop: Spacing.lg,
   },
-  setupTelemetryTile: {
+  modeToggleButton: {
     flex: 1,
+    minHeight: 52,
     borderRadius: Radius.lg,
-    backgroundColor: Colors.backgroundSoft,
     borderWidth: 1,
-    borderColor: Colors.border,
-    padding: Spacing.md,
+    borderColor: Colors.borderStrong,
+    backgroundColor: Colors.backgroundSoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: Spacing.md,
   },
-  setupTelemetryLabel: {
-    ...Typography.caption,
-    color: Colors.textDim,
-    textTransform: 'uppercase',
-    letterSpacing: 0.8,
+  modeToggleButtonActive: {
+    backgroundColor: Colors.primary,
+    borderColor: Colors.primaryDark,
   },
-  setupTelemetryValue: {
-    ...Typography.heading,
+  modeToggleLabel: {
+    ...Typography.bodyStrong,
     color: Colors.text,
-    marginTop: Spacing.xs,
+  },
+  modeToggleLabelActive: {
+    color: Colors.background,
   },
   fieldGroup: {
     marginTop: Spacing.lg,
@@ -763,91 +920,67 @@ const styles = StyleSheet.create({
     minHeight: 86,
     textAlignVertical: 'top',
   },
-  summaryGrid: {
+  lockedSetupPanel: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: Spacing.sm,
-    marginHorizontal: Spacing.md,
-    marginBottom: Spacing.md,
+    marginTop: Spacing.lg,
+    marginBottom: Spacing.sm,
   },
-  summaryTile: {
-    flex: 1,
-    minWidth: '45%',
-    borderRadius: Radius.xl,
-    backgroundColor: Colors.surface,
+  lockedSetupTile: {
+    minWidth: '30%',
+    borderRadius: Radius.lg,
+    backgroundColor: Colors.backgroundSoft,
     borderWidth: 1,
     borderColor: Colors.border,
-    padding: Spacing.lg,
+    padding: Spacing.md,
   },
-  summaryTileAccent: {
-    backgroundColor: Colors.surfaceAccent,
-    borderColor: Colors.primary,
-  },
-  summaryValue: {
-    ...Typography.display,
-    color: Colors.text,
-  },
-  summaryValueAccent: {
-    color: Colors.primary,
-  },
-  summaryLabel: {
+  lockedSetupLabel: {
     ...Typography.caption,
     color: Colors.textDim,
     textTransform: 'uppercase',
     letterSpacing: 0.8,
+  },
+  lockedSetupValue: {
+    ...Typography.bodyStrong,
+    color: Colors.text,
     marginTop: Spacing.xs,
   },
-  aggregateCard: {
+  setupLockHint: {
+    ...Typography.caption,
+    color: Colors.warning,
+    marginTop: Spacing.xs,
+  },
+  finishCard: {
     marginHorizontal: Spacing.md,
-    marginBottom: Spacing.sm,
+    marginBottom: Spacing.md,
   },
-  aggregateHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: Spacing.md,
-  },
-  aggregateEyebrow: {
+  finishEyebrow: {
     ...Typography.caption,
     color: Colors.textDim,
     textTransform: 'uppercase',
     letterSpacing: 1,
   },
-  aggregateTitle: {
-    ...Typography.heading,
-    color: Colors.text,
-    marginTop: 4,
-  },
-  aggregateScore: {
+  finishTitle: {
     ...Typography.titleMd,
     color: Colors.primary,
-    marginTop: Spacing.lg,
+    marginTop: Spacing.sm,
   },
-  aggregateSplit: {
+  finishSubtitle: {
     ...Typography.body,
     color: Colors.textMuted,
     marginTop: Spacing.xs,
   },
+  primaryActionButton: {
+    marginHorizontal: Spacing.md,
+  },
+  secondaryActionButton: {
+    marginHorizontal: Spacing.md,
+    marginBottom: Spacing.md,
+  },
   helperText: {
     ...Typography.caption,
-    color: Colors.warning,
+    color: Colors.textDim,
     marginHorizontal: Spacing.md,
-    marginBottom: Spacing.sm,
-    letterSpacing: 0.5,
-    textTransform: 'uppercase',
-  },
-  footerRow: {
-    flexDirection: 'row',
-    gap: Spacing.sm,
-    marginHorizontal: Spacing.md,
-  },
-  footerButton: {
-    flex: 1,
-  },
-  footerPrimaryButton: {
-    flex: 1.15,
-  },
-  finalizeButton: {
-    marginHorizontal: Spacing.md,
-    marginTop: Spacing.sm,
   },
 });

@@ -1,180 +1,343 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { AppBadge } from '../ui/AppBadge';
 import { AppCard } from '../ui/AppCard';
 import { Colors, Radius, Spacing, Typography } from '../../constants';
 import type { RoundDraftHole } from '../../types';
-import { getQuickScoreOptions, getScoreDescriptor } from '../../lib/hole-view';
+import { getScoreDescriptor } from '../../lib/hole-view';
 
 type Props = {
   hole: RoundDraftHole;
-  metricsExpanded: boolean;
-  onToggleMetrics: () => void;
-  onApplyScore: (score: number) => void;
+  onApplyScore: (score: number, options?: { autoAdvance?: boolean }) => void;
   onChangeHole: (patch: Partial<RoundDraftHole>) => void;
   onResetHole: () => void;
 };
 
-export function HoleScoringPanel({
-  hole,
-  metricsExpanded,
-  onToggleMetrics,
-  onApplyScore,
-  onChangeHole,
-  onResetHole,
-}: Props) {
+type ScoreChoice =
+  | {
+      key: string;
+      type: 'score';
+      score: number;
+      title: string;
+      subtitle: string;
+      tone: ReturnType<typeof getScoreDescriptor>['tone'];
+    }
+  | {
+      key: string;
+      type: 'custom';
+      title: string;
+      subtitle: string;
+    };
+
+const PUTT_PRESETS = [0, 1, 2, 3, 4] as const;
+const PENALTY_PRESETS = [0, 1, 2, 3] as const;
+
+export function HoleScoringPanel({ hole, onApplyScore, onChangeHole, onResetHole }: Props) {
   const descriptor = useMemo(() => getScoreDescriptor(hole.score, hole.par), [hole.score, hole.par]);
-  const quickScores = useMemo(() => getQuickScoreOptions(hole.par), [hole.par]);
+  const scoreChoices = useMemo(() => buildScoreChoices(hole.par), [hole.par]);
+  const quickScoreValues = useMemo(
+    () => scoreChoices.flatMap((choice) => (choice.type === 'score' ? [choice.score] : [])),
+    [scoreChoices]
+  );
+  const [customScoreOpen, setCustomScoreOpen] = useState(!quickScoreValues.includes(hole.score));
+
+  useEffect(() => {
+    setCustomScoreOpen(!quickScoreValues.includes(hole.score));
+  }, [hole.hole_number, hole.par, hole.score, quickScoreValues]);
+
+  const canDecrementScore = hole.score > 1;
+  const canIncrementScore = hole.score < 15;
+  const canIncrementPutts = hole.putts < 6 && hole.putts < hole.score;
+  const canIncrementPenalty = hole.penalty < 5;
 
   return (
     <AppCard style={styles.card}>
       <View style={styles.headerRow}>
         <View style={styles.headerCopy}>
-          <Text style={styles.eyebrow}>Execution</Text>
-          <Text style={styles.title}>Score du trou</Text>
+          <Text style={styles.eyebrow}>Fast lane</Text>
+          <Text style={styles.title}>Score d’abord, détails ensuite</Text>
           <Text style={styles.subtitle}>
-            {hole.completed ? 'Le score principal est verrouillé et peut être affiné.' : 'Commence par saisir le score principal.'}
+            Un tap sur un score sauvegarde le trou. Les métriques restent modifiables sans quitter l’écran.
           </Text>
         </View>
-        <AppBadge label={hole.completed ? 'Validé' : 'En cours'} tone={hole.completed ? 'primary' : 'warning'} />
+        <AppBadge label={hole.completed ? 'Saisi' : 'À saisir'} tone={hole.completed ? 'primary' : 'warning'} />
       </View>
 
-      <View style={styles.board}>
-        <TouchableOpacity style={styles.controlButton} onPress={() => onApplyScore(Math.max(1, hole.score - 1))}>
-          <Text style={styles.controlButtonText}>−</Text>
-        </TouchableOpacity>
-
-        <View style={styles.scoreCore}>
-          <Text style={[styles.scoreDiff, getToneStyle(descriptor.tone)]}>{descriptor.diffLabel}</Text>
-          <Text style={styles.scoreValue}>{hole.score}</Text>
-          <Text style={[styles.scoreLabel, getToneStyle(descriptor.tone)]}>{descriptor.label}</Text>
-        </View>
-
-        <TouchableOpacity style={styles.controlButton} onPress={() => onApplyScore(Math.min(15, hole.score + 1))}>
-          <Text style={styles.controlButtonText}>+</Text>
-        </TouchableOpacity>
+      <View style={styles.scoreHero}>
+        <Text style={[styles.scoreDiff, getToneStyle(descriptor.tone)]}>{descriptor.diffLabel}</Text>
+        <Text style={styles.scoreValue}>{hole.score}</Text>
+        <Text style={[styles.scoreLabel, getToneStyle(descriptor.tone)]}>{descriptor.label}</Text>
       </View>
 
-      <View style={styles.quickGrid}>
-        {quickScores.map((option) => {
-          const isActive = hole.completed && hole.score === option.score;
+      <View style={styles.choiceGrid}>
+        {scoreChoices.map((choice) => {
+          if (choice.type === 'custom') {
+            const isActive = customScoreOpen;
+
+            return (
+              <TouchableOpacity
+                key={choice.key}
+                style={[styles.choiceTile, isActive && styles.choiceTileActive]}
+                onPress={() => setCustomScoreOpen((currentValue) => !currentValue)}
+              >
+                <Text style={[styles.choiceTitle, isActive && styles.choiceTitleActive]}>{choice.title}</Text>
+                <Text style={[styles.choiceSubtitle, isActive && styles.choiceSubtitleActive]}>{choice.subtitle}</Text>
+              </TouchableOpacity>
+            );
+          }
+
+          const isActive = hole.completed && hole.score === choice.score && !customScoreOpen;
 
           return (
             <TouchableOpacity
-              key={`${hole.hole_number}-${option.score}`}
-              style={[styles.quickTile, isActive && styles.quickTileActive]}
-              onPress={() => onApplyScore(option.score)}
+              key={choice.key}
+              style={[styles.choiceTile, isActive && styles.choiceTileActive]}
+              onPress={() => onApplyScore(choice.score, { autoAdvance: true })}
             >
-              <Text style={[styles.quickTileValue, isActive && styles.quickTileValueActive]}>{option.score}</Text>
-              <Text style={[styles.quickTileLabel, isActive && styles.quickTileLabelActive]}>{option.label}</Text>
+              <Text style={[styles.choiceTitle, getToneStyle(choice.tone), isActive && styles.choiceTitleActive]}>
+                {choice.title}
+              </Text>
+              <Text style={[styles.choiceSubtitle, isActive && styles.choiceSubtitleActive]}>{choice.subtitle}</Text>
             </TouchableOpacity>
           );
         })}
       </View>
 
-      <View style={styles.telemetryStrip}>
-        <TelemetryPill label="Putts" value={`${hole.putts}`} />
-        <TelemetryPill label="GIR" value={hole.gir ? 'Oui' : 'Non'} />
-        <TelemetryPill label="Fairway" value={hole.par > 3 ? (hole.fairway_hit ? 'Oui' : 'Non') : 'n/a'} />
-        <TelemetryPill label="Pen" value={`${hole.penalty}`} />
-      </View>
-
-      <TouchableOpacity style={styles.metricsToggle} onPress={onToggleMetrics}>
-        <View>
-          <Text style={styles.metricsToggleTitle}>Télémétrie avancée</Text>
-          <Text style={styles.metricsToggleSubtitle}>Putts, GIR, fairway, pénalités</Text>
-        </View>
-        <Text style={styles.metricsToggleArrow}>{metricsExpanded ? '−' : '+'}</Text>
-      </TouchableOpacity>
-
-      {metricsExpanded ? (
-        <View style={styles.metricsPanel}>
-          <View style={styles.metricsRow}>
-            <MetricStepper
-              label="Putts"
-              value={hole.putts}
-              min={0}
-              max={6}
-              onChange={(value) => onChangeHole({ putts: value })}
-            />
-            <MetricStepper
-              label="Pénalités"
-              value={hole.penalty}
-              min={0}
-              max={5}
-              onChange={(value) => onChangeHole({ penalty: value })}
-            />
+      {customScoreOpen ? (
+        <View style={styles.customScorePanel}>
+          <View style={styles.customScoreHeader}>
+            <Text style={styles.customScoreTitle}>Score rare ou ajustement fin</Text>
+            <Text style={styles.customScoreSubtitle}>Les boutons +/- évitent d’encombrer le chemin principal.</Text>
           </View>
 
-          <View style={styles.toggleRow}>
-            <ToggleTile label="Green en régulation" value={hole.gir} onPress={() => onChangeHole({ gir: !hole.gir })} />
-            {hole.par > 3 ? (
-              <ToggleTile
-                label="Fairway touché"
-                value={hole.fairway_hit === true}
-                onPress={() => onChangeHole({ fairway_hit: hole.fairway_hit === true ? false : true })}
-              />
-            ) : (
-              <View style={[styles.toggleTile, styles.toggleTileDisabled]}>
-                <Text style={styles.toggleTileDisabledLabel}>Fairway non pertinent</Text>
-              </View>
-            )}
-          </View>
+          <View style={styles.customScoreControls}>
+            <TouchableOpacity
+              style={[styles.adjustButton, !canDecrementScore && styles.adjustButtonDisabled]}
+              onPress={() => onApplyScore(Math.max(1, hole.score - 1), { autoAdvance: false })}
+              disabled={!canDecrementScore}
+            >
+              <Text style={styles.adjustButtonLabel}>−</Text>
+            </TouchableOpacity>
 
-          <TouchableOpacity style={styles.resetButton} onPress={onResetHole}>
-            <Text style={styles.resetButtonText}>Réinitialiser ce trou</Text>
-          </TouchableOpacity>
+            <View style={styles.customScoreValueShell}>
+              <Text style={styles.customScoreValue}>{hole.score}</Text>
+            </View>
+
+            <TouchableOpacity
+              style={[styles.adjustButton, !canIncrementScore && styles.adjustButtonDisabled]}
+              onPress={() => onApplyScore(Math.min(15, hole.score + 1), { autoAdvance: false })}
+              disabled={!canIncrementScore}
+            >
+              <Text style={styles.adjustButtonLabel}>+</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       ) : null}
+
+      <View style={styles.metricsSection}>
+        <Text style={styles.metricsTitle}>Stats rapides</Text>
+
+        <MetricSelector
+          label="Putts"
+          value={hole.putts}
+          presets={PUTT_PRESETS}
+          canDecrement={hole.putts > 0}
+          canIncrement={canIncrementPutts}
+          onDecrement={() => onChangeHole({ putts: Math.max(0, hole.putts - 1) })}
+          onIncrement={() => onChangeHole({ putts: Math.min(hole.score, hole.putts + 1) })}
+          onSelect={(value) => onChangeHole({ putts: value })}
+          isValueDisabled={(value) => value > hole.score}
+        />
+
+        <MetricSelector
+          label="Pénalités"
+          value={hole.penalty}
+          presets={PENALTY_PRESETS}
+          canDecrement={hole.penalty > 0}
+          canIncrement={canIncrementPenalty}
+          onDecrement={() => onChangeHole({ penalty: Math.max(0, hole.penalty - 1) })}
+          onIncrement={() => onChangeHole({ penalty: Math.min(5, hole.penalty + 1) })}
+          onSelect={(value) => onChangeHole({ penalty: value })}
+        />
+
+        <BinarySelector
+          label="Green en régulation"
+          value={hole.gir}
+          falseLabel="Non"
+          trueLabel="Oui"
+          onChange={(nextValue) => onChangeHole({ gir: nextValue })}
+        />
+
+        {hole.par > 3 ? (
+          <BinarySelector
+            label="Fairway"
+            value={hole.fairway_hit === true}
+            falseLabel="Raté"
+            trueLabel="Touché"
+            onChange={(nextValue) => onChangeHole({ fairway_hit: nextValue })}
+          />
+        ) : (
+          <View style={styles.infoTile}>
+            <Text style={styles.infoTileLabel}>Fairway</Text>
+            <Text style={styles.infoTileValue}>Non pertinent sur un par 3</Text>
+          </View>
+        )}
+      </View>
+
+      <View style={styles.footerRow}>
+        <Text style={styles.footerHint}>
+          Les taps score auto-avancent. Les edits manuels restent sur le trou courant.
+        </Text>
+        <TouchableOpacity style={styles.resetButton} onPress={onResetHole}>
+          <Text style={styles.resetButtonText}>Réinitialiser</Text>
+        </TouchableOpacity>
+      </View>
     </AppCard>
   );
 }
 
-function MetricStepper({
+function MetricSelector({
   label,
   value,
-  min,
-  max,
-  onChange,
+  presets,
+  canDecrement,
+  canIncrement,
+  onDecrement,
+  onIncrement,
+  onSelect,
+  isValueDisabled,
 }: {
   label: string;
   value: number;
-  min: number;
-  max: number;
-  onChange: (value: number) => void;
+  presets: readonly number[];
+  canDecrement: boolean;
+  canIncrement: boolean;
+  onDecrement: () => void;
+  onIncrement: () => void;
+  onSelect: (value: number) => void;
+  isValueDisabled?: (value: number) => boolean;
 }) {
   return (
-    <View style={styles.metricTile}>
+    <View style={styles.metricBlock}>
       <Text style={styles.metricLabel}>{label}</Text>
       <View style={styles.metricRow}>
-        <TouchableOpacity style={styles.metricButton} onPress={() => onChange(Math.max(min, value - 1))}>
-          <Text style={styles.metricButtonText}>−</Text>
+        <TouchableOpacity
+          style={[styles.metricEdgeButton, !canDecrement && styles.metricEdgeButtonDisabled]}
+          onPress={onDecrement}
+          disabled={!canDecrement}
+        >
+          <Text style={styles.metricEdgeButtonLabel}>−</Text>
         </TouchableOpacity>
-        <Text style={styles.metricValue}>{value}</Text>
-        <TouchableOpacity style={styles.metricButton} onPress={() => onChange(Math.min(max, value + 1))}>
-          <Text style={styles.metricButtonText}>+</Text>
+
+        <View style={styles.metricPresetRow}>
+          {presets.map((preset) => {
+            const disabled = isValueDisabled?.(preset) ?? false;
+            const active = value === preset;
+
+            return (
+              <TouchableOpacity
+                key={`${label}-${preset}`}
+                style={[
+                  styles.metricChip,
+                  active && styles.metricChipActive,
+                  disabled && styles.metricChipDisabled,
+                ]}
+                onPress={() => onSelect(preset)}
+                disabled={disabled}
+              >
+                <Text
+                  style={[
+                    styles.metricChipLabel,
+                    active && styles.metricChipLabelActive,
+                    disabled && styles.metricChipLabelDisabled,
+                  ]}
+                >
+                  {preset}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+
+        <TouchableOpacity
+          style={[styles.metricEdgeButton, !canIncrement && styles.metricEdgeButtonDisabled]}
+          onPress={onIncrement}
+          disabled={!canIncrement}
+        >
+          <Text style={styles.metricEdgeButtonLabel}>+</Text>
         </TouchableOpacity>
       </View>
     </View>
   );
 }
 
-function ToggleTile({ label, value, onPress }: { label: string; value: boolean; onPress: () => void }) {
+function BinarySelector({
+  label,
+  value,
+  falseLabel,
+  trueLabel,
+  onChange,
+}: {
+  label: string;
+  value: boolean;
+  falseLabel: string;
+  trueLabel: string;
+  onChange: (value: boolean) => void;
+}) {
   return (
-    <TouchableOpacity style={[styles.toggleTile, value && styles.toggleTileActive]} onPress={onPress}>
-      <Text style={[styles.toggleTileLabel, value && styles.toggleTileLabelActive]}>{label}</Text>
-      <Text style={[styles.toggleTileValue, value && styles.toggleTileValueActive]}>{value ? 'Oui' : 'Non'}</Text>
-    </TouchableOpacity>
+    <View style={styles.metricBlock}>
+      <Text style={styles.metricLabel}>{label}</Text>
+      <View style={styles.binaryRow}>
+        <TouchableOpacity
+          style={[styles.binaryChip, !value && styles.binaryChipActive]}
+          onPress={() => onChange(false)}
+        >
+          <Text style={[styles.binaryChipLabel, !value && styles.binaryChipLabelActive]}>{falseLabel}</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.binaryChip, value && styles.binaryChipActive]}
+          onPress={() => onChange(true)}
+        >
+          <Text style={[styles.binaryChipLabel, value && styles.binaryChipLabelActive]}>{trueLabel}</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
   );
 }
 
-function TelemetryPill({ label, value }: { label: string; value: string }) {
-  return (
-    <View style={styles.telemetryPill}>
-      <Text style={styles.telemetryLabel}>{label}</Text>
-      <Text style={styles.telemetryValue}>{value}</Text>
-    </View>
-  );
+function buildScoreChoices(par: number): ScoreChoice[] {
+  const eagleScore = Math.max(1, par - 2);
+  const birdieScore = Math.max(1, par - 1);
+  const parScore = par;
+  const bogeyScore = par + 1;
+  const doubleScore = par + 2;
+
+  return [
+    buildScoreChoice('birdie', birdieScore, par),
+    buildScoreChoice('par', parScore, par),
+    buildScoreChoice('bogey', bogeyScore, par),
+    buildScoreChoice('eagle', eagleScore, par),
+    buildScoreChoice('double', doubleScore, par),
+    {
+      key: 'custom',
+      type: 'custom',
+      title: 'Autre',
+      subtitle: 'Score rare',
+    },
+  ];
+}
+
+function buildScoreChoice(key: string, score: number, par: number): ScoreChoice {
+  const descriptor = getScoreDescriptor(score, par);
+
+  return {
+    key,
+    type: 'score',
+    score,
+    title: `${score}`,
+    subtitle: descriptor.label,
+    tone: descriptor.tone,
+  };
 }
 
 function getToneStyle(tone: ReturnType<typeof getScoreDescriptor>['tone']) {
@@ -209,63 +372,42 @@ const styles = StyleSheet.create({
     ...Typography.caption,
     color: Colors.textDim,
     textTransform: 'uppercase',
-    letterSpacing: 1.1,
+    letterSpacing: 1,
   },
   title: {
     ...Typography.titleMd,
     color: Colors.text,
-    marginTop: 4,
+    marginTop: 6,
   },
   subtitle: {
     ...Typography.body,
     color: Colors.textMuted,
     marginTop: Spacing.xs,
   },
-  board: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.md,
+  scoreHero: {
     marginTop: Spacing.lg,
-    padding: Spacing.md,
     borderRadius: Radius.xl,
     backgroundColor: Colors.backgroundSoft,
     borderWidth: 1,
     borderColor: Colors.borderStrong,
-  },
-  controlButton: {
-    width: 64,
-    height: 64,
-    borderRadius: Radius.lg,
-    backgroundColor: Colors.surfaceElevated,
-    borderWidth: 1,
-    borderColor: Colors.borderStrong,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  controlButtonText: {
-    color: Colors.text,
-    fontSize: 32,
-    lineHeight: 34,
-    fontWeight: '900',
-  },
-  scoreCore: {
-    flex: 1,
+    paddingVertical: Spacing.xl,
+    paddingHorizontal: Spacing.lg,
     alignItems: 'center',
   },
   scoreDiff: {
     ...Typography.caption,
-    marginBottom: 4,
-    letterSpacing: 0.8,
+    letterSpacing: 1.1,
   },
   scoreValue: {
     ...Typography.display,
     color: Colors.text,
-    fontSize: 64,
-    lineHeight: 68,
+    fontSize: 72,
+    lineHeight: 76,
+    marginTop: 8,
   },
   scoreLabel: {
     ...Typography.bodyStrong,
-    marginTop: 4,
+    marginTop: 6,
   },
   toneElite: {
     color: Colors.warning,
@@ -282,187 +424,246 @@ const styles = StyleSheet.create({
   toneDanger: {
     color: Colors.error,
   },
-  quickGrid: {
+  choiceGrid: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: Spacing.sm,
     marginTop: Spacing.lg,
   },
-  quickTile: {
-    flex: 1,
+  choiceTile: {
+    width: '31%',
+    minHeight: 82,
     borderRadius: Radius.lg,
     backgroundColor: Colors.backgroundSoft,
     borderWidth: 1,
     borderColor: Colors.border,
-    paddingVertical: Spacing.md,
     paddingHorizontal: Spacing.sm,
+    paddingVertical: Spacing.md,
+    justifyContent: 'center',
     alignItems: 'center',
   },
-  quickTileActive: {
-    backgroundColor: Colors.surfaceAccent,
+  choiceTileActive: {
     borderColor: Colors.primary,
+    backgroundColor: Colors.surfaceAccent,
   },
-  quickTileValue: {
+  choiceTitle: {
     ...Typography.heading,
     color: Colors.text,
   },
-  quickTileValueActive: {
+  choiceTitleActive: {
     color: Colors.primary,
   },
-  quickTileLabel: {
+  choiceSubtitle: {
     ...Typography.caption,
     color: Colors.textMuted,
-    marginTop: Spacing.xs,
     textAlign: 'center',
+    marginTop: 6,
   },
-  quickTileLabelActive: {
+  choiceSubtitleActive: {
     color: Colors.text,
   },
-  telemetryStrip: {
+  customScorePanel: {
+    marginTop: Spacing.md,
+    borderRadius: Radius.xl,
+    backgroundColor: Colors.backgroundSoft,
+    borderWidth: 1,
+    borderColor: Colors.borderStrong,
+    padding: Spacing.md,
+  },
+  customScoreHeader: {
+    alignItems: 'center',
+  },
+  customScoreTitle: {
+    ...Typography.bodyStrong,
+    color: Colors.text,
+  },
+  customScoreSubtitle: {
+    ...Typography.caption,
+    color: Colors.textDim,
+    marginTop: 4,
+    textAlign: 'center',
+  },
+  customScoreControls: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: Spacing.xs,
+    alignItems: 'center',
+    gap: Spacing.md,
     marginTop: Spacing.md,
   },
-  telemetryPill: {
+  adjustButton: {
+    width: 64,
+    height: 64,
     borderRadius: Radius.full,
     backgroundColor: Colors.surfaceElevated,
     borderWidth: 1,
-    borderColor: Colors.border,
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: 8,
-  },
-  telemetryLabel: {
-    ...Typography.caption,
-    color: Colors.textDim,
-  },
-  telemetryValue: {
-    ...Typography.bodyStrong,
-    color: Colors.text,
-    marginTop: 2,
-  },
-  metricsToggle: {
-    marginTop: Spacing.lg,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.md,
-    borderRadius: Radius.lg,
-    borderWidth: 1,
     borderColor: Colors.borderStrong,
-    backgroundColor: Colors.backgroundSoft,
-    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: Spacing.md,
+    justifyContent: 'center',
   },
-  metricsToggleTitle: {
-    ...Typography.bodyStrong,
+  adjustButtonDisabled: {
+    opacity: 0.35,
+  },
+  adjustButtonLabel: {
     color: Colors.text,
-  },
-  metricsToggleSubtitle: {
-    ...Typography.caption,
-    color: Colors.textDim,
-    marginTop: 2,
-  },
-  metricsToggleArrow: {
-    color: Colors.primary,
-    fontSize: 22,
+    fontSize: 30,
+    lineHeight: 32,
     fontWeight: '900',
   },
-  metricsPanel: {
-    marginTop: Spacing.md,
-  },
-  metricsRow: {
-    flexDirection: 'row',
-    gap: Spacing.sm,
-  },
-  metricTile: {
+  customScoreValueShell: {
     flex: 1,
+    minHeight: 64,
     borderRadius: Radius.lg,
-    backgroundColor: Colors.backgroundSoft,
+    backgroundColor: Colors.surface,
     borderWidth: 1,
     borderColor: Colors.border,
-    padding: Spacing.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  customScoreValue: {
+    ...Typography.display,
+    color: Colors.text,
+    fontSize: 46,
+    lineHeight: 50,
+  },
+  metricsSection: {
+    marginTop: Spacing.lg,
+  },
+  metricsTitle: {
+    ...Typography.heading,
+    color: Colors.text,
+    marginBottom: Spacing.sm,
+  },
+  metricBlock: {
+    marginTop: Spacing.sm,
   },
   metricLabel: {
     ...Typography.caption,
     color: Colors.textDim,
     textTransform: 'uppercase',
     letterSpacing: 0.8,
+    marginBottom: 8,
   },
   metricRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: Spacing.sm,
+    gap: Spacing.xs,
   },
-  metricButton: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
+  metricEdgeButton: {
+    width: 42,
+    height: 42,
+    borderRadius: Radius.full,
     backgroundColor: Colors.surfaceElevated,
+    borderWidth: 1,
+    borderColor: Colors.borderStrong,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  metricButtonText: {
+  metricEdgeButtonDisabled: {
+    opacity: 0.35,
+  },
+  metricEdgeButtonLabel: {
     color: Colors.text,
-    fontSize: 20,
+    fontSize: 22,
+    lineHeight: 24,
     fontWeight: '900',
-    lineHeight: 22,
   },
-  metricValue: {
-    ...Typography.titleMd,
+  metricPresetRow: {
+    flex: 1,
+    flexDirection: 'row',
+    gap: Spacing.xs,
+  },
+  metricChip: {
+    flex: 1,
+    minHeight: 42,
+    borderRadius: Radius.lg,
+    backgroundColor: Colors.backgroundSoft,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  metricChipActive: {
+    borderColor: Colors.primary,
+    backgroundColor: Colors.surfaceAccent,
+  },
+  metricChipDisabled: {
+    opacity: 0.28,
+  },
+  metricChipLabel: {
+    ...Typography.bodyStrong,
     color: Colors.text,
   },
-  toggleRow: {
+  metricChipLabelActive: {
+    color: Colors.primary,
+  },
+  metricChipLabelDisabled: {
+    color: Colors.textDim,
+  },
+  binaryRow: {
     flexDirection: 'row',
     gap: Spacing.sm,
-    marginTop: Spacing.sm,
   },
-  toggleTile: {
+  binaryChip: {
     flex: 1,
+    minHeight: 48,
+    borderRadius: Radius.lg,
+    backgroundColor: Colors.backgroundSoft,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: Spacing.md,
+  },
+  binaryChipActive: {
+    borderColor: Colors.primary,
+    backgroundColor: Colors.surfaceAccent,
+  },
+  binaryChipLabel: {
+    ...Typography.bodyStrong,
+    color: Colors.textMuted,
+  },
+  binaryChipLabelActive: {
+    color: Colors.primary,
+  },
+  infoTile: {
+    marginTop: Spacing.sm,
     borderRadius: Radius.lg,
     backgroundColor: Colors.backgroundSoft,
     borderWidth: 1,
     borderColor: Colors.border,
     padding: Spacing.md,
   },
-  toggleTileActive: {
-    borderColor: Colors.primary,
-    backgroundColor: Colors.surfaceAccent,
-  },
-  toggleTileDisabled: {
-    opacity: 0.5,
-  },
-  toggleTileLabel: {
+  infoTileLabel: {
     ...Typography.caption,
     color: Colors.textDim,
     textTransform: 'uppercase',
     letterSpacing: 0.8,
   },
-  toggleTileLabelActive: {
-    color: Colors.primary,
-  },
-  toggleTileValue: {
+  infoTileValue: {
     ...Typography.bodyStrong,
-    color: Colors.text,
+    color: Colors.textMuted,
     marginTop: Spacing.xs,
   },
-  toggleTileValueActive: {
-    color: Colors.text,
+  footerRow: {
+    marginTop: Spacing.lg,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: Spacing.md,
   },
-  toggleTileDisabledLabel: {
-    ...Typography.bodyStrong,
+  footerHint: {
+    ...Typography.caption,
     color: Colors.textDim,
+    flex: 1,
   },
   resetButton: {
-    marginTop: Spacing.md,
-    borderRadius: Radius.lg,
+    borderRadius: Radius.full,
     borderWidth: 1,
     borderColor: Colors.error,
-    paddingVertical: Spacing.md,
-    alignItems: 'center',
+    paddingHorizontal: Spacing.md,
+    paddingVertical: 10,
   },
   resetButtonText: {
-    ...Typography.bodyStrong,
+    ...Typography.label,
     color: Colors.error,
   },
 });

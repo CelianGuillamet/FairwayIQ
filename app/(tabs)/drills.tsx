@@ -1,32 +1,15 @@
 import { useState, useEffect } from 'react';
-import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Linking } from 'react-native';
+import { Alert, View, Text, ScrollView, StyleSheet, TouchableOpacity, Linking } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '../../constants';
 import { useDrillsStore } from '../../stores/drills';
 import { useAuthStore } from '../../stores/auth';
 import type { Drill } from '../../types';
+import { DRILL_CATEGORY_LABELS, DRILL_DIFFICULTY_LABELS, DRILLS } from '../../lib/drill-library';
 import { AppCard } from '../../components/ui/AppCard';
 import { AppButton } from '../../components/ui/AppButton';
 import { PageHeader } from '../../components/ui/PageHeader';
 import { DecorativeBackground } from '../../components/ui/DecorativeBackground';
-
-export const DRILLS: Drill[] = [
-  { id: '1', title: 'Gate Drill', description: 'Place deux tees à la largeur de ton putter à 50cm du trou. Rentre 10 putts de suite sans toucher les tees.', youtube_url: null, category: 'putting', difficulty: 'beginner', duration_minutes: 10 },
-  { id: '2', title: 'Clock Drill — distance', description: 'Place 4 balles à 1m, 2m, 3m et 4m du trou (comme une horloge). Fais le tour complet sans 3-putter.', youtube_url: null, category: 'putting', difficulty: 'intermediate', duration_minutes: 15 },
-  { id: '3', title: '100 putts de 1 mètre', description: 'Rentre 100 putts de 1 mètre consécutifs. Si tu rates, recommence depuis 0. Construit la confiance.', youtube_url: null, category: 'putting', difficulty: 'beginner', duration_minutes: 20 },
-  { id: '4', title: 'Chip & Run 50/50', description: "Depuis le rough, chipe vers une cible à 10m. L'objectif est que la balle roule autant qu'elle vole.", youtube_url: null, category: 'short_game', difficulty: 'beginner', duration_minutes: 20 },
-  { id: '5', title: 'Sortie de bunker ciblée', description: "Trace un cercle de 1m autour du trou. Sors 10 balles de bunker. Objectif: 7/10 dans le cercle.", youtube_url: null, category: 'short_game', difficulty: 'intermediate', duration_minutes: 20 },
-  { id: '6', title: 'Up & Down challenge', description: "50m du green, 10 essais. Compte tes up & downs réussis. Objectif: 5/10 minimum.", youtube_url: null, category: 'short_game', difficulty: 'intermediate', duration_minutes: 25 },
-  { id: '7', title: '9 to 3 — contact propre', description: "Fais des swings courts (9h à 3h) avec un fer 7. Objectif: contact propre et trajectoire droite.", youtube_url: null, category: 'approach', difficulty: 'beginner', duration_minutes: 15 },
-  { id: '8', title: 'Fer contre mur', description: "Debout face à un mur (10cm), descends le club sans le toucher. Corrige les défauts de swing intérieur.", youtube_url: null, category: 'approach', difficulty: 'intermediate', duration_minutes: 10 },
-  { id: '9', title: 'Approche 100m / 150m / 200m', description: "10 balles à chaque distance. Note les résultats. Identifie quelle distance te coûte le plus de coups.", youtube_url: null, category: 'approach', difficulty: 'intermediate', duration_minutes: 30 },
-  { id: '10', title: 'Drive en douceur 80%', description: "Frappe 20 drives à 80% de puissance. Mesure la précision vs direction. La vitesse sans contrôle ne sert à rien.", youtube_url: null, category: 'driving', difficulty: 'beginner', duration_minutes: 20 },
-  { id: '11', title: 'Tempo 3:1', description: 'Monte en 3 temps, descends en 1. Utilise un métronome ou compte "un-deux-trois / frapper".', youtube_url: null, category: 'driving', difficulty: 'beginner', duration_minutes: 15 },
-  { id: '12', title: 'Drive entre les cibles', description: "Choisis deux repères à 10m d'écart à 200m. Frappe 10 balles dans le couloir. Compte tes réussites.", youtube_url: null, category: 'driving', difficulty: 'intermediate', duration_minutes: 20 },
-  { id: '13', title: 'Routine de putting mental', description: "10 putts de 2m. Avant chaque putt: visualise la ligne, 2 pratiques, target focus. Zéro précipitation.", youtube_url: null, category: 'mental', difficulty: 'beginner', duration_minutes: 15 },
-  { id: '14', title: 'Simulation de trou', description: "Au practice, joue un trou imaginaire. Drive, approche, chip, putt. Tout avec la même routine qu'en compet.", youtube_url: null, category: 'mental', difficulty: 'advanced', duration_minutes: 30 },
-  { id: '15', title: 'Respiration avant coup', description: "Sur 20 coups, impose-toi 3 respirations profondes avant chaque swing. Observe l'effet sur la précision.", youtube_url: null, category: 'mental', difficulty: 'beginner', duration_minutes: 20 },
-];
 
 const CATEGORIES = [
   { key: 'recommended', label: 'Focus' },
@@ -44,7 +27,11 @@ export default function DrillsScreen() {
   const { completions, recommendedCategories, fetchCompletions, markDone, isDoneToday, getStreak, getTotalDone } = useDrillsStore();
   const insets = useSafeAreaInsets();
 
-  useEffect(() => { fetchCompletions(); }, []);
+  useEffect(() => {
+    void fetchCompletions().catch((error: any) => {
+      Alert.alert('Erreur', error?.message ?? 'Impossible de charger tes drills complétés.');
+    });
+  }, [fetchCompletions]);
 
   const filtered = activeCategory === 'all'
     ? DRILLS
@@ -80,8 +67,7 @@ export default function DrillsScreen() {
             <Text style={styles.recommendEyebrow}>Focus du moment</Text>
             <Text style={styles.recommendText}>
               {recommendedCategories.map(c => {
-                const labels: Record<string, string> = { putting: 'Putting', short_game: 'Petit jeu', approach: 'Approches', driving: 'Mise en jeu', mental: 'Mental' };
-                return labels[c] ?? c;
+                return DRILL_CATEGORY_LABELS[c as keyof typeof DRILL_CATEGORY_LABELS] ?? c;
               }).join(' · ')}
             </Text>
           </AppCard>
@@ -107,7 +93,15 @@ export default function DrillsScreen() {
             drill={drill}
             doneToday={isDoneToday(drill.id)}
             totalCompletions={completions.filter(c => c.drill_id === drill.id).length}
-            onMarkDone={() => user && markDone(drill.id, user.id)}
+            onMarkDone={() => {
+              if (!user) {
+                return;
+              }
+
+              void markDone(drill.id, user.id).catch((error: any) => {
+                Alert.alert('Erreur', error?.message ?? 'Impossible de marquer ce drill comme terminé.');
+              });
+            }}
           />
         ))}
 
@@ -129,7 +123,6 @@ function DrillCard({ drill, doneToday, totalCompletions, onMarkDone }: {
   onMarkDone: () => void;
 }) {
   const diffColors: Record<string, string> = { beginner: Colors.primary, intermediate: Colors.warning, advanced: Colors.error };
-  const diffLabels: Record<string, string> = { beginner: 'Débutant', intermediate: 'Intermédiaire', advanced: 'Avancé' };
 
   return (
     <AppCard style={[styles.card, doneToday && styles.cardDone]} accent={doneToday ? 'highlight' : 'default'}>
@@ -137,7 +130,7 @@ function DrillCard({ drill, doneToday, totalCompletions, onMarkDone }: {
         <Text style={styles.cardTitle}>{drill.title}</Text>
         <View style={[styles.diffBadge, { borderColor: diffColors[drill.difficulty] }]}>
           <Text style={[styles.diffText, { color: diffColors[drill.difficulty] }]}>
-            {diffLabels[drill.difficulty]}
+            {DRILL_DIFFICULTY_LABELS[drill.difficulty]}
           </Text>
         </View>
       </View>

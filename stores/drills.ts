@@ -24,20 +24,30 @@ export const useDrillsStore = create<DrillsState>((set, get) => ({
   recommendedCategories: [],
 
   fetchCompletions: async () => {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('drill_completions')
       .select('*')
       .order('completed_at', { ascending: false })
       .limit(200);
+
+    if (error) {
+      throw error;
+    }
+
     if (data) set({ completions: data });
   },
 
   markDone: async (drillId, userId) => {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('drill_completions')
       .insert({ drill_id: drillId, user_id: userId })
       .select()
       .single();
+
+    if (error) {
+      throw error;
+    }
+
     if (data) set({ completions: [data, ...get().completions] });
   },
 
