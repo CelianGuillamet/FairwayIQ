@@ -1,8 +1,7 @@
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { AppBadge } from '../ui/AppBadge';
-import { AppCard } from '../ui/AppCard';
 import { Colors, Radius, Spacing, Typography } from '../../constants';
 import type { HoleViewData } from '../../lib/hole-view';
+import { getScoreDescriptor } from '../../lib/hole-view';
 import type { TeeKey, TeeOption } from '../../lib/golf-courses';
 import type { RoundDraftHole } from '../../types';
 
@@ -15,227 +14,267 @@ type Props = {
   onSelectTee: (teeKey: TeeKey) => void;
 };
 
-function getHazardLabel(hazard: HoleViewData['hazards'][number]) {
-  switch (hazard) {
-    case 'water':
-      return 'Eau';
-    case 'trees':
-      return 'Arbres';
-    default:
-      return 'Bunker';
+function toneToColor(tone: string): string {
+  switch (tone) {
+    case 'elite':    return '#FFD055';
+    case 'positive': return Colors.primary;
+    case 'neutral':  return Colors.text;
+    case 'warning':  return Colors.warning;
+    default:         return Colors.error;
   }
 }
 
-function getDifficultyTone(label: HoleViewData['difficultyLabel']) {
-  if (label === 'Exigeant') return 'warning' as const;
-  if (label === 'Accessible') return 'primary' as const;
-  return 'neutral' as const;
+function hazardLabel(hazard: HoleViewData['hazards'][number]) {
+  switch (hazard) {
+    case 'water': return 'Eau';
+    case 'trees': return 'Arbres';
+    default:      return 'Bunker';
+  }
 }
 
 export function HoleOverviewCard({ courseName, hole, holeView, teeKey, teeOptions, onSelectTee }: Props) {
-  const selectedTee = teeOptions.find((tee) => tee.key === teeKey) ?? teeOptions[0];
-  const selectedDistance =
-    (selectedTee ? holeView.distanceByTee[selectedTee.key] : undefined)
-    ?? Object.values(holeView.distanceByTee).find((distance) => typeof distance === 'number')
-    ?? 0;
+  const selectedTee = teeOptions.find((t) => t.key === teeKey) ?? teeOptions[0];
+  const distance =
+    (selectedTee ? holeView.distanceByTee[selectedTee.key] : undefined) ??
+    Object.values(holeView.distanceByTee).find((d) => typeof d === 'number') ??
+    0;
+
+  const descriptor  = hole.completed ? getScoreDescriptor(hole.score, hole.par) : null;
+  const scoreColor  = descriptor ? toneToColor(descriptor.tone) : null;
+
+  const diffBadgeStyle =
+    holeView.difficultyLabel === 'Exigeant'   ? styles.badgeWarn :
+    holeView.difficultyLabel === 'Accessible' ? styles.badgeGood :
+    styles.badgeNeutral;
+
+  const diffTextStyle =
+    holeView.difficultyLabel === 'Exigeant'   ? styles.badgeTextWarn :
+    holeView.difficultyLabel === 'Accessible' ? styles.badgeTextGood :
+    styles.badgeTextNeutral;
 
   return (
-    <AppCard accent="highlight" style={styles.card}>
-      <View style={styles.topRow}>
-        <View style={styles.topCopy}>
-          <Text style={styles.eyebrow}>Contexte du trou</Text>
-          <Text style={styles.courseName} numberOfLines={1}>
-            {courseName || 'Parcours non précisé'}
-          </Text>
-        </View>
-        <AppBadge label={holeView.difficultyLabel} tone={getDifficultyTone(holeView.difficultyLabel)} />
-      </View>
+    <View style={styles.container}>
 
+      {/* Course name — subtle caption */}
+      {courseName.trim().length > 0 && (
+        <Text style={styles.courseName} numberOfLines={1}>{courseName}</Text>
+      )}
+
+      {/* Big hole number + score indicator */}
       <View style={styles.heroRow}>
-        <View style={styles.heroCopy}>
-          <Text style={styles.holeTitle}>Trou {hole.hole_number}</Text>
-          <Text style={styles.holeMeta}>
-            Par {holeView.par} · HCP {holeView.handicapIndex}
-          </Text>
-          <Text style={styles.summary}>{holeView.summary}</Text>
-        </View>
+        <Text style={styles.holeNum}>{hole.hole_number}</Text>
 
-        <View style={styles.distanceBlock}>
-          <Text style={styles.distanceValue}>{selectedDistance}</Text>
-          <Text style={styles.distanceLabel}>mètres</Text>
-        </View>
+        {descriptor && scoreColor ? (
+          <View style={[styles.scorePill, { borderColor: scoreColor, backgroundColor: scoreColor + '18' }]}>
+            <Text style={[styles.scorePillDiff,  { color: scoreColor }]}>{descriptor.diffLabel}</Text>
+            <Text style={[styles.scorePillLabel, { color: scoreColor }]}>{descriptor.label}</Text>
+          </View>
+        ) : (
+          <View style={styles.pendingPill}>
+            <Text style={styles.pendingText}>À jouer</Text>
+          </View>
+        )}
       </View>
 
-      <View style={styles.badgesRow}>
-        <AppBadge label={holeView.distanceSource === 'catalog' ? 'Distance réelle' : 'Distance estimée'} />
-        {holeView.gpsAvailable ? <AppBadge label={`GPS ${holeView.gpsPointCount || 1} pts`} tone="primary" /> : null}
-        {holeView.hazards.map((hazard) => (
-          <AppBadge key={hazard} label={getHazardLabel(hazard)} />
-        ))}
+      {/* Par · HCP · Distance */}
+      <View style={styles.metaRow}>
+        <Text style={styles.metaItem}>Par {holeView.par}</Text>
+        <Text style={styles.metaDot}>·</Text>
+        <Text style={styles.metaItem}>HCP {holeView.handicapIndex}</Text>
+        <Text style={styles.metaDot}>·</Text>
+        <Text style={[styles.metaItem, styles.metaDist]}>{distance}m</Text>
       </View>
 
-      {teeOptions.length > 1 ? (
-        <View style={styles.teeSection}>
-          <Text style={styles.teeSectionLabel}>Départ</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.teeRow}>
-            {teeOptions.map((tee) => {
-              const isActive = tee.key === teeKey;
-              const teeDistance = holeView.distanceByTee[tee.key] ?? selectedDistance;
-
-              return (
-                <TouchableOpacity
-                  key={tee.key}
-                  style={[
-                    styles.teeChip,
-                    isActive && styles.teeChipActive,
-                    { borderColor: isActive ? tee.color : Colors.borderStrong },
-                  ]}
-                  onPress={() => onSelectTee(tee.key)}
-                >
-                  <View style={styles.teeChipTop}>
-                    <View style={[styles.teeDot, { backgroundColor: tee.color }]} />
-                    <Text style={[styles.teeChipLabel, isActive && styles.teeChipLabelActive]}>
-                      {tee.shortLabel ?? tee.label}
-                    </Text>
-                  </View>
-                  <Text style={[styles.teeChipValue, isActive && styles.teeChipValueActive]}>
-                    {teeDistance} m
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </ScrollView>
+      {/* Difficulty + hazard chips */}
+      <View style={styles.chipsRow}>
+        <View style={[styles.badge, diffBadgeStyle]}>
+          <Text style={[styles.badgeText, diffTextStyle]}>{holeView.difficultyLabel}</Text>
         </View>
-      ) : null}
-    </AppCard>
+        {holeView.hazards
+          .filter((h) => h !== 'bunker')
+          .map((hazard) => (
+            <View key={hazard} style={styles.badge}>
+              <Text style={styles.badgeText}>{hazardLabel(hazard)}</Text>
+            </View>
+          ))}
+      </View>
+
+      {/* Tee selector — compact pill row */}
+      {teeOptions.length > 1 && (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.teeRow}
+        >
+          {teeOptions.map((tee) => {
+            const active   = tee.key === teeKey;
+            const teeDist  = holeView.distanceByTee[tee.key] ?? distance;
+            return (
+              <TouchableOpacity
+                key={tee.key}
+                style={[
+                  styles.teeChip,
+                  active && { borderColor: tee.color, backgroundColor: tee.color + '18' },
+                ]}
+                onPress={() => onSelectTee(tee.key)}
+                activeOpacity={0.7}
+              >
+                <View style={[styles.teeDot, { backgroundColor: tee.color }]} />
+                <Text style={[styles.teeLabel, active && { color: tee.color }]}>
+                  {tee.shortLabel ?? tee.label} · {teeDist}m
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+      )}
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  card: {
-    marginHorizontal: Spacing.md,
-    marginBottom: Spacing.md,
+  container: {
+    paddingHorizontal: Spacing.xl,
+    paddingVertical: Spacing.md,
+    gap: Spacing.xs,
   },
-  topRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-    gap: Spacing.md,
-  },
-  topCopy: {
-    flex: 1,
-  },
-  eyebrow: {
+
+  courseName: {
     ...Typography.caption,
     color: Colors.textDim,
     textTransform: 'uppercase',
-    letterSpacing: 1,
+    letterSpacing: 1.2,
+    textAlign: 'center',
   },
-  courseName: {
-    ...Typography.bodyStrong,
-    color: Colors.text,
-    marginTop: 6,
-  },
+
+  // ── Hero row ──
   heroRow: {
     flexDirection: 'row',
-    alignItems: 'flex-end',
-    justifyContent: 'space-between',
+    alignItems: 'center',
+    justifyContent: 'center',
     gap: Spacing.md,
-    marginTop: Spacing.lg,
   },
-  heroCopy: {
-    flex: 1,
-  },
-  holeTitle: {
-    ...Typography.display,
+  holeNum: {
+    fontSize: 96,
+    lineHeight: 100,
+    fontWeight: '900' as const,
     color: Colors.text,
+    letterSpacing: -3,
   },
-  holeMeta: {
-    ...Typography.bodyStrong,
-    color: Colors.textMuted,
-    marginTop: 4,
-  },
-  summary: {
-    ...Typography.body,
-    color: Colors.textMuted,
-    marginTop: Spacing.sm,
-  },
-  distanceBlock: {
-    minWidth: 104,
-    alignItems: 'flex-end',
-  },
-  distanceValue: {
-    ...Typography.display,
-    color: Colors.primary,
-    fontSize: 48,
-    lineHeight: 50,
-  },
-  distanceLabel: {
-    ...Typography.caption,
-    color: Colors.textDim,
-    marginTop: 4,
-    textTransform: 'uppercase',
-    letterSpacing: 0.8,
-  },
-  badgesRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: Spacing.xs,
-    marginTop: Spacing.md,
-  },
-  teeSection: {
-    marginTop: Spacing.lg,
-    borderTopWidth: 1,
-    borderTopColor: Colors.border,
-    paddingTop: Spacing.md,
-  },
-  teeSectionLabel: {
-    ...Typography.caption,
-    color: Colors.textDim,
-    textTransform: 'uppercase',
-    letterSpacing: 0.8,
-  },
-  teeRow: {
-    gap: Spacing.sm,
-    paddingTop: Spacing.sm,
-    paddingRight: Spacing.xs,
-  },
-  teeChip: {
-    minWidth: 92,
+  scorePill: {
     borderRadius: Radius.lg,
-    borderWidth: 1,
-    backgroundColor: Colors.backgroundSoft,
+    borderWidth: 1.5,
     paddingHorizontal: Spacing.md,
     paddingVertical: Spacing.sm,
+    alignItems: 'center',
+    minWidth: 72,
   },
-  teeChipActive: {
-    backgroundColor: Colors.surfaceElevated,
+  scorePillDiff: {
+    fontSize: 22,
+    lineHeight: 26,
+    fontWeight: '900' as const,
   },
-  teeChipTop: {
+  scorePillLabel: {
+    ...Typography.caption,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginTop: 2,
+    textAlign: 'center',
+  },
+  pendingPill: {
+    borderRadius: Radius.lg,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    backgroundColor: Colors.surface,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    alignItems: 'center',
+    minWidth: 72,
+  },
+  pendingText: {
+    ...Typography.label,
+    color: Colors.textDim,
+  },
+
+  // ── Metadata ──
+  metaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Spacing.sm,
+  },
+  metaItem: {
+    ...Typography.bodyStrong,
+    color: Colors.textMuted,
+  },
+  metaDot: {
+    ...Typography.body,
+    color: Colors.textDim,
+  },
+  metaDist: {
+    color: Colors.primary,
+  },
+
+  // ── Chips ──
+  chipsRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: Spacing.xs,
+    flexWrap: 'wrap',
+  },
+  badge: {
+    borderRadius: Radius.full,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    backgroundColor: Colors.surface,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 4,
+  },
+  badgeWarn: {
+    borderColor: Colors.warning + '88',
+    backgroundColor: Colors.warning + '14',
+  },
+  badgeGood: {
+    borderColor: Colors.primary + '88',
+    backgroundColor: Colors.primary + '14',
+  },
+  badgeNeutral: {
+    borderColor: Colors.border,
+    backgroundColor: Colors.surface,
+  },
+  badgeText: {
+    ...Typography.caption,
+    color: Colors.textMuted,
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+  },
+  badgeTextWarn:    { color: Colors.warning },
+  badgeTextGood:    { color: Colors.primary },
+  badgeTextNeutral: { color: Colors.textMuted },
+
+  // ── Tee selector ──
+  teeRow: {
+    gap: Spacing.xs,
+    justifyContent: 'center',
+  },
+  teeChip: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.xs,
+    borderRadius: Radius.full,
+    borderWidth: 1,
+    borderColor: Colors.borderStrong,
+    backgroundColor: Colors.surface,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.xs,
   },
   teeDot: {
-    width: 10,
-    height: 10,
+    width: 8,
+    height: 8,
     borderRadius: Radius.full,
   },
-  teeChipLabel: {
-    ...Typography.caption,
+  teeLabel: {
+    ...Typography.label,
     color: Colors.textMuted,
-    textTransform: 'uppercase',
-    letterSpacing: 0.8,
-  },
-  teeChipLabelActive: {
-    color: Colors.text,
-  },
-  teeChipValue: {
-    ...Typography.bodyStrong,
-    color: Colors.text,
-    marginTop: 6,
-  },
-  teeChipValueActive: {
-    color: Colors.primary,
   },
 });

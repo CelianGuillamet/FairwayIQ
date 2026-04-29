@@ -25,7 +25,6 @@ import { HoleNavigation } from '../../components/rounds/HoleNavigation';
 import { HoleOverviewCard } from '../../components/rounds/HoleOverviewCard';
 import { HoleScoringPanel } from '../../components/rounds/HoleScoringPanel';
 import { AppButton } from '../../components/ui/AppButton';
-import { AppCard } from '../../components/ui/AppCard';
 import { AppInput } from '../../components/ui/AppInput';
 import {
   getCourseById,
@@ -77,47 +76,41 @@ export default function RoundScreen() {
   const { addRound, removeRound, rounds } = useRoundsStore();
   const insets = useSafeAreaInsets();
 
-  const [courseName, setCourseName] = useState('');
+  const [courseName, setCourseName]         = useState('');
   const [selectedCourse, setSelectedCourse] = useState<GolfCourse | null>(null);
-  const [holes, setHoles] = useState<9 | 18>(18);
-  const [teeKey, setTeeKey] = useState<TeeKey>(getDefaultTeeKey());
+  const [holes, setHoles]                   = useState<9 | 18>(18);
+  const [teeKey, setTeeKey]                 = useState<TeeKey>(getDefaultTeeKey());
   const [currentHoleNumber, setCurrentHoleNumber] = useState(1);
-  const [scorecard, setScorecard] = useState<RoundDraftHole[]>(() => createDefaultScorecard(18));
-  const [notes, setNotes] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [courseLoading, setCourseLoading] = useState(false);
-  const [draftHydrated, setDraftHydrated] = useState(false);
+  const [scorecard, setScorecard]           = useState<RoundDraftHole[]>(() => createDefaultScorecard(18));
+  const [notes, setNotes]                   = useState('');
+  const [loading, setLoading]               = useState(false);
+  const [courseLoading, setCourseLoading]   = useState(false);
+  const [draftHydrated, setDraftHydrated]   = useState(false);
   const [restoredDraftAt, setRestoredDraftAt] = useState<string | null>(null);
-  const [setupExpanded, setSetupExpanded] = useState(true);
-  const courseRequestRef = useRef(0);
+  const [setupExpanded, setSetupExpanded]   = useState(true);
+  const courseRequestRef  = useRef(0);
   const autoAdvanceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const progress = useMemo(() => getScorecardProgress(scorecard), [scorecard]);
-  const aggregate = useMemo(() => aggregateScorecard(scorecard), [scorecard]);
+  const progress   = useMemo(() => getScorecardProgress(scorecard), [scorecard]);
+  const aggregate  = useMemo(() => aggregateScorecard(scorecard), [scorecard]);
   const teeOptions = useMemo(() => getTeeOptions(selectedCourse), [selectedCourse]);
   const courseHasOfficialHoleData = useMemo(
     () => selectedCourse ? hasCompleteCourseHoleDetails(selectedCourse, holes) : false,
-    [holes, selectedCourse]
+    [holes, selectedCourse],
   );
   const holeViews = useMemo(
     () => buildHoleViewData({ course: selectedCourse, scorecard }),
-    [scorecard, selectedCourse]
+    [scorecard, selectedCourse],
   );
-  const currentHole = scorecard[currentHoleNumber - 1];
+
+  const currentHole     = scorecard[currentHoleNumber - 1];
   const currentHoleView = holeViews[currentHoleNumber - 1];
-  const teeLabel = teeOptions.find((tee) => tee.key === teeKey)?.label ?? teeOptions[0]?.label ?? teeKey;
-  const canGoPrevious = currentHoleNumber > 1;
-  const canGoNext = currentHoleNumber < scorecard.length;
-  const canSave = progress.completedHoles === scorecard.length && scorecard.length > 0;
-  const setupLocked = progress.completedHoles > 0;
-  const missingHoleNumbers = useMemo(
-    () => scorecard.filter((hole) => !hole.completed).map((hole) => hole.hole_number),
-    [scorecard]
-  );
-  const nextMissingHole = useMemo(
-    () => scorecard.find((hole) => !hole.completed) ?? null,
-    [scorecard]
-  );
+  const teeLabel        = teeOptions.find((tee) => tee.key === teeKey)?.label ?? teeOptions[0]?.label ?? teeKey;
+  const canGoPrevious   = currentHoleNumber > 1;
+  const canGoNext       = currentHoleNumber < scorecard.length;
+  const canSave         = progress.completedHoles === scorecard.length && scorecard.length > 0;
+  const setupLocked     = progress.completedHoles > 0;
+
   const hasMeaningfulDraft = useMemo(
     () => (
       courseName.trim().length > 0
@@ -127,41 +120,28 @@ export default function RoundScreen() {
       || holes !== 18
       || teeKey !== getDefaultTeeKey(selectedCourse)
     ),
-    [courseName, notes, progress.completedHoles, currentHoleNumber, holes, selectedCourse, teeKey]
+    [courseName, notes, progress.completedHoles, currentHoleNumber, holes, selectedCourse, teeKey],
   );
+
   const restoredDraftLabel = useMemo(() => {
-    if (!restoredDraftAt) {
-      return null;
-    }
-
-    const restoredDate = new Date(restoredDraftAt);
-
-    if (Number.isNaN(restoredDate.getTime())) {
-      return null;
-    }
-
-    return restoredDate.toLocaleString('fr-FR', {
-      day: 'numeric',
-      month: 'short',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
+    if (!restoredDraftAt) return null;
+    const d = new Date(restoredDraftAt);
+    if (Number.isNaN(d.getTime())) return null;
+    return d.toLocaleString('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
   }, [restoredDraftAt]);
 
+  // ── Effects ──────────────────────────────────────────────────────────────
+
   useEffect(() => () => {
-    if (autoAdvanceTimerRef.current) {
-      clearTimeout(autoAdvanceTimerRef.current);
-    }
+    if (autoAdvanceTimerRef.current) clearTimeout(autoAdvanceTimerRef.current);
   }, []);
 
   useEffect(() => {
-    if (currentHoleNumber > holes) {
-      setCurrentHoleNumber(holes);
-    }
+    if (currentHoleNumber > holes) setCurrentHoleNumber(holes);
   }, [currentHoleNumber, holes]);
 
   useEffect(() => {
-    setTeeKey((currentTeeKey) => getValidTeeKey(selectedCourse, currentTeeKey));
+    setTeeKey((current) => getValidTeeKey(selectedCourse, current));
   }, [selectedCourse]);
 
   useEffect(() => {
@@ -172,33 +152,19 @@ export default function RoundScreen() {
   }, [progress.completedHoles, setupExpanded]);
 
   useEffect(() => {
-    let isMounted = true;
+    let mounted = true;
 
-    async function hydrateDraft() {
-      if (!user?.id) {
-        if (isMounted) {
-          setDraftHydrated(true);
-        }
-        return;
-      }
-
+    async function hydrate() {
+      if (!user?.id) { if (mounted) setDraftHydrated(true); return; }
       const draft = await loadRoundDraft(user.id);
+      if (!mounted) return;
+      if (!draft) { setDraftHydrated(true); return; }
 
-      if (!isMounted) {
-        return;
-      }
-
-      if (!draft) {
-        setDraftHydrated(true);
-        return;
-      }
-
-      const restoredCourse = await getCourseById(draft.courseId);
-
+      const restored = await getCourseById(draft.courseId);
       setCourseName(draft.courseName);
-      setSelectedCourse(restoredCourse);
+      setSelectedCourse(restored);
       setHoles(draft.holes);
-      setTeeKey(getValidTeeKey(restoredCourse, draft.teeKey));
+      setTeeKey(getValidTeeKey(restored, draft.teeKey));
       setCurrentHoleNumber(Math.max(1, Math.min(draft.currentHoleNumber, draft.scorecard.length || draft.holes)));
       setScorecard(draft.scorecard);
       setNotes(draft.notes);
@@ -206,24 +172,18 @@ export default function RoundScreen() {
       setDraftHydrated(true);
     }
 
-    void hydrateDraft();
-
-    return () => {
-      isMounted = false;
-    };
+    void hydrate();
+    return () => { mounted = false; };
   }, [user?.id]);
 
   useEffect(() => {
-    if (!draftHydrated || !user?.id || loading) {
-      return;
-    }
+    if (!draftHydrated || !user?.id || loading) return;
 
     const timeout = setTimeout(() => {
       if (!hasMeaningfulDraft) {
         void clearRoundDraft(user.id);
         return;
       }
-
       void saveRoundDraft(user.id, {
         courseId: selectedCourse && !selectedCourse.id.startsWith('custom-') ? selectedCourse.id : null,
         courseName,
@@ -237,18 +197,11 @@ export default function RoundScreen() {
 
     return () => clearTimeout(timeout);
   }, [
-    courseName,
-    currentHoleNumber,
-    draftHydrated,
-    hasMeaningfulDraft,
-    holes,
-    loading,
-    notes,
-    scorecard,
-    selectedCourse,
-    teeKey,
-    user?.id,
+    courseName, currentHoleNumber, draftHydrated, hasMeaningfulDraft,
+    holes, loading, notes, scorecard, selectedCourse, teeKey, user?.id,
   ]);
+
+  // ── Handlers ─────────────────────────────────────────────────────────────
 
   const cancelAutoAdvance = () => {
     if (autoAdvanceTimerRef.current) {
@@ -264,74 +217,44 @@ export default function RoundScreen() {
   };
 
   const handleCourseNameChange = (text: string) => {
-    if (setupLocked) {
-      return;
-    }
-
+    if (setupLocked) return;
     setCourseName(text);
-
-    if (selectedCourse && text.trim() !== selectedCourse.name) {
-      setSelectedCourse(null);
-    }
+    if (selectedCourse && text.trim() !== selectedCourse.name) setSelectedCourse(null);
   };
 
   const handleApplyCoursePar = (nextHoles: 9 | 18, course?: GolfCourse | null) => {
-    const targetPar = course ? getParForHoles(course, nextHoles) : getDefaultPar(nextHoles);
-    const courseParSequence = course ? getCourseParSequence(course, nextHoles) : null;
-
-    setScorecard((currentScorecard) => {
-      const resizedScorecard = resizeScorecard(currentScorecard, nextHoles);
-
-      if (courseParSequence) {
-        return applyParSequenceToScorecard(resizedScorecard, courseParSequence);
-      }
-
-      return applyTargetParToScorecard(resizedScorecard, targetPar);
+    const targetPar        = course ? getParForHoles(course, nextHoles) : getDefaultPar(nextHoles);
+    const courseParSeq     = course ? getCourseParSequence(course, nextHoles) : null;
+    setScorecard((curr) => {
+      const resized = resizeScorecard(curr, nextHoles);
+      return courseParSeq
+        ? applyParSequenceToScorecard(resized, courseParSeq)
+        : applyTargetParToScorecard(resized, targetPar);
     });
   };
 
   const handleCourseSelect = async (course: GolfCourse) => {
-    if (setupLocked) {
-      return;
-    }
-
+    if (setupLocked) return;
     cancelAutoAdvance();
-
-    const requestId = courseRequestRef.current + 1;
-    courseRequestRef.current = requestId;
-
+    const reqId = ++courseRequestRef.current;
     setCourseName(course.name);
     setSelectedCourse(course);
-    setTeeKey((currentTeeKey) => getValidTeeKey(course, currentTeeKey));
+    setTeeKey((curr) => getValidTeeKey(course, curr));
     handleApplyCoursePar(holes, course);
     setCourseLoading(true);
-
     try {
-      const resolvedCourse = await getCourseById(course.id);
-
-      if (courseRequestRef.current !== requestId) {
-        return;
-      }
-
-      if (!resolvedCourse) {
-        return;
-      }
-
-      setSelectedCourse(resolvedCourse);
-      setTeeKey((currentTeeKey) => getValidTeeKey(resolvedCourse, currentTeeKey));
-      handleApplyCoursePar(holes, resolvedCourse);
+      const resolved = await getCourseById(course.id);
+      if (courseRequestRef.current !== reqId || !resolved) return;
+      setSelectedCourse(resolved);
+      setTeeKey((curr) => getValidTeeKey(resolved, curr));
+      handleApplyCoursePar(holes, resolved);
     } finally {
-      if (courseRequestRef.current === requestId) {
-        setCourseLoading(false);
-      }
+      if (courseRequestRef.current === reqId) setCourseLoading(false);
     }
   };
 
   const handleHolesToggle = (nextHoles: 9 | 18) => {
-    if (setupLocked || holes === nextHoles) {
-      return;
-    }
-
+    if (setupLocked || holes === nextHoles) return;
     cancelAutoAdvance();
     setHoles(nextHoles);
     handleApplyCoursePar(nextHoles, selectedCourse);
@@ -339,55 +262,37 @@ export default function RoundScreen() {
 
   const handleChangeCurrentHole = (patch: Partial<RoundDraftHole>) => {
     cancelAutoAdvance();
-
-    setScorecard((currentScorecard) => {
-      const currentDraftHole = currentScorecard[currentHoleNumber - 1];
-
-      if (!currentDraftHole) {
-        return currentScorecard;
-      }
-
-      const nextPatch = { ...patch };
-
-      if (typeof nextPatch.putts === 'number') {
-        nextPatch.putts = Math.max(0, Math.min(nextPatch.putts, currentDraftHole.score));
-      }
-
-      return updateDraftHole(currentScorecard, currentHoleNumber, nextPatch);
+    setScorecard((curr) => {
+      const hole = curr[currentHoleNumber - 1];
+      if (!hole) return curr;
+      const next = { ...patch };
+      if (typeof next.putts === 'number') next.putts = Math.max(0, Math.min(next.putts, hole.score));
+      return updateDraftHole(curr, currentHoleNumber, next);
     });
   };
 
   const handleApplyScore = (score: number, options?: { autoAdvance?: boolean }) => {
     cancelAutoAdvance();
-
-    setScorecard((currentScorecard) => {
-      const hole = currentScorecard[currentHoleNumber - 1];
-
-      if (!hole) {
-        return currentScorecard;
-      }
-
-      return updateDraftHole(currentScorecard, currentHoleNumber, {
+    setScorecard((curr) => {
+      const hole = curr[currentHoleNumber - 1];
+      if (!hole) return curr;
+      return updateDraftHole(curr, currentHoleNumber, {
         score,
         putts: Math.min(hole.putts, score),
         completed: true,
       });
     });
-
-    if (!options?.autoAdvance || currentHoleNumber >= scorecard.length) {
-      return;
-    }
-
+    if (!options?.autoAdvance || currentHoleNumber >= scorecard.length) return;
     autoAdvanceTimerRef.current = setTimeout(() => {
       autoAdvanceTimerRef.current = null;
       animateLayout();
-      setCurrentHoleNumber((currentValue) => Math.min(scorecard.length, currentValue + 1));
+      setCurrentHoleNumber((v) => Math.min(scorecard.length, v + 1));
     }, 650);
   };
 
   const handleResetCurrentHole = () => {
     cancelAutoAdvance();
-    setScorecard((currentScorecard) => resetDraftHole(currentScorecard, currentHoleNumber));
+    setScorecard((curr) => resetDraftHole(curr, currentHoleNumber));
   };
 
   const handleSave = async (scorecardOverride?: RoundDraftHole[]) => {
@@ -395,52 +300,44 @@ export default function RoundScreen() {
       Alert.alert('Erreur', 'Session introuvable. Reconnecte-toi puis réessaie.');
       return;
     }
-
     const effectiveScorecard = scorecardOverride ?? scorecard;
-    const validationError = validateScorecard(effectiveScorecard);
-
-    if (validationError) {
-      Alert.alert('Erreur', validationError);
-      return;
-    }
+    const err = validateScorecard(effectiveScorecard);
+    if (err) { Alert.alert('Erreur', err); return; }
 
     cancelAutoAdvance();
     setLoading(true);
-
     try {
-      const isCatalogCourse = selectedCourse != null && !selectedCourse.id.startsWith('custom-');
-      const selectedTeeOption = teeOptions.find((teeOption) => teeOption.key === teeKey) ?? null;
-      const roundPayload = buildRoundInsertFromScorecard({
+      const isCatalog       = selectedCourse != null && !selectedCourse.id.startsWith('custom-');
+      const selectedTeeOpt  = teeOptions.find((t) => t.key === teeKey) ?? null;
+      const roundPayload    = buildRoundInsertFromScorecard({
         userId: user.id,
         playedAt: new Date().toISOString(),
-        courseId: isCatalogCourse ? selectedCourse?.id ?? null : null,
+        courseId: isCatalog ? selectedCourse?.id ?? null : null,
         courseName: courseName.trim() || null,
-        courseProvider: isCatalogCourse ? selectedCourse?.provider ?? null : null,
-        providerCourseId: isCatalogCourse ? selectedCourse?.providerCourseId ?? null : null,
+        courseProvider: isCatalog ? selectedCourse?.provider ?? null : null,
+        providerCourseId: isCatalog ? selectedCourse?.providerCourseId ?? null : null,
         teeKey,
-        teeSetId: isCatalogCourse ? selectedTeeOption?.id ?? null : null,
-        teeName: selectedTeeOption?.label ?? null,
-        teeColor: selectedTeeOption?.color ?? null,
+        teeSetId: isCatalog ? selectedTeeOpt?.id ?? null : null,
+        teeName: selectedTeeOpt?.label ?? null,
+        teeColor: selectedTeeOpt?.color ?? null,
         notes: notes.trim() || null,
         scorecard: effectiveScorecard,
       });
 
-      const round = await addRound(roundPayload);
-      const roundHoleInserts = buildRoundHoleInserts(round.id, user.id, effectiveScorecard);
-
-      const { error: roundHolesError } = await supabase.from('round_holes').insert(roundHoleInserts);
-
-      if (roundHolesError) {
+      const round         = await addRound(roundPayload);
+      const holeInserts   = buildRoundHoleInserts(round.id, user.id, effectiveScorecard);
+      const { error: holesErr } = await supabase.from('round_holes').insert(holeInserts);
+      if (holesErr) {
         await supabase.from('rounds').delete().eq('id', round.id);
         removeRound(round.id);
-        throw roundHolesError;
+        throw holesErr;
       }
 
       const diagnosis = await analyzeRound(round, profile, rounds.slice(0, 5), effectiveScorecard)
         .catch(() => buildFallbackDiagnostic(round, profile, rounds.slice(0, 5), effectiveScorecard));
 
-      await saveDiagnostic({ userId: user.id, roundId: round.id, result: diagnosis }).catch((error: any) => {
-        console.warn('[diagnostic] save failed', error?.message ?? error);
+      await saveDiagnostic({ userId: user.id, roundId: round.id, result: diagnosis }).catch((e: any) => {
+        console.warn('[diagnostic] save failed', e?.message ?? e);
       });
 
       await clearRoundDraft(user.id);
@@ -451,7 +348,7 @@ export default function RoundScreen() {
         params: { roundId: round.id, diagnosis: JSON.stringify(diagnosis) },
       });
     } catch (error: any) {
-      Alert.alert('Erreur', error?.message ?? 'Une erreur est survenue pendant la création du round.');
+      Alert.alert('Erreur', error?.message ?? 'Une erreur est survenue.');
     } finally {
       setLoading(false);
     }
@@ -460,7 +357,7 @@ export default function RoundScreen() {
   const handleDiscardDraft = () => {
     Alert.alert(
       'Effacer le brouillon ?',
-      'La saisie trou par trou sauvegardée sur cet appareil sera supprimée.',
+      'La saisie trou par trou sauvegardée sera supprimée.',
       [
         { text: 'Annuler', style: 'cancel' },
         {
@@ -468,11 +365,7 @@ export default function RoundScreen() {
           style: 'destructive',
           onPress: () => {
             cancelAutoAdvance();
-
-            if (user?.id) {
-              void clearRoundDraft(user.id);
-            }
-
+            if (user?.id) void clearRoundDraft(user.id);
             setCourseName('');
             setSelectedCourse(null);
             setHoles(18);
@@ -484,160 +377,194 @@ export default function RoundScreen() {
             setSetupExpanded(true);
           },
         },
-      ]
+      ],
     );
   };
 
   const swipeResponder = useMemo(
     () => PanResponder.create({
-      onMoveShouldSetPanResponder: (_, gestureState) => (
-        Math.abs(gestureState.dx) > 14 && Math.abs(gestureState.dx) > Math.abs(gestureState.dy) * 1.2
-      ),
-      onPanResponderRelease: (_, gestureState) => {
-        if (gestureState.dx <= -50 && canGoNext) {
-          goToHole(currentHoleNumber + 1);
-          return;
-        }
-
-        if (gestureState.dx >= 50 && canGoPrevious) {
-          goToHole(currentHoleNumber - 1);
-        }
+      onMoveShouldSetPanResponder: (_, g) =>
+        Math.abs(g.dx) > 14 && Math.abs(g.dx) > Math.abs(g.dy) * 1.2,
+      onPanResponderRelease: (_, g) => {
+        if (g.dx <= -50 && canGoNext)     { goToHole(currentHoleNumber + 1); return; }
+        if (g.dx >=  50 && canGoPrevious) { goToHole(currentHoleNumber - 1); }
       },
     }),
-    [canGoNext, canGoPrevious, currentHoleNumber, scorecard.length]
+    [canGoNext, canGoPrevious, currentHoleNumber, scorecard.length],
   );
 
-  const headerSubtitle =
-    courseName.trim().length > 0
-      ? `${courseName.trim()} · ${holes} trous · départ ${teeLabel}`
-      : `Scoring express · ${holes} trous · départ ${teeLabel}`;
+  // ── Render ────────────────────────────────────────────────────────────────
 
-  return (
-    <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <DecorativeBackground />
+  if (!draftHydrated) {
+    return (
+      <View style={styles.container}>
+        <DecorativeBackground />
+        <View style={styles.loadingView}>
+          <Text style={styles.loadingText}>Chargement...</Text>
+        </View>
+      </View>
+    );
+  }
 
-      <ScrollView
-        contentContainerStyle={[styles.content, { paddingTop: insets.top + 14 }]}
-        keyboardShouldPersistTaps="handled"
-      >
-        <View style={styles.header}>
-          <View style={styles.headerCopy}>
-            <Text style={styles.headerEyebrow}>Round scoring</Text>
-            <Text style={styles.headerTitle} numberOfLines={1}>
-              {courseName.trim() || 'Fast score'}
-            </Text>
-            <Text style={styles.headerSubtitle}>{headerSubtitle}</Text>
-          </View>
-
-          <TouchableOpacity
-            style={styles.headerAction}
-            onPress={() => {
-              cancelAutoAdvance();
-              animateLayout();
-              setSetupExpanded((currentValue) => !currentValue);
-            }}
+  // ── Setup mode ────────────────────────────────────────────────────────────
+  if (setupExpanded) {
+    return (
+      <View style={styles.container}>
+        <DecorativeBackground />
+        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+          <ScrollView
+            contentContainerStyle={[styles.setupContent, { paddingTop: insets.top + 20, paddingBottom: 96 + insets.bottom }]}
+            keyboardShouldPersistTaps="handled"
           >
-            <Text style={styles.headerActionLabel}>{setupExpanded ? 'Masquer' : 'Setup'}</Text>
-          </TouchableOpacity>
-        </View>
+            {/* Header */}
+            <Text style={styles.setupEyebrow}>Round scoring</Text>
+            <Text style={styles.setupTitle}>
+              {setupLocked ? courseName.trim() || 'Round en cours' : 'Prépare ta partie'}
+            </Text>
 
-        <View style={styles.liveMetricsRow}>
-          <HeaderMetric label="Live" value={progress.completedHoles > 0 ? `${progress.liveScore}` : '--'} accent />
-          <HeaderMetric label="Vs par" value={progress.completedHoles > 0 ? formatScoreToPar(progress.liveScoreToPar) : '—'} />
-          <HeaderMetric label="Trous" value={`${progress.completedHoles}/${progress.totalHoles}`} />
-        </View>
-
-        {restoredDraftAt ? (
-          <AppCard accent="soft" style={styles.bannerCard}>
-            <View style={styles.bannerRow}>
-              <View style={styles.bannerCopy}>
-                <Text style={styles.bannerTitle}>Brouillon restauré</Text>
-                <Text style={styles.bannerText}>
-                  {restoredDraftLabel
-                    ? `Carte reprise automatiquement le ${restoredDraftLabel}.`
-                    : 'Carte reprise automatiquement sur cet appareil.'}
-                </Text>
-              </View>
-              <TouchableOpacity style={styles.bannerAction} onPress={handleDiscardDraft}>
-                <Text style={styles.bannerActionLabel}>Effacer</Text>
+            {setupLocked && (
+              <TouchableOpacity
+                style={styles.resumeBtn}
+                onPress={() => { cancelAutoAdvance(); animateLayout(); setSetupExpanded(false); }}
+              >
+                <Text style={styles.resumeBtnLabel}>← Reprendre le round</Text>
               </TouchableOpacity>
-            </View>
-          </AppCard>
-        ) : null}
+            )}
 
-        {setupExpanded ? (
-          <AppCard accent="soft" style={styles.setupCard}>
-            <View style={styles.setupHeader}>
-              <View style={styles.setupHeaderCopy}>
-                <Text style={styles.setupEyebrow}>Round setup</Text>
-                <Text style={styles.setupTitle}>
-                  {setupLocked ? 'Le cadre du round est verrouillé pour protéger la carte.' : 'Prépare le round une fois, puis laisse l’écran vivre la partie.'}
-                </Text>
-              </View>
-              {!setupLocked && hasMeaningfulDraft ? (
-                <TouchableOpacity style={styles.setupGhostButton} onPress={handleDiscardDraft}>
-                  <Text style={styles.setupGhostButtonLabel}>Réinitialiser</Text>
+            {/* Draft banner */}
+            {restoredDraftAt && (
+              <View style={styles.draftBanner}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.draftBannerTitle}>Brouillon restauré</Text>
+                  <Text style={styles.draftBannerText}>
+                    {restoredDraftLabel ? `Repris le ${restoredDraftLabel}` : 'Repris automatiquement'}
+                  </Text>
+                </View>
+                <TouchableOpacity onPress={handleDiscardDraft}>
+                  <Text style={styles.draftBannerClear}>Effacer</Text>
                 </TouchableOpacity>
-              ) : null}
-            </View>
+              </View>
+            )}
 
-            {!setupLocked ? (
-              <>
-                <View style={styles.modeToggle}>
+            {/* Holes toggle */}
+            {!setupLocked && (
+              <View style={styles.setupSection}>
+                <Text style={styles.setupLabel}>Format</Text>
+                <View style={styles.holesRow}>
                   {([9, 18] as const).map((value) => (
                     <TouchableOpacity
                       key={value}
-                      style={[styles.modeToggleButton, holes === value && styles.modeToggleButtonActive]}
+                      style={[styles.holesBtn, holes === value && styles.holesBtnActive]}
                       onPress={() => handleHolesToggle(value)}
                     >
-                      <Text style={[styles.modeToggleLabel, holes === value && styles.modeToggleLabelActive]}>
+                      <Text style={[styles.holesBtnLabel, holes === value && styles.holesBtnLabelActive]}>
                         {value} trous
                       </Text>
                     </TouchableOpacity>
                   ))}
                 </View>
-
-                <View style={styles.fieldGroup}>
-                  <Text style={styles.fieldLabel}>Parcours</Text>
-                  <CourseSearch
-                    value={courseName}
-                    onChangeText={handleCourseNameChange}
-                    onSelect={handleCourseSelect}
-                  />
-                  <Text style={styles.fieldHint}>
-                    {courseLoading
-                      ? 'Synchronisation du parcours...'
-                      : selectedCourse
-                        ? `${selectedCourse.city} · ${selectedCourse.region} · ${courseHasOfficialHoleData ? 'données officielles complètes' : 'fallback premium'}`
-                        : 'Parcours optionnel. Si absent, la saisie reste immédiate.'}
-                  </Text>
-                </View>
-              </>
-            ) : (
-              <View style={styles.lockedSetupPanel}>
-                <LockedSetupPill label="Parcours" value={courseName.trim() || 'Libre'} />
-                <LockedSetupPill label="Format" value={`${holes} trous`} />
-                <LockedSetupPill label="Départ" value={teeLabel} />
               </View>
             )}
 
-            <AppInput
-              label="Notes"
-              hint="Vent, stratégie, feeling. Optionnel."
-              value={notes}
-              onChangeText={setNotes}
-              multiline
-              style={styles.notesInput}
+            {/* Course search */}
+            {!setupLocked && (
+              <View style={styles.setupSection}>
+                <Text style={styles.setupLabel}>Parcours</Text>
+                <CourseSearch
+                  value={courseName}
+                  onChangeText={handleCourseNameChange}
+                  onSelect={handleCourseSelect}
+                />
+                <Text style={styles.setupHint}>
+                  {courseLoading
+                    ? 'Chargement du parcours...'
+                    : selectedCourse
+                      ? `${selectedCourse.city} · ${selectedCourse.region} · ${courseHasOfficialHoleData ? 'données complètes' : 'données partielles'}`
+                      : 'Optionnel — la saisie reste disponible sans parcours.'}
+                </Text>
+              </View>
+            )}
+
+            {/* Locked pills */}
+            {setupLocked && (
+              <View style={styles.lockedRow}>
+                <LockedPill label="Parcours" value={courseName.trim() || 'Libre'} />
+                <LockedPill label="Format"   value={`${holes} trous`} />
+                <LockedPill label="Départ"   value={teeLabel} />
+              </View>
+            )}
+
+            {/* Notes */}
+            <View style={styles.setupSection}>
+              <AppInput
+                label="Notes"
+                hint="Vent, stratégie, feeling."
+                value={notes}
+                onChangeText={setNotes}
+                multiline
+                style={styles.notesInput}
+              />
+            </View>
+
+            {/* CTA */}
+            <AppButton
+              label={progress.completedHoles > 0
+                ? `Reprendre · trou ${currentHoleNumber}`
+                : 'Commencer le round →'}
+              onPress={() => { cancelAutoAdvance(); animateLayout(); setSetupExpanded(false); }}
+              style={styles.startBtn}
             />
 
-            {setupLocked ? (
-              <Text style={styles.setupLockHint}>
-                Le parcours et le nombre de trous sont figés après le premier trou saisi pour éviter les incohérences de par.
-              </Text>
-            ) : null}
-          </AppCard>
-        ) : null}
+            {hasMeaningfulDraft && !setupLocked && (
+              <TouchableOpacity style={styles.discardLink} onPress={handleDiscardDraft}>
+                <Text style={styles.discardLinkLabel}>Réinitialiser</Text>
+              </TouchableOpacity>
+            )}
+          </ScrollView>
+        </KeyboardAvoidingView>
+      </View>
+    );
+  }
 
+  // ── Scoring mode ──────────────────────────────────────────────────────────
+  return (
+    <View style={styles.container}>
+      <DecorativeBackground />
+
+      <View style={styles.scoringLayout}>
+        {/* Status bar */}
+        <View style={[styles.statusBar, { paddingTop: insets.top + 6 }]}>
+          <View style={styles.statusLeft}>
+            <Text style={styles.statusCourse} numberOfLines={1}>
+              {courseName.trim() || 'Fast score'}
+            </Text>
+            <Text style={styles.statusMeta}>{holes} trous · départ {teeLabel}</Text>
+          </View>
+          <View style={styles.statusRight}>
+            {progress.completedHoles > 0 && (
+              <Text style={[
+                styles.statusScore,
+                progress.liveScoreToPar < 0 ? styles.statusScoreUnder :
+                progress.liveScoreToPar > 0 ? styles.statusScoreOver  :
+                styles.statusScoreEven,
+              ]}>
+                {formatScoreToPar(progress.liveScoreToPar)}
+              </Text>
+            )}
+            <Text style={styles.statusHoles}>
+              {progress.completedHoles}/{progress.totalHoles}
+            </Text>
+            <TouchableOpacity
+              style={styles.gearBtn}
+              onPress={() => { cancelAutoAdvance(); animateLayout(); setSetupExpanded(true); }}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <Text style={styles.gearLabel}>⚙</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* Hole progress strip */}
         <HoleNavigation
           currentHole={currentHoleNumber}
           scorecard={scorecard}
@@ -646,341 +573,271 @@ export default function RoundScreen() {
           onNextHole={() => goToHole(currentHoleNumber + 1)}
         />
 
+        {/* Hole info — flex:1, scrollable on tiny screens */}
         {currentHole && currentHoleView ? (
-          <View {...swipeResponder.panHandlers}>
-            <HoleOverviewCard
-              courseName={courseName.trim() || 'Parcours non précisé'}
-              hole={currentHole}
-              holeView={currentHoleView}
-              teeKey={teeKey}
-              teeOptions={teeOptions}
-              onSelectTee={(nextTeeKey) => {
-                cancelAutoAdvance();
-                setTeeKey(nextTeeKey);
-              }}
-            />
+          <>
+            <View style={styles.holeArea} {...swipeResponder.panHandlers}>
+              <ScrollView
+                style={{ flex: 1 }}
+                contentContainerStyle={styles.holeAreaContent}
+                showsVerticalScrollIndicator={false}
+                bounces={false}
+              >
+              <HoleOverviewCard
+                courseName={courseName.trim()}
+                hole={currentHole}
+                holeView={currentHoleView}
+                teeKey={teeKey}
+                teeOptions={teeOptions}
+                onSelectTee={(next) => { cancelAutoAdvance(); setTeeKey(next); }}
+              />
+              </ScrollView>
+            </View>
 
-            <HoleScoringPanel
-              hole={currentHole}
-              onApplyScore={handleApplyScore}
-              onChangeHole={handleChangeCurrentHole}
-              onResetHole={handleResetCurrentHole}
-            />
-          </View>
+            {/* Score panel pinned above tab bar (tab bar: bottom 12 + height 72 + insets.bottom) */}
+            <View style={{ paddingBottom: 96 + insets.bottom }}>
+              <HoleScoringPanel
+                hole={currentHole}
+                canGoNext={canGoNext}
+                canSave={canSave}
+                loading={loading}
+                onApplyScore={handleApplyScore}
+                onChangeHole={handleChangeCurrentHole}
+                onResetHole={handleResetCurrentHole}
+                onNextHole={() => goToHole(currentHoleNumber + 1)}
+                onSave={() => void handleSave()}
+              />
+            </View>
+          </>
         ) : null}
-
-        {canSave ? (
-          <AppCard accent="highlight" style={styles.finishCard}>
-            <Text style={styles.finishEyebrow}>Round prêt</Text>
-            <Text style={styles.finishTitle}>
-              {aggregate.total_score} coups · {formatScoreToPar(aggregate.score_to_par)}
-            </Text>
-            <Text style={styles.finishSubtitle}>
-              {aggregate.putts} putts · {aggregate.gir} GIR · {aggregate.fairways_hit}/{aggregate.fairways_total} fairways · {aggregate.penalties} pénalités
-            </Text>
-          </AppCard>
-        ) : null}
-
-        {!canSave && nextMissingHole && nextMissingHole.hole_number !== currentHoleNumber ? (
-          <AppButton
-            label={`Reprendre au trou ${nextMissingHole.hole_number}`}
-            variant="secondary"
-            onPress={() => goToHole(nextMissingHole.hole_number)}
-            style={styles.secondaryActionButton}
-          />
-        ) : null}
-
-        {canSave ? (
-          <AppButton
-            label={loading ? 'Enregistrement...' : 'Finaliser le round'}
-            onPress={() => void handleSave()}
-            disabled={loading}
-            style={styles.primaryActionButton}
-          />
-        ) : (
-          <Text style={styles.helperText}>
-            {missingHoleNumbers.length > 0
-              ? `Score rapide actif. Trous restants : ${missingHoleNumbers.join(', ')}.`
-              : 'Score rapide actif.'}
-          </Text>
-        )}
-      </ScrollView>
-    </KeyboardAvoidingView>
-  );
-}
-
-function HeaderMetric({ label, value, accent = false }: { label: string; value: string; accent?: boolean }) {
-  return (
-    <View style={[styles.headerMetricTile, accent && styles.headerMetricTileAccent]}>
-      <Text style={[styles.headerMetricValue, accent && styles.headerMetricValueAccent]}>{value}</Text>
-      <Text style={styles.headerMetricLabel}>{label}</Text>
+      </View>
     </View>
   );
 }
 
-function LockedSetupPill({ label, value }: { label: string; value: string }) {
+// ── Local helpers ─────────────────────────────────────────────────────────
+
+function LockedPill({ label, value }: { label: string; value: string }) {
   return (
-    <View style={styles.lockedSetupTile}>
-      <Text style={styles.lockedSetupLabel}>{label}</Text>
-      <Text style={styles.lockedSetupValue}>{value}</Text>
+    <View style={styles.lockedPill}>
+      <Text style={styles.lockedPillLabel}>{label}</Text>
+      <Text style={styles.lockedPillValue}>{value}</Text>
     </View>
   );
 }
+
+// ── Styles ────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Colors.background,
   },
-  content: {
-    paddingBottom: 126,
-  },
-  header: {
-    marginHorizontal: Spacing.md,
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-    gap: Spacing.md,
-  },
-  headerCopy: {
+
+  // Loading
+  loadingView: {
     flex: 1,
-  },
-  headerEyebrow: {
-    ...Typography.caption,
-    color: Colors.textDim,
-    textTransform: 'uppercase',
-    letterSpacing: 1.1,
-  },
-  headerTitle: {
-    ...Typography.title,
-    color: Colors.text,
-    marginTop: 4,
-  },
-  headerSubtitle: {
-    ...Typography.body,
-    color: Colors.textMuted,
-    marginTop: Spacing.xs,
-  },
-  headerAction: {
-    minHeight: 44,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: 12,
-    borderRadius: Radius.full,
-    borderWidth: 1,
-    borderColor: Colors.borderStrong,
-    backgroundColor: Colors.surfaceElevated,
-  },
-  headerActionLabel: {
-    ...Typography.label,
-    color: Colors.text,
-  },
-  liveMetricsRow: {
-    flexDirection: 'row',
-    gap: Spacing.sm,
-    marginHorizontal: Spacing.md,
-    marginTop: Spacing.md,
-    marginBottom: Spacing.md,
-  },
-  headerMetricTile: {
-    flex: 1,
-    borderRadius: Radius.lg,
-    backgroundColor: Colors.surface,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    padding: Spacing.md,
-  },
-  headerMetricTileAccent: {
-    backgroundColor: Colors.surfaceAccent,
-    borderColor: Colors.primary,
-  },
-  headerMetricValue: {
-    ...Typography.heading,
-    color: Colors.text,
-  },
-  headerMetricValueAccent: {
-    color: Colors.primary,
-  },
-  headerMetricLabel: {
-    ...Typography.caption,
-    color: Colors.textDim,
-    textTransform: 'uppercase',
-    letterSpacing: 0.8,
-    marginTop: 6,
-  },
-  bannerCard: {
-    marginHorizontal: Spacing.md,
-    marginBottom: Spacing.md,
-  },
-  bannerRow: {
-    flexDirection: 'row',
-    gap: Spacing.md,
     alignItems: 'center',
-    justifyContent: 'space-between',
+    justifyContent: 'center',
   },
-  bannerCopy: {
-    flex: 1,
-  },
-  bannerTitle: {
-    ...Typography.heading,
-    color: Colors.text,
-  },
-  bannerText: {
+  loadingText: {
     ...Typography.body,
-    color: Colors.textMuted,
-    marginTop: 4,
+    color: Colors.textDim,
   },
-  bannerAction: {
-    borderRadius: Radius.full,
-    borderWidth: 1,
-    borderColor: Colors.borderStrong,
-    backgroundColor: Colors.backgroundSoft,
+
+  // ── Setup ──
+  setupContent: {
     paddingHorizontal: Spacing.md,
-    paddingVertical: 10,
-  },
-  bannerActionLabel: {
-    ...Typography.label,
-    color: Colors.text,
-  },
-  setupCard: {
-    marginHorizontal: Spacing.md,
-    marginBottom: Spacing.md,
-  },
-  setupHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: Spacing.md,
-    alignItems: 'flex-start',
-  },
-  setupHeaderCopy: {
-    flex: 1,
   },
   setupEyebrow: {
     ...Typography.caption,
     color: Colors.textDim,
     textTransform: 'uppercase',
-    letterSpacing: 1,
+    letterSpacing: 1.2,
   },
   setupTitle: {
-    ...Typography.heading,
+    ...Typography.title,
     color: Colors.text,
     marginTop: 6,
+    marginBottom: Spacing.lg,
   },
-  setupGhostButton: {
-    paddingHorizontal: Spacing.md,
-    paddingVertical: 10,
-    borderRadius: Radius.full,
-    borderWidth: 1,
-    borderColor: Colors.borderStrong,
+  resumeBtn: {
+    alignSelf: 'flex-start',
+    marginBottom: Spacing.lg,
   },
-  setupGhostButtonLabel: {
-    ...Typography.label,
-    color: Colors.text,
+  resumeBtnLabel: {
+    ...Typography.bodyStrong,
+    color: Colors.primary,
   },
-  modeToggle: {
+  draftBanner: {
     flexDirection: 'row',
-    gap: Spacing.sm,
-    marginTop: Spacing.lg,
-  },
-  modeToggleButton: {
-    flex: 1,
-    minHeight: 52,
+    alignItems: 'center',
+    gap: Spacing.md,
     borderRadius: Radius.lg,
     borderWidth: 1,
     borderColor: Colors.borderStrong,
-    backgroundColor: Colors.backgroundSoft,
+    backgroundColor: Colors.surface,
+    padding: Spacing.md,
+    marginBottom: Spacing.lg,
+  },
+  draftBannerTitle: {
+    ...Typography.bodyStrong,
+    color: Colors.text,
+  },
+  draftBannerText: {
+    ...Typography.body,
+    color: Colors.textMuted,
+    marginTop: 2,
+  },
+  draftBannerClear: {
+    ...Typography.label,
+    color: Colors.error,
+  },
+  setupSection: {
+    marginBottom: Spacing.lg,
+  },
+  setupLabel: {
+    ...Typography.label,
+    color: Colors.textMuted,
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+    marginBottom: Spacing.xs,
+  },
+  setupHint: {
+    ...Typography.caption,
+    color: Colors.textDim,
+    marginTop: 6,
+  },
+  holesRow: {
+    flexDirection: 'row',
+    gap: Spacing.sm,
+  },
+  holesBtn: {
+    flex: 1,
+    height: 52,
+    borderRadius: Radius.lg,
+    borderWidth: 1,
+    borderColor: Colors.borderStrong,
+    backgroundColor: Colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: Spacing.md,
   },
-  modeToggleButtonActive: {
+  holesBtnActive: {
     backgroundColor: Colors.primary,
     borderColor: Colors.primaryDark,
   },
-  modeToggleLabel: {
+  holesBtnLabel: {
     ...Typography.bodyStrong,
     color: Colors.text,
   },
-  modeToggleLabelActive: {
+  holesBtnLabelActive: {
     color: Colors.background,
   },
-  fieldGroup: {
-    marginTop: Spacing.lg,
-  },
-  fieldLabel: {
-    ...Typography.label,
-    color: Colors.textMuted,
-    marginBottom: Spacing.xs,
-  },
-  fieldHint: {
-    ...Typography.caption,
-    color: Colors.textDim,
-    marginTop: 6,
-  },
-  notesInput: {
-    minHeight: 86,
-    textAlignVertical: 'top',
-  },
-  lockedSetupPanel: {
+  lockedRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: Spacing.sm,
-    marginTop: Spacing.lg,
-    marginBottom: Spacing.sm,
+    marginBottom: Spacing.lg,
   },
-  lockedSetupTile: {
-    minWidth: '30%',
+  lockedPill: {
     borderRadius: Radius.lg,
-    backgroundColor: Colors.backgroundSoft,
     borderWidth: 1,
     borderColor: Colors.border,
+    backgroundColor: Colors.surface,
     padding: Spacing.md,
+    minWidth: '30%',
   },
-  lockedSetupLabel: {
+  lockedPillLabel: {
     ...Typography.caption,
     color: Colors.textDim,
     textTransform: 'uppercase',
-    letterSpacing: 0.8,
+    letterSpacing: 0.6,
   },
-  lockedSetupValue: {
+  lockedPillValue: {
     ...Typography.bodyStrong,
     color: Colors.text,
-    marginTop: Spacing.xs,
+    marginTop: 4,
   },
-  setupLockHint: {
-    ...Typography.caption,
-    color: Colors.warning,
-    marginTop: Spacing.xs,
+  notesInput: {
+    minHeight: 80,
+    textAlignVertical: 'top',
   },
-  finishCard: {
-    marginHorizontal: Spacing.md,
-    marginBottom: Spacing.md,
-  },
-  finishEyebrow: {
-    ...Typography.caption,
-    color: Colors.textDim,
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-  },
-  finishTitle: {
-    ...Typography.titleMd,
-    color: Colors.primary,
+  startBtn: {
     marginTop: Spacing.sm,
   },
-  finishSubtitle: {
-    ...Typography.body,
-    color: Colors.textMuted,
-    marginTop: Spacing.xs,
+  discardLink: {
+    alignItems: 'center',
+    marginTop: Spacing.lg,
+    paddingVertical: Spacing.sm,
   },
-  primaryActionButton: {
-    marginHorizontal: Spacing.md,
+  discardLinkLabel: {
+    ...Typography.label,
+    color: Colors.textDim,
   },
-  secondaryActionButton: {
-    marginHorizontal: Spacing.md,
-    marginBottom: Spacing.md,
+
+  // ── Scoring ──
+  scoringLayout: {
+    flex: 1,
   },
-  helperText: {
+  statusBar: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    justifyContent: 'space-between',
+    paddingHorizontal: Spacing.md,
+    paddingBottom: Spacing.sm,
+    backgroundColor: Colors.background,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+  },
+  statusLeft: {
+    flex: 1,
+    marginRight: Spacing.md,
+  },
+  statusCourse: {
+    ...Typography.heading,
+    color: Colors.text,
+  },
+  statusMeta: {
     ...Typography.caption,
     color: Colors.textDim,
-    marginHorizontal: Spacing.md,
+    marginTop: 2,
+  },
+  statusRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+  },
+  statusScore: {
+    ...Typography.titleMd,
+    lineHeight: 28,
+  },
+  statusScoreUnder: { color: Colors.primary },
+  statusScoreOver:  { color: Colors.error },
+  statusScoreEven:  { color: Colors.text },
+  statusHoles: {
+    ...Typography.bodyStrong,
+    color: Colors.textMuted,
+  },
+  gearBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: Radius.full,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    backgroundColor: Colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  gearLabel: {
+    fontSize: 15,
+    lineHeight: 17,
+  },
+  holeArea: {
+    flex: 1,
+    overflow: 'hidden',
+  },
+  holeAreaContent: {
+    flexGrow: 1,
+    justifyContent: 'center',
   },
 });
