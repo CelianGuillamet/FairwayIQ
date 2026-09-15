@@ -104,7 +104,7 @@ export default function DiagnosticScreen() {
     return (
       <View style={styles.loadingState}>
         <DecorativeBackground />
-        <ActivityIndicator size="large" color={Colors.primary} />
+        <ActivityIndicator size="large" color={Colors.text} />
         <Text style={styles.loadingText}>Chargement du diagnostic...</Text>
       </View>
     );
@@ -267,13 +267,13 @@ const styles = StyleSheet.create({
   categoryChip: {
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: Colors.primary,
+    borderColor: Colors.accentBlue,
     backgroundColor: Colors.surfaceAccent,
     paddingHorizontal: 12,
     paddingVertical: 8,
   },
   categoryChipText: {
-    color: Colors.primary,
+    color: Colors.accentBlue,
     fontSize: 13,
     fontWeight: '700',
   },
@@ -292,7 +292,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   positive: {
-    color: Colors.primary,
+    color: Colors.accentBlue,
   },
   warning: {
     color: Colors.warning,

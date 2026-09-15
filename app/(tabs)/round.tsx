@@ -667,7 +667,7 @@ const styles = StyleSheet.create({
   },
   resumeBtnLabel: {
     ...Typography.bodyStrong,
-    color: Colors.primary,
+    color: Colors.accentBlue,
   },
   draftBanner: {
     flexDirection: 'row',
@@ -723,8 +723,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   holesBtnActive: {
-    backgroundColor: Colors.primary,
-    borderColor: Colors.primaryDark,
+    backgroundColor: Colors.text,
+    borderColor: Colors.text,
   },
   holesBtnLabel: {
     ...Typography.bodyStrong,
@@ -811,7 +811,7 @@ const styles = StyleSheet.create({
     ...Typography.titleMd,
     lineHeight: 28,
   },
-  statusScoreUnder: { color: Colors.primary },
+  statusScoreUnder: { color: Colors.accentBlue },
   statusScoreOver:  { color: Colors.error },
   statusScoreEven:  { color: Colors.text },
   statusHoles: {

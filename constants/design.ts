@@ -11,36 +11,36 @@ export const Spacing = {
 } as const;
 
 export const Radius = {
-  sm: 12,
-  md: 16,
-  lg: 20,
-  xl: 24,
-  xxl: 30,
+  sm: 4,
+  md: 6,
+  lg: 8,
+  xl: 10,
+  xxl: 14,
   full: 999,
 } as const;
 
 export const Typography = {
-  display: { fontSize: 38, lineHeight: 42, fontWeight: '900' as const },
-  title: { fontSize: 30, lineHeight: 36, fontWeight: '900' as const },
-  titleMd: { fontSize: 24, lineHeight: 30, fontWeight: '800' as const },
-  heading: { fontSize: 19, lineHeight: 25, fontWeight: '800' as const },
+  display: { fontSize: 40, lineHeight: 42, fontWeight: '800' as const, letterSpacing: -0.8 },
+  title: { fontSize: 30, lineHeight: 34, fontWeight: '800' as const, letterSpacing: -0.5 },
+  titleMd: { fontSize: 22, lineHeight: 27, fontWeight: '700' as const, letterSpacing: -0.3 },
+  heading: { fontSize: 18, lineHeight: 23, fontWeight: '700' as const, letterSpacing: -0.1 },
   body: { fontSize: 15, lineHeight: 22, fontWeight: '400' as const },
-  bodyStrong: { fontSize: 15, lineHeight: 22, fontWeight: '700' as const },
-  label: { fontSize: 13, lineHeight: 18, fontWeight: '700' as const },
-  caption: { fontSize: 11, lineHeight: 15, fontWeight: '700' as const },
+  bodyStrong: { fontSize: 15, lineHeight: 22, fontWeight: '600' as const },
+  label: { fontSize: 13, lineHeight: 18, fontWeight: '600' as const },
+  caption: { fontSize: 12, lineHeight: 16, fontWeight: '500' as const },
 } as const;
 
 export const Shadows = {
   card: {
-    shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.2,
-    shadowRadius: 24,
-    elevation: 4,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.16,
+    shadowRadius: 12,
+    elevation: 2,
   },
   elevated: {
-    shadowOffset: { width: 0, height: 16 },
-    shadowOpacity: 0.24,
-    shadowRadius: 30,
-    elevation: 6,
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.2,
+    shadowRadius: 18,
+    elevation: 4,
   },
 } as const;

@@ -271,7 +271,7 @@ export default function RoundDetailScreen() {
     return (
       <View style={styles.loadingState}>
         <DecorativeBackground />
-        <ActivityIndicator size="large" color={Colors.primary} />
+        <ActivityIndicator size="large" color={Colors.text} />
         <Text style={styles.loadingText}>Chargement du round...</Text>
       </View>
     );
@@ -527,7 +527,7 @@ const styles = StyleSheet.create({
   },
   metricValue: {
     ...Typography.display,
-    color: Colors.primary,
+    color: Colors.text,
   },
   metricLabel: {
     ...Typography.label,
@@ -599,7 +599,7 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.xs,
   },
   good: {
-    color: Colors.primary,
+    color: Colors.accentBlue,
   },
   bad: {
     color: Colors.error,

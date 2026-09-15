@@ -10,7 +10,7 @@
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#0f1a0f"
+      "backgroundColor": "#0A0A0C"
     },
     "ios": {
       "supportsTablet": false,
@@ -19,7 +19,7 @@
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#0f1a0f"
+        "backgroundColor": "#0A0A0C"
       },
       "package": "com.fairwayiq.app",
       "edgeToEdgeEnabled": true,
@@ -37,7 +37,7 @@
         "expo-notifications",
         {
           "icon": "./assets/icon.png",
-          "color": "#4ade80",
+          "color": "#E5382C",
           "sounds": []
         }
       ]

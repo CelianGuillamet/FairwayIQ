@@ -157,6 +157,7 @@ export default function PaywallScreen() {
 
         <AppButton
           label="Commencer l’essai gratuit 7 jours"
+          variant="accent"
           onPress={() => void handlePurchase()}
           loading={loading}
           style={styles.primaryAction}
@@ -308,13 +309,13 @@ const styles = StyleSheet.create({
     position: 'relative',
   },
   planCardSelected: {
-    borderColor: Colors.primary,
+    borderColor: Colors.text,
     backgroundColor: Colors.surfaceAccent,
   },
   planBadge: {
     position: 'absolute',
     top: -10,
-    backgroundColor: Colors.primary,
+    backgroundColor: Colors.text,
     borderRadius: 10,
     paddingHorizontal: 8,
     paddingVertical: 3,
@@ -331,7 +332,7 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   planLabelSelected: {
-    color: Colors.primary,
+    color: Colors.text,
   },
   planPrice: {
     fontSize: 24,
@@ -339,7 +340,7 @@ const styles = StyleSheet.create({
     color: Colors.text,
   },
   planPriceSelected: {
-    color: Colors.primary,
+    color: Colors.text,
   },
   planPeriod: {
     fontSize: 13,
@@ -352,7 +353,7 @@ const styles = StyleSheet.create({
   savingsText: {
     textAlign: 'center',
     fontSize: 13,
-    color: Colors.primary,
+    color: Colors.accentBlue,
     marginBottom: 18,
     fontWeight: '700',
   },

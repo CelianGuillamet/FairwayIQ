@@ -43,8 +43,8 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.surfaceElevated,
   },
   primary: {
-    backgroundColor: Colors.primaryMuted,
-    borderColor: Colors.primary,
+    backgroundColor: Colors.text,
+    borderColor: Colors.text,
   },
   warning: {
     backgroundColor: 'rgba(244, 196, 83, 0.14)',
@@ -57,11 +57,10 @@ const styles = StyleSheet.create({
   label: {
     ...Typography.caption,
     color: Colors.textMuted,
-    letterSpacing: 0.6,
-    textTransform: 'uppercase',
+    fontWeight: '600',
   },
   labelPrimary: {
-    color: Colors.primary,
+    color: Colors.background,
   },
   labelWarning: {
     color: Colors.warning,

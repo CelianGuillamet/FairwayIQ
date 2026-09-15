@@ -39,7 +39,7 @@ const styles = StyleSheet.create({
   },
   tileSelected: {
     backgroundColor: Colors.surfaceAccent,
-    borderColor: Colors.primary,
+    borderColor: Colors.text,
   },
   dotWrap: {
     width: 22,
@@ -57,7 +57,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent',
   },
   dotActive: {
-    backgroundColor: Colors.primary,
+    backgroundColor: Colors.text,
   },
   content: {
     flex: 1,
@@ -67,7 +67,7 @@ const styles = StyleSheet.create({
     ...Typography.bodyStrong,
   },
   labelSelected: {
-    color: Colors.primary,
+    color: Colors.text,
   },
   description: {
     color: Colors.textDim,

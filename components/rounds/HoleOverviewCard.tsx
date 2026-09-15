@@ -17,7 +17,7 @@ type Props = {
 function toneToColor(tone: string): string {
   switch (tone) {
     case 'elite':    return '#FFD055';
-    case 'positive': return Colors.primary;
+    case 'positive': return Colors.accentBlue;
     case 'neutral':  return Colors.text;
     case 'warning':  return Colors.warning;
     default:         return Colors.error;
@@ -212,7 +212,7 @@ const styles = StyleSheet.create({
     color: Colors.textDim,
   },
   metaDist: {
-    color: Colors.primary,
+    color: Colors.text,
   },
 
   // ── Chips ──
@@ -235,8 +235,8 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.warning + '14',
   },
   badgeGood: {
-    borderColor: Colors.primary + '88',
-    backgroundColor: Colors.primary + '14',
+    borderColor: Colors.accentBlue + '88',
+    backgroundColor: Colors.accentBlue + '14',
   },
   badgeNeutral: {
     borderColor: Colors.border,
@@ -249,7 +249,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.6,
   },
   badgeTextWarn:    { color: Colors.warning },
-  badgeTextGood:    { color: Colors.primary },
+  badgeTextGood:    { color: Colors.accentBlue },
   badgeTextNeutral: { color: Colors.textMuted },
 
   // ── Tee selector ──

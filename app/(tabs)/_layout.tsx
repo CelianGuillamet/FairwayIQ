@@ -30,7 +30,7 @@ export default function TabsLayout() {
           elevation: 10,
         },
         tabBarActiveBackgroundColor: Colors.surfaceAccent,
-        tabBarActiveTintColor: Colors.primary,
+        tabBarActiveTintColor: Colors.text,
         tabBarInactiveTintColor: Colors.textDim,
         tabBarLabelStyle: { fontSize: 11, fontWeight: '800', marginTop: 2, letterSpacing: 0.2 },
         tabBarItemStyle: { borderRadius: 18, marginHorizontal: 2 },

@@ -11,7 +11,7 @@ type Props = {
   showDots?: boolean;
 };
 
-export function LineChart({ data, labels, width, height = 140, color = Colors.primary, showDots = true }: Props) {
+export function LineChart({ data, labels, width, height = 140, color = Colors.accentBlue, showDots = true }: Props) {
   if (data.length < 2) return null;
 
   const paddingLeft = 36;

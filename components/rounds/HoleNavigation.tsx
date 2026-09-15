@@ -21,7 +21,7 @@ function chipDotColor(hole: RoundDraftHole): string {
   const { tone } = getScoreDescriptor(hole.score, hole.par);
   switch (tone) {
     case 'elite':    return '#FFD055';
-    case 'positive': return Colors.primary;
+    case 'positive': return Colors.accentBlue;
     case 'warning':  return Colors.warning;
     case 'danger':   return Colors.error;
     default:         return Colors.textMuted;
@@ -144,7 +144,7 @@ const styles = StyleSheet.create({
   },
   chipActive: {
     backgroundColor: Colors.surfaceAccent,
-    borderColor: Colors.primary,
+    borderColor: Colors.text,
   },
   chipNum: {
     fontSize: 13,
@@ -153,7 +153,7 @@ const styles = StyleSheet.create({
     color: Colors.textMuted,
   },
   chipNumActive: {
-    color: Colors.primary,
+    color: Colors.text,
   },
   dot: {
     width: 5,

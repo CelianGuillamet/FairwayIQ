@@ -20,7 +20,7 @@ export default function AuthCallbackScreen() {
     <View style={styles.container}>
       <DecorativeBackground />
       <AppCard accent="highlight" style={styles.card}>
-        <ActivityIndicator size="large" color={Colors.primary} />
+        <ActivityIndicator size="large" color={Colors.text} />
         <Text style={styles.title}>Connexion en cours</Text>
         <Text style={styles.subtitle}>
           On finalise ta session. Si le flux ne reprend pas, retourne sur l’écran de connexion.

@@ -34,10 +34,8 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   eyebrow: {
-    color: Colors.textDim,
+    color: Colors.accentBlue,
     ...Typography.caption,
-    textTransform: 'uppercase',
-    letterSpacing: 1,
     marginBottom: 6,
   },
   title: {

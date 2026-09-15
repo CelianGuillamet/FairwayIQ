@@ -246,7 +246,7 @@ export default function DashboardScreen() {
     return (
       <View style={styles.loadingState}>
         <DecorativeBackground />
-        <ActivityIndicator size="large" color={Colors.primary} />
+        <ActivityIndicator size="large" color={Colors.text} />
         <Text style={styles.loadingText}>Chargement de ton cockpit de jeu...</Text>
       </View>
     );
@@ -339,7 +339,7 @@ export default function DashboardScreen() {
 
             {scoreData.length >= 2 ? (
               <ChartCard title="Évolution du score vs par">
-                <LineChart data={scoreData} labels={scoreLabels} width={chartWidth} color={Colors.primary} />
+                <LineChart data={scoreData} labels={scoreLabels} width={chartWidth} color={Colors.accentBlue} />
                 <Text style={styles.chartHint}>Plus bas est meilleur. Lecture sur les 10 derniers rounds.</Text>
               </ChartCard>
             ) : null}
@@ -447,7 +447,7 @@ function PracticeFocusCard({
     return (
       <AppCard style={styles.practiceCard}>
         <View style={styles.practiceLoadingRow}>
-          <ActivityIndicator color={Colors.primary} />
+          <ActivityIndicator color={Colors.text} />
           <Text style={styles.practiceLoadingText}>Préparation de ton focus du jour...</Text>
         </View>
       </AppCard>
@@ -473,7 +473,7 @@ function PracticeFocusCard({
         <Text style={styles.practiceText}>
           Enregistre ou relance un diagnostic pour transformer ton prochain round en plan d'entraînement concret.
         </Text>
-        <AppButton label="Analyser un round" onPress={onOpenDiagnostic} style={styles.practicePrimaryAction} />
+        <AppButton label="Analyser un round" variant="secondary" onPress={onOpenDiagnostic} style={styles.practicePrimaryAction} />
       </AppCard>
     );
   }
@@ -601,7 +601,7 @@ const styles = StyleSheet.create({
   },
   heroTrend: {
     ...Typography.label,
-    color: Colors.primary,
+    color: Colors.accentBlue,
     marginTop: Spacing.sm,
   },
   heroAction: {
@@ -713,7 +713,7 @@ const styles = StyleSheet.create({
   },
   statValue: {
     ...Typography.display,
-    color: Colors.primary,
+    color: Colors.text,
   },
   statLabel: {
     ...Typography.label,
@@ -764,7 +764,7 @@ const styles = StyleSheet.create({
   },
   sectionAction: {
     ...Typography.label,
-    color: Colors.primary,
+    color: Colors.accentBlue,
   },
   roundCard: {
     marginHorizontal: Spacing.md,
@@ -814,7 +814,7 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   good: {
-    color: Colors.primary,
+    color: Colors.accentBlue,
   },
   bad: {
     color: Colors.error,

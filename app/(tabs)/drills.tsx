@@ -122,7 +122,7 @@ function DrillCard({ drill, doneToday, totalCompletions, onMarkDone }: {
   totalCompletions: number;
   onMarkDone: () => void;
 }) {
-  const diffColors: Record<string, string> = { beginner: Colors.primary, intermediate: Colors.warning, advanced: Colors.error };
+  const diffColors: Record<string, string> = { beginner: Colors.accentBlue, intermediate: Colors.warning, advanced: Colors.error };
 
   return (
     <AppCard style={[styles.card, doneToday && styles.cardDone]} accent={doneToday ? 'highlight' : 'default'}>
@@ -175,16 +175,16 @@ const styles = StyleSheet.create({
   content: { paddingHorizontal: 16, paddingBottom: 110 },
   statsColumn: { gap: 8 },
   statBadge: { backgroundColor: Colors.surfaceAccent, borderRadius: 16, paddingHorizontal: 12, paddingVertical: 10, alignItems: 'center', borderWidth: 1, borderColor: Colors.borderStrong, minWidth: 64 },
-  statBadgeValue: { fontSize: 18, fontWeight: '800', color: Colors.primary },
-  statBadgeLabel: { fontSize: 10, color: Colors.textDim, marginTop: 2, textTransform: 'uppercase', letterSpacing: 0.8 },
+  statBadgeValue: { fontSize: 18, fontWeight: '800', color: Colors.text },
+  statBadgeLabel: { fontSize: 10, color: Colors.textDim, marginTop: 2 },
   recommendBanner: { marginBottom: 12 },
-  recommendEyebrow: { fontSize: 12, color: Colors.textDim, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 },
+  recommendEyebrow: { fontSize: 12, color: Colors.accentBlue, fontWeight: '700', marginBottom: 8 },
   recommendText: { fontSize: 15, color: Colors.text, lineHeight: 22, fontWeight: '700' },
   filterScroll: { maxHeight: 46, marginBottom: 12 },
   filterContent: { gap: 8, alignItems: 'center' },
   filterChip: { paddingHorizontal: 16, paddingVertical: 9, borderRadius: 22, backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.border },
-  filterChipActive: { backgroundColor: Colors.surfaceAccent, borderColor: Colors.primary },
-  filterChipText: { color: Colors.textMuted, fontSize: 12, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.6 },
+  filterChipActive: { backgroundColor: Colors.surfaceAccent, borderColor: Colors.accentBlue },
+  filterChipText: { color: Colors.textMuted, fontSize: 12, fontWeight: '700' },
   filterChipTextActive: { color: Colors.text },
   card: { marginBottom: 12 },
   cardDone: { borderColor: Colors.borderStrong },
@@ -196,9 +196,9 @@ const styles = StyleSheet.create({
   cardFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', marginTop: 14, gap: 12 },
   cardMeta: { gap: 4 },
   cardDuration: { fontSize: 13, color: Colors.textDim, fontWeight: '700' },
-  cardCount: { fontSize: 12, color: Colors.primary },
+  cardCount: { fontSize: 12, color: Colors.textDim },
   cardActions: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  youtubeLink: { fontSize: 12, color: Colors.primary, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.6 },
+  youtubeLink: { fontSize: 12, color: Colors.accentBlue, fontWeight: '700' },
   doneButton: { minHeight: 40, paddingHorizontal: 14 },
   emptyCard: { marginTop: 6 },
   emptyTitle: { color: Colors.text, fontSize: 16, fontWeight: '800', marginBottom: 6 },

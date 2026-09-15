@@ -262,7 +262,7 @@ const styles = StyleSheet.create({
   },
   progressFill: {
     height: '100%',
-    backgroundColor: Colors.primary,
+    backgroundColor: Colors.text,
     borderRadius: 999,
   },
   progressText: {
@@ -285,13 +285,13 @@ const styles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: Colors.primaryMuted,
+    backgroundColor: Colors.surfaceElevated,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 14,
   },
   heroBadgeText: {
-    color: Colors.primary,
+    color: Colors.text,
     fontSize: 24,
     fontWeight: '800',
   },

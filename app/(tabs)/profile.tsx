@@ -143,7 +143,7 @@ const styles = StyleSheet.create({
     width: 78,
     height: 78,
     borderRadius: 39,
-    backgroundColor: Colors.primary,
+    backgroundColor: Colors.text,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -184,7 +184,7 @@ const styles = StyleSheet.create({
   },
   metricValue: {
     ...Typography.display,
-    color: Colors.primary,
+    color: Colors.text,
   },
   metricLabel: {
     ...Typography.label,

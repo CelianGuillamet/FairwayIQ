@@ -190,7 +190,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   linkBold: {
-    color: Colors.primary,
+    color: Colors.accentBlue,
     fontWeight: '800',
   },
 });

@@ -225,7 +225,7 @@ export default function DebriefScreen() {
 
       {loading ? (
         <View style={styles.typingRow}>
-          <ActivityIndicator size="small" color={Colors.primary} />
+          <ActivityIndicator size="small" color={Colors.text} />
           <Text style={styles.typingText}>FairwayIQ répond...</Text>
         </View>
       ) : null}
@@ -289,7 +289,7 @@ const styles = StyleSheet.create({
     paddingRight: 8,
   },
   backBtnText: {
-    color: Colors.primary,
+    color: Colors.text,
     fontSize: 16,
     fontWeight: '700',
   },
@@ -346,13 +346,13 @@ const styles = StyleSheet.create({
   bubbleUser: {
     alignSelf: 'flex-end',
     backgroundColor: Colors.surfaceAccent,
-    borderColor: Colors.primary,
+    borderColor: Colors.accentBlue,
     borderBottomLeftRadius: 18,
     borderBottomRightRadius: 4,
   },
   bubbleLabel: {
     fontSize: 11,
-    color: Colors.primary,
+    color: Colors.text,
     fontWeight: '800',
     marginBottom: 4,
   },
@@ -401,7 +401,7 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: Colors.primary,
+    backgroundColor: Colors.text,
     alignItems: 'center',
     justifyContent: 'center',
   },

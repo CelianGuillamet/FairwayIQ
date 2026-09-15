@@ -6,7 +6,7 @@ type Props = {
   onPress: () => void;
   disabled?: boolean;
   loading?: boolean;
-  variant?: 'primary' | 'secondary' | 'ghost';
+  variant?: 'primary' | 'secondary' | 'ghost' | 'accent';
   style?: StyleProp<ViewStyle>;
 };
 
@@ -19,6 +19,7 @@ export function AppButton({
   style,
 }: Props) {
   const isDisabled = disabled || loading;
+  const isLight = variant === 'primary';
 
   return (
     <TouchableOpacity
@@ -27,6 +28,7 @@ export function AppButton({
         variant === 'primary' && styles.primary,
         variant === 'secondary' && styles.secondary,
         variant === 'ghost' && styles.ghost,
+        variant === 'accent' && styles.accent,
         isDisabled && styles.disabled,
         style,
       ]}
@@ -34,13 +36,13 @@ export function AppButton({
       disabled={isDisabled}
     >
       {loading ? (
-        <ActivityIndicator color={variant === 'primary' ? Colors.background : Colors.text} />
+        <ActivityIndicator color={isLight ? Colors.background : Colors.text} />
       ) : (
         <Text
           style={[
             styles.label,
-            variant === 'primary' && styles.labelPrimary,
-            variant !== 'primary' && styles.labelSecondary,
+            isLight && styles.labelPrimary,
+            !isLight && styles.labelSecondary,
           ]}
         >
           {label}
@@ -59,14 +61,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.lg,
   },
   primary: {
-    backgroundColor: Colors.primary,
+    backgroundColor: Colors.text,
     borderWidth: 1,
-    borderColor: Colors.primaryDark,
-    shadowColor: Colors.primary,
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.24,
-    shadowRadius: 18,
-    elevation: 6,
+    borderColor: Colors.text,
   },
   secondary: {
     backgroundColor: Colors.surfaceElevated,
@@ -75,6 +72,16 @@ const styles = StyleSheet.create({
   },
   ghost: {
     backgroundColor: 'transparent',
+  },
+  accent: {
+    backgroundColor: Colors.primary,
+    borderWidth: 1,
+    borderColor: Colors.primaryDark,
+    shadowColor: Colors.primary,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.16,
+    shadowRadius: 10,
+    elevation: 3,
   },
   disabled: {
     opacity: 0.45,

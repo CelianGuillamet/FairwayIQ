@@ -9,7 +9,7 @@ export default function Index() {
   if (loading || (session && profileLoading)) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: Colors.background }}>
-        <ActivityIndicator color={Colors.primary} size="large" />
+        <ActivityIndicator color={Colors.text} size="large" />
       </View>
     );
   }

@@ -252,7 +252,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   booleanChipActive: {
-    borderColor: Colors.primary,
+    borderColor: Colors.text,
     backgroundColor: Colors.surfaceAccent,
   },
   booleanChipDisabled: {
@@ -263,7 +263,7 @@ const styles = StyleSheet.create({
     color: Colors.textMuted,
   },
   booleanChipTextActive: {
-    color: Colors.primary,
+    color: Colors.text,
   },
   booleanChipTextDisabled: {
     ...Typography.label,

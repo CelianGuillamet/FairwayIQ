@@ -21,7 +21,7 @@ const PUTTS = [0, 1, 2, 3, 4] as const;
 function toneToColor(tone: string): string {
   switch (tone) {
     case 'elite':    return '#FFD055';
-    case 'positive': return Colors.primary;
+    case 'positive': return Colors.accentBlue;
     case 'neutral':  return Colors.text;
     case 'warning':  return Colors.warning;
     default:         return Colors.error;
@@ -280,7 +280,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   pillActive: {
-    borderColor: Colors.primary,
+    borderColor: Colors.text,
     backgroundColor: Colors.surfaceAccent,
   },
   pillOff: {
@@ -291,7 +291,7 @@ const styles = StyleSheet.create({
     color: Colors.textMuted,
   },
   pillTextActive: {
-    color: Colors.primary,
+    color: Colors.text,
   },
 
   // ── Score row ──
@@ -409,7 +409,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   chipOn: {
-    borderColor: Colors.primary,
+    borderColor: Colors.text,
     backgroundColor: Colors.surfaceAccent,
   },
   chipDim: {
@@ -423,7 +423,7 @@ const styles = StyleSheet.create({
     color: Colors.textMuted,
   },
   chipTextOn: {
-    color: Colors.primary,
+    color: Colors.text,
   },
   chipTextDim: {
     ...Typography.label,
@@ -456,7 +456,7 @@ const styles = StyleSheet.create({
     minWidth: 56,
     paddingHorizontal: Spacing.lg,
     borderRadius: Radius.full,
-    backgroundColor: Colors.primary,
+    backgroundColor: Colors.text,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -470,7 +470,7 @@ const styles = StyleSheet.create({
     height: 44,
     paddingHorizontal: Spacing.lg,
     borderRadius: Radius.full,
-    backgroundColor: Colors.primary,
+    backgroundColor: Colors.text,
     alignItems: 'center',
     justifyContent: 'center',
   },
