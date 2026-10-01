@@ -2,12 +2,17 @@ import { create } from 'zustand';
 import { supabase } from '../lib/supabase';
 import type { Round, RoundInsert } from '../types';
 
+const PAGE_SIZE = 50;
+
 type RoundsState = {
   rounds: Round[];
   loading: boolean;
+  loadingMore: boolean;
   initialized: boolean;
   error: string | null;
+  hasMore: boolean;
   fetchRounds: () => Promise<void>;
+  fetchMoreRounds: () => Promise<void>;
   addRound: (round: RoundInsert) => Promise<Round>;
   upsertRound: (round: Round) => void;
   removeRound: (roundId: string) => void;
@@ -16,8 +21,10 @@ type RoundsState = {
 export const useRoundsStore = create<RoundsState>((set, get) => ({
   rounds: [],
   loading: true,
+  loadingMore: false,
   initialized: false,
   error: null,
+  hasMore: true,
 
   fetchRounds: async () => {
     set({ loading: true, error: null });
@@ -25,14 +32,45 @@ export const useRoundsStore = create<RoundsState>((set, get) => ({
       .from('rounds')
       .select('*')
       .order('played_at', { ascending: false })
-      .limit(50);
+      .range(0, PAGE_SIZE - 1);
 
     if (error) {
       set({ loading: false, initialized: true, error: error.message });
       return;
     }
 
-    set({ rounds: data ?? [], loading: false, initialized: true, error: null });
+    set({
+      rounds: data ?? [],
+      loading: false,
+      initialized: true,
+      error: null,
+      hasMore: (data?.length ?? 0) === PAGE_SIZE,
+    });
+  },
+
+  fetchMoreRounds: async () => {
+    const { loading, loadingMore, hasMore, rounds } = get();
+    if (loading || loadingMore || !hasMore) {
+      return;
+    }
+
+    set({ loadingMore: true, error: null });
+    const { data, error } = await supabase
+      .from('rounds')
+      .select('*')
+      .order('played_at', { ascending: false })
+      .range(rounds.length, rounds.length + PAGE_SIZE - 1);
+
+    if (error) {
+      set({ loadingMore: false, error: error.message });
+      return;
+    }
+
+    set({
+      rounds: [...rounds, ...(data ?? [])],
+      loadingMore: false,
+      hasMore: (data?.length ?? 0) === PAGE_SIZE,
+    });
   },
 
   addRound: async (round) => {
