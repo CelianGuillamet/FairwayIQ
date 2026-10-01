@@ -8,6 +8,10 @@ import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../stores/auth';
 import { setupNotificationResponseListener } from '../lib/notifications';
 import { initPurchases } from '../lib/purchases';
+import { initSentry } from '../lib/sentry';
+import { ErrorBoundary } from '../components/ErrorBoundary';
+
+initSentry();
 
 export default function RootLayout() {
   const { setSession, fetchProfile, session, loading } = useAuthStore();
@@ -105,7 +109,7 @@ export default function RootLayout() {
   }, []);
 
   return (
-    <>
+    <ErrorBoundary>
       <StatusBar style="light" />
       <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: Colors.background } }}>
         <Stack.Screen name="index" />
@@ -117,6 +121,6 @@ export default function RootLayout() {
         <Stack.Screen name="edit-profile" options={{ presentation: 'modal' }} />
         <Stack.Screen name="paywall" options={{ presentation: 'modal' }} />
       </Stack>
-    </>
+    </ErrorBoundary>
   );
 }
