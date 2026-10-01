@@ -45,11 +45,15 @@ export default function PaywallScreen() {
 
   const handlePurchase = async () => {
     if (!offerings) {
-      Alert.alert(
-        'Mode développement',
-        'RevenueCat n’est pas encore configuré. Configure EXPO_PUBLIC_REVENUECAT_IOS_KEY dans .env.local.',
-        [{ text: 'Continuer sans premium', onPress: () => router.replace('/(tabs)') }]
-      );
+      if (__DEV__) {
+        Alert.alert(
+          'Mode développement',
+          'RevenueCat n’est pas encore configuré. Configure EXPO_PUBLIC_REVENUECAT_IOS_KEY dans .env.local.',
+          [{ text: 'Continuer sans premium', onPress: () => router.replace('/(tabs)') }]
+        );
+      } else {
+        Alert.alert('Erreur', 'Achat impossible pour le moment. Réessaie plus tard.');
+      }
       return;
     }
 
