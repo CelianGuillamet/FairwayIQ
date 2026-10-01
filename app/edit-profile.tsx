@@ -21,7 +21,7 @@ import { ChoiceTile } from '../components/ui/ChoiceTile';
 import { PageHeader } from '../components/ui/PageHeader';
 
 export default function EditProfileScreen() {
-  const { profile, fetchProfile } = useAuthStore();
+  const { profile, fetchProfile, signOut } = useAuthStore();
   const insets = useSafeAreaInsets();
 
   const [displayName, setDisplayName] = useState(profile?.display_name ?? '');
@@ -29,6 +29,7 @@ export default function EditProfileScreen() {
   const [playFrequency, setPlayFrequency] = useState(profile?.play_frequency ?? 'monthly');
   const [goal, setGoal] = useState(profile?.goal ?? 'lower_handicap');
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   const handleSave = async () => {
     if (!displayName.trim()) {
@@ -56,6 +57,32 @@ export default function EditProfileScreen() {
 
     await fetchProfile();
     router.back();
+  };
+
+  const performDeleteAccount = async () => {
+    setDeleting(true);
+
+    const { error } = await supabase.functions.invoke('delete-account');
+
+    if (error) {
+      setDeleting(false);
+      Alert.alert('Erreur', error.message);
+      return;
+    }
+
+    await signOut();
+    router.replace('/(auth)/login');
+  };
+
+  const handleDeleteAccount = () => {
+    Alert.alert(
+      'Supprimer le compte',
+      'Cette action est irréversible. Toutes tes données (rounds, diagnostics, profil) seront définitivement supprimées.',
+      [
+        { text: 'Annuler', style: 'cancel' },
+        { text: 'Supprimer', style: 'destructive', onPress: () => void performDeleteAccount() },
+      ]
+    );
   };
 
   return (
@@ -133,6 +160,20 @@ export default function EditProfileScreen() {
           variant="secondary"
           onPress={() => router.back()}
         />
+
+        <AppCard style={styles.dangerSection}>
+          <Text style={styles.sectionLabel}>Zone dangereuse</Text>
+          <Text style={styles.dangerText}>
+            La suppression de ton compte efface définitivement ton profil, tes rounds et tes diagnostics. Cette action est irréversible.
+          </Text>
+          <AppButton
+            label="Supprimer mon compte"
+            variant="secondary"
+            onPress={handleDeleteAccount}
+            loading={deleting}
+            style={styles.dangerAction}
+          />
+        </AppCard>
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -165,5 +206,19 @@ const styles = StyleSheet.create({
   },
   primaryAction: {
     marginBottom: 10,
+  },
+  dangerSection: {
+    marginTop: 24,
+    borderColor: Colors.error,
+    borderWidth: 1,
+  },
+  dangerText: {
+    fontSize: 13,
+    color: Colors.textMuted,
+    lineHeight: 18,
+    marginBottom: 16,
+  },
+  dangerAction: {
+    borderColor: Colors.error,
   },
 });
