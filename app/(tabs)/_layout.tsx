@@ -40,6 +40,7 @@ export default function TabsLayout() {
         name="index"
         options={{
           title: 'Accueil',
+          tabBarAccessibilityLabel: 'Accueil',
           tabBarIcon: ({ color, focused }) => (
             <TabIcon type="home" color={color} focused={focused} />
           ),
@@ -49,6 +50,7 @@ export default function TabsLayout() {
         name="round"
         options={{
           title: 'Score',
+          tabBarAccessibilityLabel: 'Score',
           tabBarIcon: ({ color, focused }) => (
             <TabIcon type="score" color={color} focused={focused} />
           ),
@@ -58,6 +60,7 @@ export default function TabsLayout() {
         name="drills"
         options={{
           title: 'Drills',
+          tabBarAccessibilityLabel: 'Drills',
           tabBarIcon: ({ color, focused }) => (
             <TabIcon type="drills" color={color} focused={focused} />
           ),
@@ -67,6 +70,7 @@ export default function TabsLayout() {
         name="profile"
         options={{
           title: 'Profil',
+          tabBarAccessibilityLabel: 'Profil',
           tabBarIcon: ({ color, focused }) => (
             <TabIcon type="profile" color={color} focused={focused} />
           ),

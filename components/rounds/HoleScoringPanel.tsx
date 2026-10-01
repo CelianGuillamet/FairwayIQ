@@ -213,7 +213,13 @@ export function HoleScoringPanel({
         <View style={styles.spacer} />
 
         {/* Reset */}
-        <TouchableOpacity style={styles.iconBtn} onPress={onResetHole} activeOpacity={0.7}>
+        <TouchableOpacity
+          style={styles.iconBtn}
+          onPress={onResetHole}
+          activeOpacity={0.7}
+          accessibilityRole="button"
+          accessibilityLabel="Réinitialiser le trou"
+        >
           <Text style={styles.iconBtnLabel}>↺</Text>
         </TouchableOpacity>
 
