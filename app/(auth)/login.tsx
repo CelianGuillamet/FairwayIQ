@@ -29,7 +29,7 @@ export default function LoginScreen() {
       return;
     }
 
-    console.info('[auth] Login attempt', { email: normalizedEmail });
+    console.info('[auth] Login attempt');
     setLoading(true);
 
     try {
@@ -40,7 +40,6 @@ export default function LoginScreen() {
 
       if (error) {
         console.warn('[auth] Login failed', {
-          email: normalizedEmail,
           message: error.message,
         });
         Alert.alert('Erreur', error.message);
@@ -48,14 +47,12 @@ export default function LoginScreen() {
       }
 
       console.info('[auth] Login succeeded', {
-        email: normalizedEmail,
         userId: data.user?.id ?? null,
       });
 
       router.replace('/');
     } catch (error: any) {
       console.warn('[auth] Login crashed', {
-        email: normalizedEmail,
         message: error?.message ?? 'unknown error',
       });
       Alert.alert('Erreur', error?.message ?? 'Connexion impossible');
