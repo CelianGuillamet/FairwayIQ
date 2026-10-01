@@ -175,6 +175,12 @@ const OSM_OVERPASS_URL = (Deno.env.get('OSM_OVERPASS_URL') ?? 'https://overpass-
 const OSM_SEARCH_ENABLED = Deno.env.get('OSM_COURSE_SEARCH_ENABLED') !== 'false';
 const OSM_DETAIL_ENABLED = Deno.env.get('OSM_COURSE_DETAIL_ENABLED') !== 'false';
 const OSM_DEFAULT_RADIUS_METERS = Number(Deno.env.get('OSM_COURSE_DETAIL_RADIUS_METERS') ?? '2500');
+const COURSE_CATALOG_RATE_LIMIT_MAX = Number(Deno.env.get('COURSE_CATALOG_RATE_LIMIT_MAX') ?? '30');
+const COURSE_CATALOG_RATE_LIMIT_WINDOW_SECONDS = Number(Deno.env.get('COURSE_CATALOG_RATE_LIMIT_WINDOW_SECONDS') ?? '60');
+const COURSE_CATALOG_NEGATIVE_CACHE_TTL_HOURS = Number(Deno.env.get('COURSE_CATALOG_NEGATIVE_CACHE_TTL_HOURS') ?? '24');
+
+class ProviderNotFoundError extends Error {}
+class RateLimitExceededError extends Error {}
 
 function jsonResponse(status: number, body: unknown) {
   return new Response(JSON.stringify(body), {
@@ -366,6 +372,81 @@ async function resolveAuthenticatedUser(request: Request) {
   return data.user;
 }
 
+async function enforceRateLimit(admin: ReturnType<typeof getAdminClient>, userId: string) {
+  if (COURSE_CATALOG_RATE_LIMIT_MAX <= 0) {
+    return;
+  }
+
+  const windowMs = Math.max(COURSE_CATALOG_RATE_LIMIT_WINDOW_SECONDS, 1) * 1000;
+  const windowStart = new Date(Math.floor(Date.now() / windowMs) * windowMs).toISOString();
+
+  const { data, error } = await admin.rpc('increment_course_catalog_rate_limit', {
+    p_user_id: userId,
+    p_window_start: windowStart,
+  });
+
+  if (error) {
+    throw error;
+  }
+
+  const requestCount = Number(data);
+
+  if (Number.isFinite(requestCount) && requestCount > COURSE_CATALOG_RATE_LIMIT_MAX) {
+    throw new RateLimitExceededError('Trop de requêtes sur la recherche de parcours. Réessaie dans une minute.');
+  }
+}
+
+async function isNegativelyCached(
+  admin: ReturnType<typeof getAdminClient>,
+  lookupType: 'search' | 'course',
+  provider: string,
+  cacheKey: string
+) {
+  const { data, error } = await admin
+    .from('course_catalog_negative_cache')
+    .select('expires_at')
+    .eq('id', `${lookupType}:${provider}:${cacheKey}`)
+    .maybeSingle();
+
+  if (error) {
+    throw error;
+  }
+
+  if (!data) {
+    return false;
+  }
+
+  return new Date(data.expires_at).getTime() > Date.now();
+}
+
+async function recordNegativeCache(
+  admin: ReturnType<typeof getAdminClient>,
+  lookupType: 'search' | 'course',
+  provider: string,
+  cacheKey: string
+) {
+  if (COURSE_CATALOG_NEGATIVE_CACHE_TTL_HOURS <= 0) {
+    return;
+  }
+
+  const expiresAt = new Date(Date.now() + COURSE_CATALOG_NEGATIVE_CACHE_TTL_HOURS * 60 * 60 * 1000).toISOString();
+
+  const { error } = await admin.from('course_catalog_negative_cache').upsert(
+    {
+      id: `${lookupType}:${provider}:${cacheKey}`,
+      lookup_type: lookupType,
+      provider,
+      cache_key: cacheKey,
+      expires_at: expiresAt,
+    },
+    { onConflict: 'id' }
+  );
+
+  if (error) {
+    throw error;
+  }
+}
+
 function buildProviderHeaders() {
   if (!GOLFAPI_KEY) {
     return null;
@@ -401,6 +482,10 @@ async function providerFetch(path: string, params?: Record<string, string | numb
   const response = await fetch(url.toString(), {
     headers,
   });
+
+  if (response.status === 404) {
+    throw new ProviderNotFoundError(`Golf provider 404: ${await response.text()}`);
+  }
 
   if (!response.ok) {
     throw new Error(`Golf provider ${response.status}: ${await response.text()}`);
@@ -1291,7 +1376,7 @@ async function fetchProviderClubCourses(rawClub: Record<string, unknown>) {
 
 async function syncProviderSearch(admin: ReturnType<typeof getAdminClient>, query: string, limit: number) {
   if (!GOLFAPI_KEY) {
-    return;
+    return false;
   }
 
   const rawClubs = await fetchProviderClubSearch(query, Math.min(Math.max(limit, 4), 8));
@@ -1300,6 +1385,7 @@ async function syncProviderSearch(admin: ReturnType<typeof getAdminClient>, quer
   const courses = courseBatches.flat();
 
   await upsertCourseSummaries(admin, courses);
+  return courses.length > 0;
 }
 
 function escapeOverpassRegex(value: string) {
@@ -1449,7 +1535,7 @@ function mapOsmCourseElementToSummary(element: OverpassElement): ProviderCourseS
 
 async function syncOpenStreetMapSearch(admin: ReturnType<typeof getAdminClient>, query: string, limit: number) {
   if (!OSM_SEARCH_ENABLED || query.trim().length < 3) {
-    return;
+    return false;
   }
 
   const overpassQuery = `
@@ -1465,6 +1551,7 @@ async function syncOpenStreetMapSearch(admin: ReturnType<typeof getAdminClient>,
     .filter((course): course is ProviderCourseSummary => course != null);
 
   await upsertCourseSummaries(admin, courses);
+  return courses.length > 0;
 }
 
 function parseDistanceValue(value: string | undefined) {
@@ -1561,6 +1648,12 @@ async function syncOpenStreetMapCourseDetail(
     return existingCourse;
   }
 
+  const cacheKey = existingCourse.providerCourseId ?? existingCourse.id;
+
+  if (await isNegativelyCached(admin, 'course', OSM_PROVIDER, cacheKey)) {
+    return existingCourse;
+  }
+
   const elementSelector =
     osmCourseRef.type === 'node'
       ? `node(${osmCourseRef.id});`
@@ -1575,6 +1668,7 @@ async function syncOpenStreetMapCourseDetail(
   const courseElement = courseElements.find((element) => element.id === osmCourseRef.id && element.type === osmCourseRef.type);
 
   if (!courseElement) {
+    await recordNegativeCache(admin, 'course', OSM_PROVIDER, cacheKey);
     return existingCourse;
   }
 
@@ -1796,7 +1890,23 @@ function isCourseStale(course: CatalogCourse | null) {
 }
 
 async function syncProviderCourseDetail(admin: ReturnType<typeof getAdminClient>, courseId: string, providerCourseId: string) {
-  const rawPayload = await providerFetch(`/courses/${providerCourseId}`);
+  if (await isNegativelyCached(admin, 'course', GOLF_PROVIDER, providerCourseId)) {
+    return await loadCourseDetailFromDb(admin, courseId);
+  }
+
+  let rawPayload: unknown;
+
+  try {
+    rawPayload = await providerFetch(`/courses/${providerCourseId}`);
+  } catch (error) {
+    if (!(error instanceof ProviderNotFoundError)) {
+      throw error;
+    }
+
+    await recordNegativeCache(admin, 'course', GOLF_PROVIDER, providerCourseId);
+    return await loadCourseDetailFromDb(admin, courseId);
+  }
+
   const existingCourse = await loadCourseDetailFromDb(admin, courseId);
   const fallbackSummary = existingCourse
     ? {
@@ -1833,17 +1943,36 @@ function extractProviderCourseIdFromCatalogId(courseId: string) {
 async function handleSearchCourses(admin: ReturnType<typeof getAdminClient>, payload: SearchCoursesRequest) {
   const query = payload.query.trim();
   const limit = Math.min(Math.max(payload.limit ?? 8, 1), 12);
+  const normalizedQuery = normalizeCourseValue(query);
 
   let localCourses = await searchLocalCourses(admin, query, limit);
 
-  if (localCourses.length < limit && GOLFAPI_KEY) {
-    await syncProviderSearch(admin, query, limit);
-    localCourses = await searchLocalCourses(admin, query, limit);
+  if (localCourses.length < limit && GOLFAPI_KEY && normalizedQuery.length >= 2) {
+    const cached = await isNegativelyCached(admin, 'search', GOLF_PROVIDER, normalizedQuery);
+
+    if (!cached) {
+      const foundAny = await syncProviderSearch(admin, query, limit);
+
+      if (!foundAny) {
+        await recordNegativeCache(admin, 'search', GOLF_PROVIDER, normalizedQuery);
+      }
+
+      localCourses = await searchLocalCourses(admin, query, limit);
+    }
   }
 
-  if (localCourses.length < limit && OSM_SEARCH_ENABLED) {
-    await syncOpenStreetMapSearch(admin, query, limit);
-    localCourses = await searchLocalCourses(admin, query, limit);
+  if (localCourses.length < limit && OSM_SEARCH_ENABLED && normalizedQuery.length >= 3) {
+    const cached = await isNegativelyCached(admin, 'search', OSM_PROVIDER, normalizedQuery);
+
+    if (!cached) {
+      const foundAny = await syncOpenStreetMapSearch(admin, query, limit);
+
+      if (!foundAny) {
+        await recordNegativeCache(admin, 'search', OSM_PROVIDER, normalizedQuery);
+      }
+
+      localCourses = await searchLocalCourses(admin, query, limit);
+    }
   }
 
   return jsonResponse(200, { courses: localCourses });
@@ -1898,9 +2027,12 @@ Deno.serve(async (request) => {
   }
 
   try {
-    await resolveAuthenticatedUser(request);
-    const payload = await request.json() as unknown;
+    const user = await resolveAuthenticatedUser(request);
     const admin = getAdminClient();
+
+    await enforceRateLimit(admin, user.id);
+
+    const payload = await request.json() as unknown;
 
     if (isSearchCoursesRequest(payload)) {
       return await handleSearchCourses(admin, payload);
@@ -1912,6 +2044,10 @@ Deno.serve(async (request) => {
 
     return jsonResponse(400, { error: 'Payload invalide.' });
   } catch (error) {
+    if (error instanceof RateLimitExceededError) {
+      return jsonResponse(429, { error: error.message });
+    }
+
     const message = error instanceof Error ? error.message : 'Erreur interne.';
     return jsonResponse(500, { error: message });
   }
