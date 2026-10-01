@@ -4,6 +4,7 @@ import type { HoleViewData } from '../../lib/hole-view';
 import { getScoreDescriptor } from '../../lib/hole-view';
 import type { TeeKey, TeeOption } from '../../lib/golf-courses';
 import type { RoundDraftHole } from '../../types';
+import { AppBadge } from '../ui/AppBadge';
 
 type Props = {
   courseName: string;
@@ -83,6 +84,9 @@ export function HoleOverviewCard({ courseName, hole, holeView, teeKey, teeOption
         <Text style={styles.metaItem}>HCP {holeView.handicapIndex}</Text>
         <Text style={styles.metaDot}>·</Text>
         <Text style={[styles.metaItem, styles.metaDist]}>{distance}m</Text>
+        {holeView.distanceSource !== 'catalog' && (
+          <AppBadge label="Estimée" tone="neutral" style={styles.estimationBadge} />
+        )}
       </View>
 
       {/* Difficulty + hazard chips */}
@@ -213,6 +217,10 @@ const styles = StyleSheet.create({
   },
   metaDist: {
     color: Colors.text,
+  },
+  estimationBadge: {
+    paddingHorizontal: Spacing.xs,
+    paddingVertical: 2,
   },
 
   // ── Chips ──
