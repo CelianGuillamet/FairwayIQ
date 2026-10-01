@@ -31,6 +31,10 @@ export type Round = {
   penalties: number | null;
   notes: string | null;
   created_at: string;
+  // Hydrated client-side from course_tee_sets (not columns on the rounds table itself);
+  // absent when the round has no tee_set_id or the tee set has no rating/slope recorded.
+  course_rating?: number | null;
+  slope_rating?: number | null;
 };
 
 export type RoundInsert = Omit<Round, 'id' | 'created_at'>;
