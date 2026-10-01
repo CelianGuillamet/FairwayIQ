@@ -7,7 +7,12 @@ const REVENUECAT_ANDROID_KEY = process.env.EXPO_PUBLIC_REVENUECAT_ANDROID_KEY ??
 export function initPurchases(userId?: string) {
   Purchases.setLogLevel(LOG_LEVEL.ERROR);
   const key = Platform.OS === 'ios' ? REVENUECAT_IOS_KEY : REVENUECAT_ANDROID_KEY;
-  if (!key) return;
+  if (!key) {
+    if (__DEV__) {
+      console.warn('[purchases] Missing RevenueCat API key for', Platform.OS, '— skipping init. Set EXPO_PUBLIC_REVENUECAT_IOS_KEY / EXPO_PUBLIC_REVENUECAT_ANDROID_KEY.');
+    }
+    return;
+  }
   Purchases.configure({ apiKey: key, appUserID: userId });
 }
 

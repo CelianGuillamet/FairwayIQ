@@ -7,6 +7,7 @@ import { Colors } from '../constants';
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../stores/auth';
 import { setupNotificationResponseListener } from '../lib/notifications';
+import { initPurchases } from '../lib/purchases';
 
 export default function RootLayout() {
   const { setSession, fetchProfile, session, loading } = useAuthStore();
@@ -16,6 +17,10 @@ export default function RootLayout() {
       router.replace('/(auth)/login');
     }
   }, [session, loading]);
+
+  useEffect(() => {
+    initPurchases();
+  }, []);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
