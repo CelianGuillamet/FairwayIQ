@@ -32,7 +32,34 @@ export const useRoundsStore = create<RoundsState>((set, get) => ({
       return;
     }
 
-    set({ rounds: data ?? [], loading: false, initialized: true, error: null });
+    const rounds: Round[] = data ?? [];
+    const teeSetIds = Array.from(
+      new Set(rounds.map((round) => round.tee_set_id).filter((id): id is string => !!id))
+    );
+
+    // rounds.tee_set_id has no FK to course_tee_sets, so it can't be embedded in the
+    // select above; fetch ratings separately and merge them in for the WHS handicap calc.
+    let ratingByTeeSetId = new Map<string, { course_rating: number | null; slope_rating: number | null }>();
+    if (teeSetIds.length > 0) {
+      const { data: teeSets } = await supabase
+        .from('course_tee_sets')
+        .select('id, course_rating, slope_rating')
+        .in('id', teeSetIds);
+
+      ratingByTeeSetId = new Map(
+        (teeSets ?? []).map((teeSet) => [
+          teeSet.id as string,
+          { course_rating: teeSet.course_rating, slope_rating: teeSet.slope_rating },
+        ])
+      );
+    }
+
+    const hydratedRounds = rounds.map((round) => ({
+      ...round,
+      ...(round.tee_set_id ? ratingByTeeSetId.get(round.tee_set_id) : undefined),
+    }));
+
+    set({ rounds: hydratedRounds, loading: false, initialized: true, error: null });
   },
 
   addRound: async (round) => {

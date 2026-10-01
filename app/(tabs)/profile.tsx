@@ -13,7 +13,7 @@ import { PageHeader } from '../../components/ui/PageHeader';
 import {
   getAveragePenaltyCount,
   getBestRound,
-  getEstimatedHandicap,
+  getEstimatedHandicapIndex,
 } from '../../lib/rounds';
 
 function average(values: number[]) {
@@ -29,7 +29,7 @@ export default function ProfileScreen() {
 
   const goalLabel = GOALS.find((goal) => goal.value === profile?.goal)?.label ?? profile?.goal ?? '--';
   const frequencyLabel = PLAY_FREQUENCIES.find((frequency) => frequency.value === profile?.play_frequency)?.label ?? '--';
-  const estimatedHandicap = getEstimatedHandicap(rounds);
+  const estimatedHandicapIndex = getEstimatedHandicapIndex(rounds);
   const bestRound = getBestRound(rounds);
   const averagePenaltyCount = getAveragePenaltyCount(rounds);
   const scoringAverage = average(rounds.map((round) => round.total_score));
@@ -72,7 +72,7 @@ export default function ProfileScreen() {
 
         <View style={styles.metricsGrid}>
           <MetricCard label="Rounds" value={rounds.length.toString()} helper="historique" />
-          <MetricCard label="Handicap estimé" value={estimatedHandicap != null ? estimatedHandicap.toString() : '--'} helper="récents" />
+          <MetricCard label="Handicap Index estimé" value={estimatedHandicapIndex != null ? estimatedHandicapIndex.toString() : '--'} helper="méthode WHS, non officiel" />
           <MetricCard label="Meilleur score" value={bestRound ? `${bestRound.total_score}` : '--'} helper={bestRound ? `${bestRound.total_score - bestRound.par > 0 ? '+' : ''}${bestRound.total_score - bestRound.par}` : '—'} />
           <MetricCard label="Streak drills" value={getStreak().toString()} helper="jours" />
         </View>
