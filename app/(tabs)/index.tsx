@@ -33,7 +33,7 @@ import {
 import {
   getAveragePenaltyCount,
   getBestRound,
-  getEstimatedHandicap,
+  getEstimatedHandicapIndex,
   getRoundPerformanceSummary,
 } from '../../lib/rounds';
 
@@ -135,7 +135,7 @@ function getTrendLabel(rounds: Round[]) {
 
 export default function DashboardScreen() {
   const { profile, user } = useAuthStore();
-  const { rounds, fetchRounds, loading, initialized, error } = useRoundsStore();
+  const { rounds, fetchRounds, fetchMoreRounds, loading, loadingMore, hasMore, initialized, error } = useRoundsStore();
   const { completions, fetchCompletions, markDone, setRecommendedCategories } = useDrillsStore();
   const { width } = useWindowDimensions();
   const insets = useSafeAreaInsets();
@@ -144,6 +144,7 @@ export default function DashboardScreen() {
   const [diagnosticError, setDiagnosticError] = useState<string | null>(null);
   const [markingFocusDone, setMarkingFocusDone] = useState(false);
   const [focusCompletionError, setFocusCompletionError] = useState<string | null>(null);
+  const [visibleRoundsCount, setVisibleRoundsCount] = useState(6);
 
   useEffect(() => {
     if (!initialized) {
@@ -187,7 +188,7 @@ export default function DashboardScreen() {
   const chartWidth = width - 32;
   const latestRound = rounds[0] ?? null;
   const focusInsight = getFocusInsight(rounds);
-  const estimatedHandicap = getEstimatedHandicap(rounds);
+  const estimatedHandicapIndex = getEstimatedHandicapIndex(rounds);
   const bestRound = getBestRound(rounds);
   const averagePenaltyCount = getAveragePenaltyCount(rounds);
   const trendLabel = getTrendLabel(rounds);
@@ -214,7 +215,20 @@ export default function DashboardScreen() {
       .filter((round) => round.fairways_hit != null && round.fairways_total != null && (round.fairways_total ?? 0) > 0)
       .map((round) => Math.round(((round.fairways_hit as number) / (round.fairways_total as number)) * 100))
   );
-  const recentRounds = rounds.slice(0, 6);
+  const recentRounds = rounds.slice(0, visibleRoundsCount);
+  const canShowMoreRounds = visibleRoundsCount < rounds.length || hasMore;
+
+  const handleShowMoreRounds = async () => {
+    if (visibleRoundsCount < rounds.length) {
+      setVisibleRoundsCount((count) => count + 6);
+      return;
+    }
+
+    if (hasMore) {
+      await fetchMoreRounds();
+      setVisibleRoundsCount((count) => count + 6);
+    }
+  };
   const focusDrill = useMemo(() => (
     latestDiagnostic
       ? getDailyFocusDrill({
@@ -325,7 +339,7 @@ export default function DashboardScreen() {
             />
 
             <View style={styles.statsGrid}>
-              <PrimaryStatCard label="Handicap estimé" value={estimatedHandicap != null ? estimatedHandicap.toString() : '--'} helper="calcul récent" />
+              <PrimaryStatCard label="Handicap Index estimé" value={estimatedHandicapIndex != null ? estimatedHandicapIndex.toString() : '--'} helper="méthode WHS, non officiel" />
               <PrimaryStatCard label="Moyenne vs par" value={averageScoreToPar != null ? `${averageScoreToPar > 0 ? '+' : ''}${averageScoreToPar}` : '--'} helper="sur les rounds" />
               <PrimaryStatCard label="Meilleur round" value={bestRound ? `${bestRound.total_score}` : '--'} helper={bestRound ? `${bestRound.total_score - bestRound.par > 0 ? '+' : ''}${bestRound.total_score - bestRound.par}` : '—'} />
               <PrimaryStatCard label="Pénalités moy." value={averagePenaltyCount != null ? averagePenaltyCount.toString() : '--'} helper="par round" />
@@ -401,6 +415,16 @@ export default function DashboardScreen() {
                 </TouchableOpacity>
               );
             })}
+
+            {canShowMoreRounds ? (
+              <AppButton
+                label={loadingMore ? 'Chargement...' : 'Voir plus de rounds'}
+                variant="secondary"
+                loading={loadingMore}
+                onPress={() => void handleShowMoreRounds()}
+                style={styles.showMoreButton}
+              />
+            ) : null}
           </>
         )}
       </ScrollView>
@@ -772,6 +796,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.sm,
+  },
+  showMoreButton: {
+    marginHorizontal: Spacing.md,
+    marginTop: Spacing.xs,
   },
   roundLeft: {
     alignItems: 'center',

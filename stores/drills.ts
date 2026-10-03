@@ -2,6 +2,9 @@ import { create } from 'zustand';
 import { supabase } from '../lib/supabase';
 import { format, isToday, isYesterday, subDays } from 'date-fns';
 
+const PAGE_SIZE = 500;
+const MAX_PAGES = 20;
+
 type Completion = {
   id: string;
   drill_id: string;
@@ -24,17 +27,36 @@ export const useDrillsStore = create<DrillsState>((set, get) => ({
   recommendedCategories: [],
 
   fetchCompletions: async () => {
-    const { data, error } = await supabase
-      .from('drill_completions')
-      .select('*')
-      .order('completed_at', { ascending: false })
-      .limit(200);
+    // getStreak()/getTotalDone() need the full completion history to stay accurate, but
+    // there's no UI list to paginate against, so we page through everything here instead
+    // of capping at a single batch. MAX_PAGES bounds the worst case (10,000 completions)
+    // rather than fetching truly unbounded data for a runaway account.
+    let allCompletions: Completion[] = [];
 
-    if (error) {
-      throw error;
+    for (let page = 0; page < MAX_PAGES; page++) {
+      const from = page * PAGE_SIZE;
+      const { data, error } = await supabase
+        .from('drill_completions')
+        .select('*')
+        .order('completed_at', { ascending: false })
+        .range(from, from + PAGE_SIZE - 1);
+
+      if (error) {
+        throw error;
+      }
+
+      if (!data || data.length === 0) {
+        break;
+      }
+
+      allCompletions = allCompletions.concat(data);
+
+      if (data.length < PAGE_SIZE) {
+        break;
+      }
     }
 
-    if (data) set({ completions: data });
+    set({ completions: allCompletions });
   },
 
   markDone: async (drillId, userId) => {

@@ -1,7 +1,7 @@
 import {
   aggregateScorecard,
   createDefaultScorecard,
-  getEstimatedHandicap,
+  getEstimatedHandicapIndex,
   getScorecardProgress,
 } from './rounds';
 import type { Round, RoundDraftHole } from '../types';
@@ -148,39 +148,55 @@ describe('getScorecardProgress', () => {
   });
 });
 
-describe('getEstimatedHandicap', () => {
+describe('getEstimatedHandicapIndex', () => {
   it('returns null when there are no rounds', () => {
-    expect(getEstimatedHandicap([])).toBeNull();
+    expect(getEstimatedHandicapIndex([])).toBeNull();
   });
 
-  it('estimates from a single round', () => {
+  it('applies the WHS adjustment for a single round (differential 13 -> (13 - 2) * 0.96)', () => {
     const rounds = [makeRound({ total_score: 85, par: 72 })];
 
-    expect(getEstimatedHandicap(rounds)).toBeCloseTo(13 * 0.9, 5);
+    expect(getEstimatedHandicapIndex(rounds)).toBe(10.5);
   });
 
-  it('averages the score-to-par across multiple rounds', () => {
-    const rounds = [
-      makeRound({ total_score: 82, par: 72 }), // +10
-      makeRound({ total_score: 92, par: 72 }), // +20
-      makeRound({ total_score: 72, par: 72 }), // 0
-    ];
+  it('uses course rating and slope when available', () => {
+    const rounds = [makeRound({ total_score: 90, par: 72, course_rating: 71.2, slope_rating: 130 })];
 
-    expect(getEstimatedHandicap(rounds)).toBeCloseTo(10 * 0.9, 5);
+    // differential = (90 - 71.2) * 113 / 130 = 16.34; (16.34 - 2) * 0.96 = 13.76 -> truncated to 13.7
+    expect(getEstimatedHandicapIndex(rounds)).toBe(13.7);
   });
 
-  it('only considers the 8 most recent rounds', () => {
-    const goodRounds = Array.from({ length: 8 }, () => makeRound({ total_score: 72, par: 72 })); // all even par
-    const ignoredBadRounds = Array.from({ length: 4 }, () => makeRound({ total_score: 120, par: 72 }));
+  it('falls back to par and neutral slope when rating data is missing', () => {
+    const withoutRating = [makeRound({ total_score: 85, par: 72, course_rating: null, slope_rating: null })];
+    const withNeutralRating = [makeRound({ total_score: 85, par: 72, course_rating: 72, slope_rating: 113 })];
 
-    const handicap = getEstimatedHandicap([...goodRounds, ...ignoredBadRounds]);
-
-    expect(handicap).toBe(0);
+    expect(getEstimatedHandicapIndex(withoutRating)).toBe(getEstimatedHandicapIndex(withNeutralRating));
   });
 
-  it('clamps a negative average score-to-par to zero', () => {
-    const rounds = [makeRound({ total_score: 68, par: 72 })]; // -4 to par
+  it('averages the best 8 differentials out of 20 rounds', () => {
+    const rounds = Array.from({ length: 20 }, (_, index) =>
+      makeRound({ id: `round-${index}`, total_score: 72 + index + 1, par: 72 })
+    ); // differentials 1..20
 
-    expect(getEstimatedHandicap(rounds)).toBe(0);
+    // best 8 = 1..8 -> average 4.5; no adjustment; 4.5 * 0.96 = 4.32 -> truncated to 4.3
+    expect(getEstimatedHandicapIndex(rounds)).toBe(4.3);
+  });
+
+  it('only considers the 20 most recent rounds', () => {
+    const recentRounds = Array.from({ length: 20 }, (_, index) =>
+      makeRound({ id: `recent-${index}`, total_score: 82, par: 72, played_at: `2026-02-${String(index + 1).padStart(2, '0')}T00:00:00.000Z` })
+    ); // differential 10 each
+    const olderBetterRounds = Array.from({ length: 5 }, (_, index) =>
+      makeRound({ id: `old-${index}`, total_score: 72, par: 72, played_at: `2025-01-0${index + 1}T00:00:00.000Z` })
+    ); // differential 0 each, must be ignored
+
+    expect(getEstimatedHandicapIndex([...olderBetterRounds, ...recentRounds])).toBeCloseTo(9.6, 5);
+  });
+
+  it('can return a negative (plus) index for rounds under par', () => {
+    const rounds = [makeRound({ total_score: 68, par: 72 })];
+
+    // (-4 - 2) * 0.96 = -5.76 -> truncated toward zero to -5.7
+    expect(getEstimatedHandicapIndex(rounds)).toBe(-5.7);
   });
 });

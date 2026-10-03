@@ -13,6 +13,7 @@ import {
   View,
 } from 'react-native';
 import { router } from 'expo-router';
+import * as Location from 'expo-location';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors, Radius, Spacing, Typography } from '../../constants';
 import { useAuthStore } from '../../stores/auth';
@@ -38,6 +39,7 @@ import {
   type TeeKey,
 } from '../../lib/golf-courses';
 import { buildHoleViewData } from '../../lib/hole-view';
+import { getGreenDistances } from '../../lib/gps';
 import { clearRoundDraft, loadRoundDraft, saveRoundDraft } from '../../lib/round-draft';
 import { supabase } from '../../lib/supabase';
 import type { RoundDraftHole } from '../../types';
@@ -88,6 +90,8 @@ export default function RoundScreen() {
   const [draftHydrated, setDraftHydrated]   = useState(false);
   const [restoredDraftAt, setRestoredDraftAt] = useState<string | null>(null);
   const [setupExpanded, setSetupExpanded]   = useState(true);
+  const [gpsPermission, setGpsPermission]   = useState<'undetermined' | 'granted' | 'denied'>('undetermined');
+  const [livePosition, setLivePosition]     = useState<{ latitude: number; longitude: number } | null>(null);
   const courseRequestRef  = useRef(0);
   const autoAdvanceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -102,9 +106,23 @@ export default function RoundScreen() {
     () => buildHoleViewData({ course: selectedCourse, scorecard }),
     [scorecard, selectedCourse],
   );
+  const courseHasAnyGpsData = useMemo(
+    () => holeViews.some((hole) => hole.gpsAvailable),
+    [holeViews],
+  );
 
   const currentHole     = scorecard[currentHoleNumber - 1];
   const currentHoleView = holeViews[currentHoleNumber - 1];
+  const liveGreenDistances = useMemo(
+    () => getGreenDistances(currentHoleView?.gpsPoints, livePosition),
+    [currentHoleView, livePosition],
+  );
+  const gpsHintLabel = useMemo(() => {
+    if (!currentHoleView?.gpsAvailable) return null;
+    if (gpsPermission === 'denied') return 'Active la localisation pour les distances réelles.';
+    if (gpsPermission === 'granted' && !livePosition) return 'Recherche du signal GPS…';
+    return null;
+  }, [currentHoleView, gpsPermission, livePosition]);
   const teeLabel        = teeOptions.find((tee) => tee.key === teeKey)?.label ?? teeOptions[0]?.label ?? teeKey;
   const canGoPrevious   = currentHoleNumber > 1;
   const canGoNext       = currentHoleNumber < scorecard.length;
@@ -150,6 +168,39 @@ export default function RoundScreen() {
       setSetupExpanded(false);
     }
   }, [progress.completedHoles, setupExpanded]);
+
+  useEffect(() => {
+    if (setupExpanded || !courseHasAnyGpsData) return;
+
+    let cancelled = false;
+    let subscription: Location.LocationSubscription | null = null;
+
+    (async () => {
+      try {
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (cancelled) return;
+        setGpsPermission(status === 'granted' ? 'granted' : 'denied');
+        if (status !== 'granted') return;
+
+        const sub = await Location.watchPositionAsync(
+          { accuracy: Location.Accuracy.High, timeInterval: 2000, distanceInterval: 3 },
+          (location) => {
+            setLivePosition({ latitude: location.coords.latitude, longitude: location.coords.longitude });
+          },
+        );
+
+        if (cancelled) { sub.remove(); return; }
+        subscription = sub;
+      } catch {
+        if (!cancelled) setGpsPermission('denied');
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      subscription?.remove();
+    };
+  }, [setupExpanded, courseHasAnyGpsData]);
 
   useEffect(() => {
     let mounted = true;
@@ -590,6 +641,8 @@ export default function RoundScreen() {
                 teeKey={teeKey}
                 teeOptions={teeOptions}
                 onSelectTee={(next) => { cancelAutoAdvance(); setTeeKey(next); }}
+                liveGreenDistances={liveGreenDistances}
+                gpsHintLabel={gpsHintLabel}
               />
               </ScrollView>
             </View>

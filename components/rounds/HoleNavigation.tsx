@@ -54,6 +54,8 @@ export const HoleNavigation = memo(function HoleNavigation({
         disabled={atStart}
         activeOpacity={0.7}
         hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
+        accessibilityRole="button"
+        accessibilityLabel="Trou précédent"
       >
         <Text style={[styles.arrowLabel, atStart && styles.arrowLabelOff]}>‹</Text>
       </TouchableOpacity>
@@ -91,6 +93,8 @@ export const HoleNavigation = memo(function HoleNavigation({
         disabled={atEnd}
         activeOpacity={0.7}
         hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
+        accessibilityRole="button"
+        accessibilityLabel="Trou suivant"
       >
         <Text style={[styles.arrowLabel, atEnd && styles.arrowLabelOff]}>›</Text>
       </TouchableOpacity>
