@@ -13,12 +13,15 @@ import {
 import { useLocalSearchParams, router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase } from '../lib/supabase';
-import { AiCoachLimitError, postRoundDebrief } from '../lib/claude';
+import { AiCoachLimitError, AiCoachPremiumRequiredError, postRoundDebrief } from '../lib/claude';
 import { useAuthStore } from '../stores/auth';
 import { useRoundsStore } from '../stores/rounds';
+import { useSubscriptionStore } from '../stores/subscription';
 import { Colors } from '../constants';
+import type { Round } from '../types';
 import { DecorativeBackground } from '../components/ui/DecorativeBackground';
 import { AppCard } from '../components/ui/AppCard';
+import { AppButton } from '../components/ui/AppButton';
 
 type Message = {
   id: string;
@@ -48,6 +51,8 @@ export default function DebriefScreen() {
   const { roundId } = useLocalSearchParams<{ roundId: string }>();
   const { profile, user } = useAuthStore();
   const { rounds } = useRoundsStore();
+  const isPremium = useSubscriptionStore((state) => state.isPremium);
+  const subscriptionLoading = useSubscriptionStore((state) => state.loading);
   const round = rounds.find((currentRound) => currentRound.id === roundId);
 
   const [messages, setMessages] = useState<Message[]>([]);
@@ -58,12 +63,12 @@ export default function DebriefScreen() {
   const insets = useSafeAreaInsets();
 
   useEffect(() => {
-    if (!round || !profile || !user) {
+    if (!round || !profile || !user || !isPremium) {
       return;
     }
 
     void initSession();
-  }, [round, profile, user]);
+  }, [round, profile, user, isPremium]);
 
   const initSession = async () => {
     if (!round || !profile || !user) {
@@ -129,7 +134,7 @@ export default function DebriefScreen() {
   };
 
   const sendMessage = async () => {
-    if (!input.trim() || loading || !round || !profile) {
+    if (!input.trim() || loading || !round || !profile || !isPremium) {
       return;
     }
 
@@ -157,6 +162,13 @@ export default function DebriefScreen() {
         ]);
       }
     } catch (error) {
+      if (error instanceof AiCoachPremiumRequiredError) {
+        useSubscriptionStore.getState().markFree();
+        setMessages((previousMessages) => previousMessages.filter((message) => message.id !== userMsg.id));
+        setInput(text);
+        return;
+      }
+
       setMessages((previousMessages) => [
         ...previousMessages,
         {
@@ -190,6 +202,40 @@ export default function DebriefScreen() {
     );
   }
 
+  if (!isPremium) {
+    return (
+      <View style={styles.container}>
+        <DecorativeBackground />
+        <DebriefHeader round={round} topInset={insets.top} />
+
+        {subscriptionLoading ? (
+          <View style={styles.loadingState}>
+            <ActivityIndicator size="small" color={Colors.text} />
+          </View>
+        ) : (
+          <View style={styles.upsell}>
+            <AppCard accent="highlight">
+              <Text style={styles.summaryEyebrow}>Premium</Text>
+              <Text style={styles.summaryTitle}>Le débrief conversationnel est réservé aux abonnés Premium</Text>
+              <Text style={styles.summaryText}>
+                Discute avec le coach IA après ton round pour isoler les coups qui t’ont coûté des points et savoir sur quoi travailler en priorité.
+              </Text>
+              <Text style={styles.summaryText}>
+                Le diagnostic IA de ton round reste disponible gratuitement.
+              </Text>
+            </AppCard>
+            <AppButton
+              label="Découvrir Premium"
+              variant="accent"
+              onPress={() => router.push('/paywall')}
+              style={styles.upsellAction}
+            />
+          </View>
+        )}
+      </View>
+    );
+  }
+
   return (
     <KeyboardAvoidingView
       style={styles.container}
@@ -197,15 +243,7 @@ export default function DebriefScreen() {
     >
       <DecorativeBackground />
 
-      <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-          <Text style={styles.backBtnText}>Retour</Text>
-        </TouchableOpacity>
-        <View style={styles.headerInfo}>
-          <Text style={styles.headerTitle}>Débrief IA</Text>
-          <Text style={styles.headerSub}>{round.total_score} coups · par {round.par}</Text>
-        </View>
-      </View>
+      <DebriefHeader round={round} topInset={insets.top} />
 
       <FlatList
         ref={flatListRef}
@@ -251,6 +289,20 @@ export default function DebriefScreen() {
         </TouchableOpacity>
       </View>
     </KeyboardAvoidingView>
+  );
+}
+
+function DebriefHeader({ round, topInset }: { round: Round; topInset: number }) {
+  return (
+    <View style={[styles.header, { paddingTop: topInset + 12 }]}>
+      <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+        <Text style={styles.backBtnText}>Retour</Text>
+      </TouchableOpacity>
+      <View style={styles.headerInfo}>
+        <Text style={styles.headerTitle}>Débrief IA</Text>
+        <Text style={styles.headerSub}>{round.total_score} coups · par {round.par}</Text>
+      </View>
+    </View>
   );
 }
 
@@ -307,6 +359,13 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: Colors.textMuted,
     marginTop: 2,
+  },
+  upsell: {
+    padding: 16,
+    gap: 12,
+  },
+  upsellAction: {
+    marginTop: 4,
   },
   messageList: {
     padding: 16,

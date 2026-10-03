@@ -90,9 +90,11 @@ const DIAGNOSTIC_CATEGORY_SET = new Set<string>(DIAGNOSTIC_CATEGORIES);
 const DIAGNOSTIC_TOOL_NAME = 'submit_round_diagnostic';
 
 const GENERIC_ERROR_MESSAGE = 'Le coach IA est momentanément indisponible. Réessaie plus tard.';
+const PREMIUM_REQUIRED_MESSAGE = 'Le débrief conversationnel est réservé aux abonnés Premium.';
+const PREMIUM_REQUIRED_CODE = 'premium_required';
 
 class ClientError extends Error {
-  constructor(readonly status: number, message: string) {
+  constructor(readonly status: number, message: string, readonly code?: string) {
     super(message);
   }
 }
@@ -163,6 +165,10 @@ function isAnalyzeRoundRequest(value: unknown): value is AnalyzeRoundRequest {
     && isObject(value.round)
     && isObject(value.profile)
     && Array.isArray(value.previousRounds);
+}
+
+function isPremiumOnlyAction(value: unknown) {
+  return isObject(value) && value.action === 'post_round_debrief';
 }
 
 function isPostRoundDebriefRequest(value: unknown): value is PostRoundDebriefRequest {
@@ -475,17 +481,19 @@ function buildDailyLimitMessage(limit: number, isPremium: boolean) {
     : `Tu as atteint ta limite quotidienne de ${calls} du coach IA. Réessaie demain ou passe à Premium pour en profiter davantage.`;
 }
 
-async function checkDailyLimit(userId: string) {
+function createAdminClient() {
   if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
     throw new Error('Configuration Supabase manquante côté serveur.');
   }
 
-  const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+  return createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
     auth: {
       persistSession: false,
     },
   });
+}
 
+async function resolveIsPremium(admin: ReturnType<typeof createAdminClient>, userId: string) {
   const { data: subscription, error: subscriptionError } = await admin
     .from('subscriptions')
     .select('is_premium, expires_at')
@@ -496,8 +504,11 @@ async function checkDailyLimit(userId: string) {
     throw new Error('Impossible de vérifier l’abonnement.', { cause: subscriptionError });
   }
 
-  const isPremium = subscription?.is_premium === true
+  return subscription?.is_premium === true
     && (subscription.expires_at == null || new Date(subscription.expires_at).getTime() > Date.now());
+}
+
+async function checkDailyLimit(admin: ReturnType<typeof createAdminClient>, userId: string, isPremium: boolean) {
   const limit = isPremium ? AI_COACH_DAILY_LIMIT_PREMIUM : AI_COACH_DAILY_LIMIT_FREE;
 
   if (limit <= 0) {
@@ -530,13 +541,20 @@ Deno.serve(async (request) => {
   try {
     const user = await resolveAuthenticatedUser(request);
 
-    const dailyLimitMessage = await checkDailyLimit(user.id);
+    const payload = await request.json().catch(() => null) as unknown;
+
+    const admin = createAdminClient();
+    const isPremium = await resolveIsPremium(admin, user.id);
+
+    if (isPremiumOnlyAction(payload) && !isPremium) {
+      throw new ClientError(403, PREMIUM_REQUIRED_MESSAGE, PREMIUM_REQUIRED_CODE);
+    }
+
+    const dailyLimitMessage = await checkDailyLimit(admin, user.id, isPremium);
 
     if (dailyLimitMessage) {
       return jsonResponse(429, { error: dailyLimitMessage });
     }
-
-    const payload = await request.json().catch(() => null) as unknown;
 
     if (isAnalyzeRoundRequest(payload)) {
       if (payload.round.user_id !== user.id || payload.profile.user_id !== user.id) {
@@ -559,7 +577,7 @@ Deno.serve(async (request) => {
     return jsonResponse(400, { error: 'Payload invalide.' });
   } catch (error) {
     if (error instanceof ClientError) {
-      return jsonResponse(error.status, { error: error.message });
+      return jsonResponse(error.status, error.code ? { error: error.message, code: error.code } : { error: error.message });
     }
 
     console.error('ai-coach: erreur inattendue', error);

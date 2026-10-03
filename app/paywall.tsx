@@ -12,6 +12,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors, PRIVACY_POLICY_URL, TERMS_OF_USE_URL } from '../constants';
 import { openLegalUrl } from '../lib/legal';
 import { getOfferings, isPremium, purchasePackage, restorePurchases } from '../lib/purchases';
+import { useSubscriptionStore } from '../stores/subscription';
 import { DecorativeBackground } from '../components/ui/DecorativeBackground';
 import { AppCard } from '../components/ui/AppCard';
 import { AppButton } from '../components/ui/AppButton';
@@ -87,6 +88,7 @@ export default function PaywallScreen() {
     try {
       const info = await purchasePackage(pkg);
       if (isPremium(info)) {
+        useSubscriptionStore.getState().markPremium();
         router.replace('/(tabs)');
       }
     } catch (error: any) {
@@ -104,6 +106,7 @@ export default function PaywallScreen() {
     try {
       const info = await restorePurchases();
       if (isPremium(info)) {
+        useSubscriptionStore.getState().markPremium();
         Alert.alert('Abonnement restauré', 'Ton accès Premium est de nouveau actif.', [
           { text: 'Continuer', onPress: () => router.replace('/(tabs)') },
         ]);

@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { AppState } from 'react-native';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { router } from 'expo-router';
@@ -6,8 +7,9 @@ import * as Linking from 'expo-linking';
 import { Colors } from '../constants';
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../stores/auth';
+import { useSubscriptionStore } from '../stores/subscription';
 import { setupNotificationResponseListener } from '../lib/notifications';
-import { initPurchases } from '../lib/purchases';
+import { identifyPurchasesUser, initPurchases, resetPurchasesUser } from '../lib/purchases';
 import { initSentry } from '../lib/sentry';
 import { ErrorBoundary } from '../components/ErrorBoundary';
 
@@ -15,6 +17,7 @@ initSentry();
 
 export default function RootLayout() {
   const { setSession, fetchProfile, session, loading } = useAuthStore();
+  const userId = session?.user?.id ?? null;
 
   useEffect(() => {
     if (!loading && !session) {
@@ -24,6 +27,32 @@ export default function RootLayout() {
 
   useEffect(() => {
     initPurchases();
+  }, []);
+
+  useEffect(() => {
+    if (loading) {
+      return;
+    }
+
+    const subscriptionStore = useSubscriptionStore.getState();
+    subscriptionStore.reset();
+
+    if (userId) {
+      void identifyPurchasesUser(userId);
+      void subscriptionStore.refresh();
+    } else {
+      void resetPurchasesUser();
+    }
+  }, [userId, loading]);
+
+  useEffect(() => {
+    const appStateSub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') {
+        void useSubscriptionStore.getState().refresh();
+      }
+    });
+
+    return () => appStateSub.remove();
   }, []);
 
   useEffect(() => {
