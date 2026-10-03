@@ -24,23 +24,37 @@ begin
 end;
 $$;
 
-drop trigger if exists enforce_round_holes_owner on public.round_holes;
-create trigger enforce_round_holes_owner
-  before insert or update of round_id, user_id
-  on public.round_holes
-  for each row execute function public.enforce_round_owner();
+revoke all on function public.enforce_round_owner() from public, anon, authenticated;
 
-drop trigger if exists enforce_diagnostics_round_owner on public.diagnostics;
-create trigger enforce_diagnostics_round_owner
-  before insert or update of round_id, user_id
-  on public.diagnostics
-  for each row execute function public.enforce_round_owner();
+do $$
+begin
+  if not exists (select 1 from pg_trigger where tgname = 'enforce_round_holes_owner' and not tgisinternal) then
+    create trigger enforce_round_holes_owner
+      before insert or update of round_id, user_id
+      on public.round_holes
+      for each row execute function public.enforce_round_owner();
+  end if;
+end $$;
 
-drop trigger if exists enforce_debrief_sessions_round_owner on public.debrief_sessions;
-create trigger enforce_debrief_sessions_round_owner
-  before insert or update of round_id, user_id
-  on public.debrief_sessions
-  for each row execute function public.enforce_round_owner();
+do $$
+begin
+  if not exists (select 1 from pg_trigger where tgname = 'enforce_diagnostics_round_owner' and not tgisinternal) then
+    create trigger enforce_diagnostics_round_owner
+      before insert or update of round_id, user_id
+      on public.diagnostics
+      for each row execute function public.enforce_round_owner();
+  end if;
+end $$;
+
+do $$
+begin
+  if not exists (select 1 from pg_trigger where tgname = 'enforce_debrief_sessions_round_owner' and not tgisinternal) then
+    create trigger enforce_debrief_sessions_round_owner
+      before insert or update of round_id, user_id
+      on public.debrief_sessions
+      for each row execute function public.enforce_round_owner();
+  end if;
+end $$;
 
 do $$
 begin
@@ -163,50 +177,33 @@ begin
   end if;
 end $$;
 
-drop policy if exists "Users can manage their own profile" on public.profiles;
-create policy "Users can manage their own profile"
-  on public.profiles
-  for all
+-- ALTER POLICY keeps each policy in place (never absent) while restricting it to authenticated.
+alter policy "Users can manage their own profile" on public.profiles
   to authenticated
   using ((select auth.uid()) = user_id)
   with check ((select auth.uid()) = user_id);
 
-drop policy if exists "Users can manage their own rounds" on public.rounds;
-create policy "Users can manage their own rounds"
-  on public.rounds
-  for all
+alter policy "Users can manage their own rounds" on public.rounds
   to authenticated
   using ((select auth.uid()) = user_id)
   with check ((select auth.uid()) = user_id);
 
-drop policy if exists "Users can manage their own diagnostics" on public.diagnostics;
-create policy "Users can manage their own diagnostics"
-  on public.diagnostics
-  for all
+alter policy "Users can manage their own diagnostics" on public.diagnostics
   to authenticated
   using ((select auth.uid()) = user_id)
   with check ((select auth.uid()) = user_id);
 
-drop policy if exists "Users can manage their own round holes" on public.round_holes;
-create policy "Users can manage their own round holes"
-  on public.round_holes
-  for all
+alter policy "Users can manage their own round holes" on public.round_holes
   to authenticated
   using ((select auth.uid()) = user_id)
   with check ((select auth.uid()) = user_id);
 
-drop policy if exists "Users can manage their own debrief sessions" on public.debrief_sessions;
-create policy "Users can manage their own debrief sessions"
-  on public.debrief_sessions
-  for all
+alter policy "Users can manage their own debrief sessions" on public.debrief_sessions
   to authenticated
   using ((select auth.uid()) = user_id)
   with check ((select auth.uid()) = user_id);
 
-drop policy if exists "Users can manage messages in their sessions" on public.debrief_messages;
-create policy "Users can manage messages in their sessions"
-  on public.debrief_messages
-  for all
+alter policy "Users can manage messages in their sessions" on public.debrief_messages
   to authenticated
   using (
     exists (
@@ -225,9 +222,6 @@ create policy "Users can manage messages in their sessions"
     )
   );
 
-drop policy if exists "Users can read their own subscription" on public.subscriptions;
-create policy "Users can read their own subscription"
-  on public.subscriptions
-  for select
+alter policy "Users can read their own subscription" on public.subscriptions
   to authenticated
   using ((select auth.uid()) = user_id);
