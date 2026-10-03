@@ -11,15 +11,18 @@ import {
 import { Link, router } from 'expo-router';
 import * as Linking from 'expo-linking';
 import { supabase } from '../../lib/supabase';
-import { Colors } from '../../constants';
+import { AI_DATA_NOTICE, Colors, PRIVACY_POLICY_URL, TERMS_OF_USE_URL } from '../../constants';
+import { openLegalUrl } from '../../lib/legal';
 import { DecorativeBackground } from '../../components/ui/DecorativeBackground';
 import { AppCard } from '../../components/ui/AppCard';
 import { AppButton } from '../../components/ui/AppButton';
 import { AppInput } from '../../components/ui/AppInput';
+import { AppCheckbox } from '../../components/ui/AppCheckbox';
 
 export default function RegisterScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [acceptedLegal, setAcceptedLegal] = useState(false);
   const [loading, setLoading] = useState(false);
 
   const handleRegister = async () => {
@@ -30,6 +33,13 @@ export default function RegisterScreen() {
     }
     if (password.length < 6) {
       Alert.alert('Erreur', 'Le mot de passe doit faire au moins 6 caractères');
+      return;
+    }
+    if (!acceptedLegal) {
+      Alert.alert(
+        'Erreur',
+        'Accepte les conditions d’utilisation et la politique de confidentialité pour créer ton compte.'
+      );
       return;
     }
     const emailRedirectTo = Linking.createURL('auth-callback');
@@ -111,10 +121,36 @@ export default function RegisterScreen() {
             autoComplete="new-password"
           />
 
+          <AppCheckbox
+            checked={acceptedLegal}
+            onToggle={() => setAcceptedLegal((value) => !value)}
+            accessibilityLabel="J’accepte les conditions d’utilisation et la politique de confidentialité"
+            hint={AI_DATA_NOTICE}
+          >
+            J’accepte les{' '}
+            <Text
+              style={styles.legalLink}
+              accessibilityRole="link"
+              onPress={() => void openLegalUrl(TERMS_OF_USE_URL)}
+            >
+              conditions d’utilisation
+            </Text>{' '}
+            et la{' '}
+            <Text
+              style={styles.legalLink}
+              accessibilityRole="link"
+              onPress={() => void openLegalUrl(PRIVACY_POLICY_URL)}
+            >
+              politique de confidentialité
+            </Text>
+            .
+          </AppCheckbox>
+
           <AppButton
             label={loading ? 'Création...' : 'Créer mon compte'}
             onPress={handleRegister}
             loading={loading}
+            disabled={!acceptedLegal}
             style={styles.primaryButton}
           />
 
@@ -199,6 +235,11 @@ const styles = StyleSheet.create({
   linkText: {
     color: Colors.textMuted,
     fontSize: 14,
+  },
+  legalLink: {
+    color: Colors.accentBlue,
+    fontWeight: '700',
+    textDecorationLine: 'underline',
   },
   linkBold: {
     color: Colors.accentBlue,

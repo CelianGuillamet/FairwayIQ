@@ -9,7 +9,8 @@ import {
 } from 'react-native';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Colors } from '../constants';
+import { Colors, PRIVACY_POLICY_URL, TERMS_OF_USE_URL } from '../constants';
+import { openLegalUrl } from '../lib/legal';
 import { getOfferings, isPremium, purchasePackage, restorePurchases } from '../lib/purchases';
 import { DecorativeBackground } from '../components/ui/DecorativeBackground';
 import { AppCard } from '../components/ui/AppCard';
@@ -197,7 +198,23 @@ export default function PaywallScreen() {
         </Text>
 
         <Text style={styles.legal}>
-          En continuant, tu acceptes les conditions d’abonnement et la politique de confidentialité.
+          En continuant, tu acceptes les{' '}
+          <Text
+            style={styles.legalLink}
+            accessibilityRole="link"
+            onPress={() => void openLegalUrl(TERMS_OF_USE_URL)}
+          >
+            conditions d’utilisation
+          </Text>{' '}
+          et la{' '}
+          <Text
+            style={styles.legalLink}
+            accessibilityRole="link"
+            onPress={() => void openLegalUrl(PRIVACY_POLICY_URL)}
+          >
+            politique de confidentialité
+          </Text>
+          .
         </Text>
       </ScrollView>
     </View>
@@ -397,5 +414,9 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: Colors.textDim,
     lineHeight: 16,
+  },
+  legalLink: {
+    color: Colors.textMuted,
+    textDecorationLine: 'underline',
   },
 });
