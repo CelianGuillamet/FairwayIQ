@@ -13,7 +13,7 @@ import {
 import { useLocalSearchParams, router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase } from '../lib/supabase';
-import { postRoundDebrief } from '../lib/claude';
+import { AiCoachLimitError, postRoundDebrief } from '../lib/claude';
 import { useAuthStore } from '../stores/auth';
 import { useRoundsStore } from '../stores/rounds';
 import { Colors } from '../constants';
@@ -156,13 +156,15 @@ export default function DebriefScreen() {
           { session_id: activeSessionId, role: 'assistant', content: reply },
         ]);
       }
-    } catch {
+    } catch (error) {
       setMessages((previousMessages) => [
         ...previousMessages,
         {
           id: `fallback-${Date.now()}`,
           role: 'assistant',
-          content: buildFallbackReply(round.total_score, round.par),
+          content: error instanceof AiCoachLimitError
+            ? error.message
+            : buildFallbackReply(round.total_score, round.par),
         },
       ]);
     } finally {

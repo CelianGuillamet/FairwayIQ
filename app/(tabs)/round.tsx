@@ -18,7 +18,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors, Radius, Spacing, Typography } from '../../constants';
 import { useAuthStore } from '../../stores/auth';
 import { useRoundsStore } from '../../stores/rounds';
-import { analyzeRound, buildFallbackDiagnostic } from '../../lib/claude';
+import { AiCoachLimitError, analyzeRound, buildFallbackDiagnostic } from '../../lib/claude';
 import { saveDiagnostic } from '../../lib/diagnostics';
 import { CourseSearch } from '../../components/ui/CourseSearch';
 import { DecorativeBackground } from '../../components/ui/DecorativeBackground';
@@ -385,7 +385,13 @@ export default function RoundScreen() {
       }
 
       const diagnosis = await analyzeRound(round, profile, rounds.slice(0, 5), effectiveScorecard)
-        .catch(() => buildFallbackDiagnostic(round, profile, rounds.slice(0, 5), effectiveScorecard));
+        .catch((analysisError) => {
+          if (analysisError instanceof AiCoachLimitError) {
+            Alert.alert('Limite atteinte', analysisError.message);
+          }
+
+          return buildFallbackDiagnostic(round, profile, rounds.slice(0, 5), effectiveScorecard);
+        });
 
       await saveDiagnostic({ userId: user.id, roundId: round.id, result: diagnosis }).catch((e: any) => {
         console.warn('[diagnostic] save failed', e?.message ?? e);

@@ -59,12 +59,35 @@ function getScorecardInsights(scorecard?: RoundDraftHole[]) {
   };
 }
 
+export class AiCoachLimitError extends Error {}
+
+async function readDailyLimitMessage(error: unknown) {
+  const context = (error as { context?: { status?: unknown; json?: unknown } } | null)?.context;
+
+  if (!context || context.status !== 429 || typeof context.json !== 'function') {
+    return null;
+  }
+
+  try {
+    const body = await (context as Response).json() as { error?: unknown };
+    return typeof body?.error === 'string' && body.error.trim().length > 0 ? body.error : null;
+  } catch {
+    return null;
+  }
+}
+
 async function invokeAiCoach<TRequest extends { action: string }, TResponse>(payload: TRequest) {
   const { data, error } = await supabase.functions.invoke('ai-coach', {
     body: payload,
   });
 
   if (error) {
+    const limitMessage = await readDailyLimitMessage(error);
+
+    if (limitMessage) {
+      throw new AiCoachLimitError(limitMessage);
+    }
+
     throw new Error(error.message || 'La fonction IA a échoué.');
   }
 

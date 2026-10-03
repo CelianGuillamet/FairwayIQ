@@ -16,7 +16,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { supabase } from '../lib/supabase';
-import { analyzeRound, buildFallbackDiagnostic } from '../lib/claude';
+import { AiCoachLimitError, analyzeRound, buildFallbackDiagnostic } from '../lib/claude';
 import { saveDiagnostic } from '../lib/diagnostics';
 import { useRoundsStore } from '../stores/rounds';
 import { useAuthStore } from '../stores/auth';
@@ -213,7 +213,13 @@ export default function RoundDetailScreen() {
 
       const comparisonRounds = rounds.filter((entry) => entry.id !== round.id).slice(0, 5);
       const diagnosis = await analyzeRound(effectiveRound, profile, comparisonRounds, scorecard)
-        .catch(() => buildFallbackDiagnostic(effectiveRound, profile, comparisonRounds, scorecard));
+        .catch((analysisError) => {
+          if (analysisError instanceof AiCoachLimitError) {
+            Alert.alert('Limite atteinte', analysisError.message);
+          }
+
+          return buildFallbackDiagnostic(effectiveRound, profile, comparisonRounds, scorecard);
+        });
 
       await saveDiagnostic({
         userId: user.id,
