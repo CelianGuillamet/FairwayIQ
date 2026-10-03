@@ -89,6 +89,14 @@ const DIAGNOSTIC_CATEGORY_SET = new Set<string>(DIAGNOSTIC_CATEGORIES);
 
 const DIAGNOSTIC_TOOL_NAME = 'submit_round_diagnostic';
 
+const GENERIC_ERROR_MESSAGE = 'Le coach IA est momentanément indisponible. Réessaie plus tard.';
+
+class ClientError extends Error {
+  constructor(readonly status: number, message: string) {
+    super(message);
+  }
+}
+
 const diagnosticResultJsonSchema = {
   type: 'object',
   additionalProperties: false,
@@ -424,7 +432,7 @@ async function resolveAuthenticatedUser(request: Request) {
   const authorization = request.headers.get('Authorization');
 
   if (!authorization) {
-    throw new Error('Authorization manquant.');
+    throw new ClientError(401, 'Authorization manquant.');
   }
 
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
@@ -442,7 +450,7 @@ async function resolveAuthenticatedUser(request: Request) {
   const { data, error } = await supabase.auth.getUser();
 
   if (error || !data.user) {
-    throw new Error('Utilisateur non authentifié.');
+    throw new ClientError(401, 'Utilisateur non authentifié.');
   }
 
   return data.user;
@@ -485,7 +493,7 @@ async function checkDailyLimit(userId: string) {
     .maybeSingle();
 
   if (subscriptionError) {
-    throw new Error('Impossible de vérifier l’abonnement.');
+    throw new Error('Impossible de vérifier l’abonnement.', { cause: subscriptionError });
   }
 
   const isPremium = subscription?.is_premium === true
@@ -502,7 +510,7 @@ async function checkDailyLimit(userId: string) {
   });
 
   if (error || typeof data !== 'number') {
-    throw new Error('Impossible de vérifier la limite quotidienne.');
+    throw new Error('Impossible de vérifier la limite quotidienne.', { cause: error });
   }
 
   return data > limit ? buildDailyLimitMessage(limit, isPremium) : null;
@@ -528,7 +536,7 @@ Deno.serve(async (request) => {
       return jsonResponse(429, { error: dailyLimitMessage });
     }
 
-    const payload = await request.json() as unknown;
+    const payload = await request.json().catch(() => null) as unknown;
 
     if (isAnalyzeRoundRequest(payload)) {
       if (payload.round.user_id !== user.id || payload.profile.user_id !== user.id) {
@@ -550,7 +558,11 @@ Deno.serve(async (request) => {
 
     return jsonResponse(400, { error: 'Payload invalide.' });
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Erreur interne.';
-    return jsonResponse(500, { error: message });
+    if (error instanceof ClientError) {
+      return jsonResponse(error.status, { error: error.message });
+    }
+
+    console.error('ai-coach: erreur inattendue', error);
+    return jsonResponse(500, { error: GENERIC_ERROR_MESSAGE });
   }
 });
