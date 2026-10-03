@@ -172,7 +172,7 @@ const GOLFAPI_AUTH_SCHEME = Deno.env.get('GOLFAPI_AUTH_SCHEME') ?? 'Bearer';
 const COURSE_CATALOG_STALE_HOURS = Number(Deno.env.get('COURSE_CATALOG_STALE_HOURS') ?? '720');
 const OSM_PROVIDER = 'openstreetmap';
 const OSM_OVERPASS_URL = (Deno.env.get('OSM_OVERPASS_URL') ?? 'https://overpass-api.de/api/interpreter').replace(/\/+$/, '');
-const OSM_SEARCH_ENABLED = Deno.env.get('OSM_COURSE_SEARCH_ENABLED') !== 'false';
+const OSM_SEARCH_ENABLED = Deno.env.get('OSM_COURSE_SEARCH_ENABLED') === 'true';
 const OSM_DETAIL_ENABLED = Deno.env.get('OSM_COURSE_DETAIL_ENABLED') !== 'false';
 const OSM_DEFAULT_RADIUS_METERS = Number(Deno.env.get('OSM_COURSE_DETAIL_RADIUS_METERS') ?? '2500');
 const COURSE_CATALOG_RATE_LIMIT_MAX = Number(Deno.env.get('COURSE_CATALOG_RATE_LIMIT_MAX') ?? '30');
@@ -1405,6 +1405,7 @@ async function overpassFetch(query: string) {
     headers: {
       'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
       Accept: 'application/json',
+      'User-Agent': 'FairwayIQ/1.0 (+https://github.com/CelianGuillamet/FairwayIQ)',
     },
     body: `data=${encodeURIComponent(query)}`,
   });
@@ -1958,13 +1959,17 @@ async function handleSearchCourses(admin: ReturnType<typeof getAdminClient>, pay
     const cached = await isNegativelyCached(admin, 'search', GOLF_PROVIDER, normalizedQuery);
 
     if (!cached) {
-      const foundAny = await syncProviderSearch(admin, query, limit);
+      try {
+        const foundAny = await syncProviderSearch(admin, query, limit);
 
-      if (!foundAny) {
-        await recordNegativeCache(admin, 'search', GOLF_PROVIDER, normalizedQuery);
+        if (!foundAny) {
+          await recordNegativeCache(admin, 'search', GOLF_PROVIDER, normalizedQuery);
+        }
+
+        localCourses = await searchLocalCourses(admin, query, limit);
+      } catch (error) {
+        console.error('course-catalog: provider search failed', error);
       }
-
-      localCourses = await searchLocalCourses(admin, query, limit);
     }
   }
 
@@ -1972,13 +1977,17 @@ async function handleSearchCourses(admin: ReturnType<typeof getAdminClient>, pay
     const cached = await isNegativelyCached(admin, 'search', OSM_PROVIDER, normalizedQuery);
 
     if (!cached) {
-      const foundAny = await syncOpenStreetMapSearch(admin, query, limit);
+      try {
+        const foundAny = await syncOpenStreetMapSearch(admin, query, limit);
 
-      if (!foundAny) {
-        await recordNegativeCache(admin, 'search', OSM_PROVIDER, normalizedQuery);
+        if (!foundAny) {
+          await recordNegativeCache(admin, 'search', OSM_PROVIDER, normalizedQuery);
+        }
+
+        localCourses = await searchLocalCourses(admin, query, limit);
+      } catch (error) {
+        console.error('course-catalog: OSM search failed', error);
       }
-
-      localCourses = await searchLocalCourses(admin, query, limit);
     }
   }
 
