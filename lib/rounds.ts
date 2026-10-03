@@ -475,10 +475,6 @@ function getRoundScoreDifferential(round: Round) {
   return ((round.total_score - courseRating) * 113) / slopeRating;
 }
 
-function truncateToOneDecimal(value: number) {
-  return Math.trunc(value * 10) / 10;
-}
-
 function sortByMostRecent(rounds: Round[]) {
   return [...rounds].sort((left, right) => new Date(right.played_at).getTime() - new Date(left.played_at).getTime());
 }
@@ -503,7 +499,7 @@ export function getHandicapIndexEstimate(rounds: Round[]): HandicapIndexEstimate
   const averageDifferential = bestDifferentials.reduce((sum, value) => sum + value, 0) / bestDifferentials.length;
 
   return {
-    index: Math.min(truncateToOneDecimal(averageDifferential + adjustment), WHS_MAX_HANDICAP_INDEX),
+    index: Math.min(roundToSingleDecimal(averageDifferential + adjustment), WHS_MAX_HANDICAP_INDEX),
     estimated: mostRecentRounds.some((round) => !hasCourseRatingAndSlope(round)),
     excludedNineHoleRounds,
   };

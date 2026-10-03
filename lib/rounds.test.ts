@@ -283,18 +283,18 @@ describe('getEstimatedHandicapIndex', () => {
     expect(getEstimatedHandicapIndex(rounds)).toBe(54);
   });
 
-  it('truncates instead of rounding to one decimal', () => {
+  it('rounds to the nearest tenth (WHS Rule 5.2)', () => {
     const rounds = makeRoundsFromScores([90, 100, 110], { course_rating: 71.2, slope_rating: 125 });
 
-    // (90 - 71.2) * 113 / 125 = 16.9952; 16.9952 - 2 = 14.9952 -> 14.9, not 15.0
-    expect(getEstimatedHandicapIndex(rounds)).toBe(14.9);
+    // (90 - 71.2) * 113 / 125 = 16.9952; 16.9952 - 2 = 14.9952 -> 15.0
+    expect(getEstimatedHandicapIndex(rounds)).toBe(15);
   });
 
-  it('truncates a negative (plus) index toward zero', () => {
+  it('rounds a negative (plus) index to the nearest tenth', () => {
     const rounds = makeRoundsFromScores([70, 80, 90], { course_rating: 71.2, slope_rating: 125 });
 
-    // (70 - 71.2) * 113 / 125 = -1.0848; -1.0848 - 2 = -3.0848 -> -3.0, not -3.1
-    expect(getEstimatedHandicapIndex(rounds)).toBe(-3);
+    // (70 - 71.2) * 113 / 125 = -1.0848; -1.0848 - 2 = -3.0848 -> -3.1
+    expect(getEstimatedHandicapIndex(rounds)).toBe(-3.1);
   });
 
   describe('9-hole rounds', () => {
@@ -320,7 +320,7 @@ describe('getEstimatedHandicapIndex', () => {
       expect(getEstimatedHandicapIndex([...eighteenHoleRounds, nineHoleRound])).toBe(
         getEstimatedHandicapIndex(eighteenHoleRounds)
       );
-      expect(getEstimatedHandicapIndex([...eighteenHoleRounds, nineHoleRound])).toBe(14.9);
+      expect(getEstimatedHandicapIndex([...eighteenHoleRounds, nineHoleRound])).toBe(15);
     });
 
     it('does not let 9-hole rounds fill the 3-round minimum', () => {
