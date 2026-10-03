@@ -66,6 +66,9 @@ const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY');
 const OPENAI_MODEL = Deno.env.get('OPENAI_MODEL_PRIMARY') ?? 'gpt-5.4-mini';
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL');
 const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY');
+const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+const AI_COACH_DAILY_LIMIT_FREE = readDailyLimit('AI_COACH_DAILY_LIMIT_FREE', 3);
+const AI_COACH_DAILY_LIMIT_PREMIUM = readDailyLimit('AI_COACH_DAILY_LIMIT_PREMIUM', 30);
 const DIAGNOSTIC_CATEGORIES = ['putting', 'short_game', 'approach', 'driving', 'mental'] as const;
 const DIAGNOSTIC_CATEGORY_SET = new Set<string>(DIAGNOSTIC_CATEGORIES);
 
@@ -424,6 +427,66 @@ async function resolveAuthenticatedUser(request: Request) {
   return data.user;
 }
 
+function readDailyLimit(name: string, fallback: number) {
+  const rawValue = Deno.env.get(name);
+
+  if (rawValue == null || rawValue.trim().length === 0) {
+    return fallback;
+  }
+
+  const parsedValue = Number(rawValue);
+  return Number.isFinite(parsedValue) ? Math.floor(parsedValue) : fallback;
+}
+
+function buildDailyLimitMessage(limit: number, isPremium: boolean) {
+  const calls = limit > 1 ? `${limit} utilisations` : '1 utilisation';
+
+  return isPremium
+    ? `Tu as atteint ta limite quotidienne de ${calls} du coach IA. Réessaie demain.`
+    : `Tu as atteint ta limite quotidienne de ${calls} du coach IA. Réessaie demain ou passe à Premium pour en profiter davantage.`;
+}
+
+async function checkDailyLimit(userId: string) {
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+    throw new Error('Configuration Supabase manquante côté serveur.');
+  }
+
+  const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+    auth: {
+      persistSession: false,
+    },
+  });
+
+  const { data: subscription, error: subscriptionError } = await admin
+    .from('subscriptions')
+    .select('is_premium, expires_at')
+    .eq('user_id', userId)
+    .maybeSingle();
+
+  if (subscriptionError) {
+    throw new Error('Impossible de vérifier l’abonnement.');
+  }
+
+  const isPremium = subscription?.is_premium === true
+    && (subscription.expires_at == null || new Date(subscription.expires_at).getTime() > Date.now());
+  const limit = isPremium ? AI_COACH_DAILY_LIMIT_PREMIUM : AI_COACH_DAILY_LIMIT_FREE;
+
+  if (limit <= 0) {
+    return null;
+  }
+
+  const { data, error } = await admin.rpc('increment_ai_coach_usage', {
+    p_user_id: userId,
+    p_usage_date: new Date().toISOString().slice(0, 10),
+  });
+
+  if (error || typeof data !== 'number') {
+    throw new Error('Impossible de vérifier la limite quotidienne.');
+  }
+
+  return data > limit ? buildDailyLimitMessage(limit, isPremium) : null;
+}
+
 Deno.serve(async (request) => {
   if (request.method === 'OPTIONS') {
     return new Response('ok', {
@@ -437,6 +500,13 @@ Deno.serve(async (request) => {
 
   try {
     const user = await resolveAuthenticatedUser(request);
+
+    const dailyLimitMessage = await checkDailyLimit(user.id);
+
+    if (dailyLimitMessage) {
+      return jsonResponse(429, { error: dailyLimitMessage });
+    }
+
     const payload = await request.json() as unknown;
 
     if (isAnalyzeRoundRequest(payload)) {
