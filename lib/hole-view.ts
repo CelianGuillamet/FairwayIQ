@@ -168,6 +168,9 @@ function buildSummary(par: number, shape: HoleShape, hazards: HoleHazard[]) {
   return `${shapeLabel} · ${strategyLabel}${hazards.includes('water') ? ' · eau en jeu' : ''}`;
 }
 
+// Temporary stopgap until provider/GPS data covers the courses: shape, hazards and any missing distance/HCP are
+// hash-generated, never real data - don't present them as such. Only distances are flagged (distanceSource ->
+// "Estimée" badge in HoleOverviewCard).
 export function buildHoleViewData(input: {
   course: GolfCourse | null;
   scorecard: RoundDraftHole[];
