@@ -17,6 +17,9 @@
       "bundleIdentifier": "com.fairwayiq.app",
       "config": {
         "usesNonExemptEncryption": false
+      },
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "FairwayIQ utilise ta position pour afficher les distances réelles jusqu'au green pendant ta partie."
       }
     },
     "android": {
@@ -26,7 +29,11 @@
       },
       "package": "com.fairwayiq.app",
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png",
@@ -36,6 +43,12 @@
     "plugins": [
       "expo-router",
       "expo-secure-store",
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "FairwayIQ utilise ta position pour afficher les distances réelles jusqu'au green pendant ta partie."
+        }
+      ],
       [
         "expo-notifications",
         {
