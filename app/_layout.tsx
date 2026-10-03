@@ -10,6 +10,7 @@ import { useAuthStore } from '../stores/auth';
 import { useSubscriptionStore } from '../stores/subscription';
 import { setupNotificationResponseListener } from '../lib/notifications';
 import { identifyPurchasesUser, initPurchases, resetPurchasesUser } from '../lib/purchases';
+import { redactUrlForLogging } from '../lib/redact-url';
 import { initSentry } from '../lib/sentry';
 import { ErrorBoundary } from '../components/ErrorBoundary';
 
@@ -123,7 +124,12 @@ export default function RootLayout() {
           }
         }
       } catch (err) {
-        console.warn('[auth] Invalid deep link URL', { url, err });
+        // URL() errors embed the full input in their message
+        const message = err instanceof Error ? err.message : String(err);
+        console.warn('[auth] Invalid deep link URL', {
+          url: redactUrlForLogging(url),
+          message: redactUrlForLogging(message),
+        });
       }
     };
 
