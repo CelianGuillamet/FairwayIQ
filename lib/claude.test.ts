@@ -1,4 +1,4 @@
-import { AiCoachLimitError, postRoundDebrief } from './claude';
+import { AiCoachLimitError, AiCoachPremiumRequiredError, postRoundDebrief } from './claude';
 import { supabase } from './supabase';
 import type { Profile, Round } from '../types';
 
@@ -52,5 +52,45 @@ describe('invokeAiCoach error handling', () => {
     });
 
     await expect(postRoundDebrief(round, profile, 'Salut', [])).rejects.toThrow('limit');
+  });
+
+  it('surfaces the premium message from a 403 premium_required response', async () => {
+    const message = 'Le débrief conversationnel est réservé aux abonnés Premium.';
+    invoke.mockResolvedValue({ data: null, error: makeHttpError(403, { error: message, code: 'premium_required' }) });
+
+    const promise = postRoundDebrief(round, profile, 'Salut', []);
+
+    await expect(promise).rejects.toBeInstanceOf(AiCoachPremiumRequiredError);
+    await expect(promise).rejects.toThrow(message);
+  });
+
+  it('uses a default message when the premium_required body has none', async () => {
+    invoke.mockResolvedValue({ data: null, error: makeHttpError(403, { code: 'premium_required' }) });
+
+    const promise = postRoundDebrief(round, profile, 'Salut', []);
+
+    await expect(promise).rejects.toBeInstanceOf(AiCoachPremiumRequiredError);
+    await expect(promise).rejects.toThrow('réservé aux abonnés Premium');
+  });
+
+  it('does not treat other 403 responses as premium required', async () => {
+    invoke.mockResolvedValue({ data: null, error: makeHttpError(403, { error: 'Round ou profil non autorisé.' }) });
+
+    const promise = postRoundDebrief(round, profile, 'Salut', []);
+
+    await expect(promise).rejects.not.toBeInstanceOf(AiCoachPremiumRequiredError);
+    await expect(promise).rejects.toThrow('Edge Function returned a non-2xx status code');
+  });
+
+  it('falls back to the generic error when the 403 body is unreadable', async () => {
+    invoke.mockResolvedValue({
+      data: null,
+      error: { message: 'forbidden', context: { status: 403, json: async () => { throw new Error('bad json'); } } },
+    });
+
+    const promise = postRoundDebrief(round, profile, 'Salut', []);
+
+    await expect(promise).rejects.not.toBeInstanceOf(AiCoachPremiumRequiredError);
+    await expect(promise).rejects.toThrow('forbidden');
   });
 });

@@ -58,6 +58,20 @@ supabase functions deploy ai-coach
 
 Le modèle doit accepter un `tool_choice` forcé : Sonnet 5.5, Opus 5.5 et Fable 5.1 le refusent (erreur 400).
 
+## Gratuit vs Premium
+
+| Fonctionnalité | Gratuit | Premium |
+|---|---|---|
+| Scorecard et rounds | Oui | Oui |
+| Statistiques et dashboard | Oui | Oui |
+| Bibliothèque de drills | Oui | Oui |
+| Diagnostic IA de round | Oui, 3 appels IA par jour | Oui, 30 appels IA par jour |
+| Débrief conversationnel post-round | Non | Oui |
+
+- Le quota quotidien est commun à tous les appels `ai-coach` (diagnostic et messages de débrief) et se règle via `AI_COACH_DAILY_LIMIT_FREE` / `AI_COACH_DAILY_LIMIT_PREMIUM`.
+- Le statut Premium fait foi côté serveur : la table `subscriptions` est synchronisée par la fonction `revenuecat-webhook`, et `ai-coach` répond `403` à `post_round_debrief` pour un utilisateur non Premium (le quota n'est alors pas consommé). L'app lit la même ligne `subscriptions` pour afficher ou masquer le débrief.
+- RevenueCat est identifié avec l'UUID Supabase de l'utilisateur (`Purchases.logIn` à la connexion, `Purchases.logOut` à la déconnexion). Sans cela, le webhook reçoit un identifiant anonyme et ne peut pas retrouver l'utilisateur.
+
 ## Lancer l'app
 
 ```bash

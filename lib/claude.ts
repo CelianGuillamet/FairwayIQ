@@ -6,6 +6,7 @@ import type {
   PostRoundDebriefRequest,
   PostRoundDebriefResponse,
 } from './ai-contract';
+import { AI_COACH_PREMIUM_REQUIRED_CODE } from './ai-contract';
 import { aggregateScorecard } from './rounds';
 import { supabase } from './supabase';
 
@@ -61,19 +62,28 @@ function getScorecardInsights(scorecard?: RoundDraftHole[]) {
 
 export class AiCoachLimitError extends Error {}
 
-async function readDailyLimitMessage(error: unknown) {
+export class AiCoachPremiumRequiredError extends Error {}
+
+const PREMIUM_REQUIRED_FALLBACK_MESSAGE = 'Le débrief conversationnel est réservé aux abonnés Premium.';
+
+type AiCoachErrorBody = { error?: unknown; code?: unknown };
+
+async function readErrorBody(error: unknown, status: number): Promise<AiCoachErrorBody | null> {
   const context = (error as { context?: { status?: unknown; json?: unknown } } | null)?.context;
 
-  if (!context || context.status !== 429 || typeof context.json !== 'function') {
+  if (!context || context.status !== status || typeof context.json !== 'function') {
     return null;
   }
 
   try {
-    const body = await (context as Response).json() as { error?: unknown };
-    return typeof body?.error === 'string' && body.error.trim().length > 0 ? body.error : null;
+    return await (context as Response).json() as AiCoachErrorBody | null;
   } catch {
     return null;
   }
+}
+
+function readErrorMessage(body: AiCoachErrorBody | null) {
+  return typeof body?.error === 'string' && body.error.trim().length > 0 ? body.error : null;
 }
 
 async function invokeAiCoach<TRequest extends { action: string }, TResponse>(payload: TRequest) {
@@ -82,10 +92,16 @@ async function invokeAiCoach<TRequest extends { action: string }, TResponse>(pay
   });
 
   if (error) {
-    const limitMessage = await readDailyLimitMessage(error);
+    const limitMessage = readErrorMessage(await readErrorBody(error, 429));
 
     if (limitMessage) {
       throw new AiCoachLimitError(limitMessage);
+    }
+
+    const premiumBody = await readErrorBody(error, 403);
+
+    if (premiumBody?.code === AI_COACH_PREMIUM_REQUIRED_CODE) {
+      throw new AiCoachPremiumRequiredError(readErrorMessage(premiumBody) ?? PREMIUM_REQUIRED_FALLBACK_MESSAGE);
     }
 
     throw new Error(error.message || 'La fonction IA a échoué.');

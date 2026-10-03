@@ -1,5 +1,7 @@
 import type { Profile, Round, RoundDraftHole } from '../types';
 
+export const AI_COACH_PREMIUM_REQUIRED_CODE = 'premium_required';
+
 export type DiagnosticResult = {
   strengths: string[];
   weaknesses: string[];

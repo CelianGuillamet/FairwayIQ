@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import type { Session, User } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
+import { resetPurchasesUser } from '../lib/purchases';
 import type { Profile } from '../types';
 import { useRoundsStore } from './rounds';
 import { useDrillsStore } from './drills';
@@ -82,6 +83,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   signOut: async () => {
     await supabase.auth.signOut();
+    void resetPurchasesUser();
     useRoundsStore.setState({ rounds: [], loading: true, initialized: false, error: null });
     useDrillsStore.setState({ completions: [], recommendedCategories: [] });
     set({
