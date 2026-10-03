@@ -2,22 +2,58 @@ import { create } from 'zustand';
 import { supabase } from '../lib/supabase';
 import type { Round, RoundInsert } from '../types';
 
+const PAGE_SIZE = 50;
+
 type RoundsState = {
   rounds: Round[];
   loading: boolean;
+  loadingMore: boolean;
   initialized: boolean;
   error: string | null;
+  hasMore: boolean;
   fetchRounds: () => Promise<void>;
+  fetchMoreRounds: () => Promise<void>;
   addRound: (round: RoundInsert) => Promise<Round>;
   upsertRound: (round: Round) => void;
   removeRound: (roundId: string) => void;
 };
 
+// rounds.tee_set_id has no FK to course_tee_sets, so it can't be embedded in the
+// select; fetch ratings separately and merge them in for the WHS handicap calc.
+async function hydrateRoundsWithTeeRatings(rounds: Round[]): Promise<Round[]> {
+  const teeSetIds = Array.from(
+    new Set(rounds.map((round) => round.tee_set_id).filter((id): id is string => !!id))
+  );
+
+  if (teeSetIds.length === 0) {
+    return rounds;
+  }
+
+  const { data: teeSets } = await supabase
+    .from('course_tee_sets')
+    .select('id, course_rating, slope_rating')
+    .in('id', teeSetIds);
+
+  const ratingByTeeSetId = new Map(
+    (teeSets ?? []).map((teeSet) => [
+      teeSet.id as string,
+      { course_rating: teeSet.course_rating, slope_rating: teeSet.slope_rating },
+    ])
+  );
+
+  return rounds.map((round) => ({
+    ...round,
+    ...(round.tee_set_id ? ratingByTeeSetId.get(round.tee_set_id) : undefined),
+  }));
+}
+
 export const useRoundsStore = create<RoundsState>((set, get) => ({
   rounds: [],
   loading: true,
+  loadingMore: false,
   initialized: false,
   error: null,
+  hasMore: true,
 
   fetchRounds: async () => {
     set({ loading: true, error: null });
@@ -25,41 +61,49 @@ export const useRoundsStore = create<RoundsState>((set, get) => ({
       .from('rounds')
       .select('*')
       .order('played_at', { ascending: false })
-      .limit(50);
+      .range(0, PAGE_SIZE - 1);
 
     if (error) {
       set({ loading: false, initialized: true, error: error.message });
       return;
     }
 
-    const rounds: Round[] = data ?? [];
-    const teeSetIds = Array.from(
-      new Set(rounds.map((round) => round.tee_set_id).filter((id): id is string => !!id))
-    );
+    const rounds = await hydrateRoundsWithTeeRatings(data ?? []);
 
-    // rounds.tee_set_id has no FK to course_tee_sets, so it can't be embedded in the
-    // select above; fetch ratings separately and merge them in for the WHS handicap calc.
-    let ratingByTeeSetId = new Map<string, { course_rating: number | null; slope_rating: number | null }>();
-    if (teeSetIds.length > 0) {
-      const { data: teeSets } = await supabase
-        .from('course_tee_sets')
-        .select('id, course_rating, slope_rating')
-        .in('id', teeSetIds);
+    set({
+      rounds,
+      loading: false,
+      initialized: true,
+      error: null,
+      hasMore: (data?.length ?? 0) === PAGE_SIZE,
+    });
+  },
 
-      ratingByTeeSetId = new Map(
-        (teeSets ?? []).map((teeSet) => [
-          teeSet.id as string,
-          { course_rating: teeSet.course_rating, slope_rating: teeSet.slope_rating },
-        ])
-      );
+  fetchMoreRounds: async () => {
+    const { loading, loadingMore, hasMore, rounds } = get();
+    if (loading || loadingMore || !hasMore) {
+      return;
     }
 
-    const hydratedRounds = rounds.map((round) => ({
-      ...round,
-      ...(round.tee_set_id ? ratingByTeeSetId.get(round.tee_set_id) : undefined),
-    }));
+    set({ loadingMore: true, error: null });
+    const { data, error } = await supabase
+      .from('rounds')
+      .select('*')
+      .order('played_at', { ascending: false })
+      .range(rounds.length, rounds.length + PAGE_SIZE - 1);
 
-    set({ rounds: hydratedRounds, loading: false, initialized: true, error: null });
+    if (error) {
+      set({ loadingMore: false, error: error.message });
+      return;
+    }
+
+    const newRounds = await hydrateRoundsWithTeeRatings(data ?? []);
+
+    set({
+      rounds: [...rounds, ...newRounds],
+      loadingMore: false,
+      hasMore: (data?.length ?? 0) === PAGE_SIZE,
+    });
   },
 
   addRound: async (round) => {
