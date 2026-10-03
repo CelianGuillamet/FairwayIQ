@@ -33,7 +33,7 @@ import {
 import {
   getAveragePenaltyCount,
   getBestRound,
-  getEstimatedHandicap,
+  getEstimatedHandicapIndex,
   getRoundPerformanceSummary,
 } from '../../lib/rounds';
 
@@ -188,7 +188,7 @@ export default function DashboardScreen() {
   const chartWidth = width - 32;
   const latestRound = rounds[0] ?? null;
   const focusInsight = getFocusInsight(rounds);
-  const estimatedHandicap = getEstimatedHandicap(rounds);
+  const estimatedHandicapIndex = getEstimatedHandicapIndex(rounds);
   const bestRound = getBestRound(rounds);
   const averagePenaltyCount = getAveragePenaltyCount(rounds);
   const trendLabel = getTrendLabel(rounds);
@@ -339,7 +339,7 @@ export default function DashboardScreen() {
             />
 
             <View style={styles.statsGrid}>
-              <PrimaryStatCard label="Handicap estimé" value={estimatedHandicap != null ? estimatedHandicap.toString() : '--'} helper="calcul récent" />
+              <PrimaryStatCard label="Handicap Index estimé" value={estimatedHandicapIndex != null ? estimatedHandicapIndex.toString() : '--'} helper="méthode WHS, non officiel" />
               <PrimaryStatCard label="Moyenne vs par" value={averageScoreToPar != null ? `${averageScoreToPar > 0 ? '+' : ''}${averageScoreToPar}` : '--'} helper="sur les rounds" />
               <PrimaryStatCard label="Meilleur round" value={bestRound ? `${bestRound.total_score}` : '--'} helper={bestRound ? `${bestRound.total_score - bestRound.par > 0 ? '+' : ''}${bestRound.total_score - bestRound.par}` : '—'} />
               <PrimaryStatCard label="Pénalités moy." value={averagePenaltyCount != null ? averagePenaltyCount.toString() : '--'} helper="par round" />

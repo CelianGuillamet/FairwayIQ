@@ -422,13 +422,64 @@ export function getRoundPerformanceSummary(round: Round) {
   };
 }
 
-export function getEstimatedHandicap(rounds: Round[]) {
+const WHS_MAX_DIFFERENTIAL_ROUNDS = 20;
+const WHS_NEUTRAL_SLOPE_RATING = 113;
+
+// WHS Rule 5.1: how many of the lowest differentials to average, and the small
+// upward adjustment applied when fewer than 20 scores are available.
+const WHS_DIFFERENTIAL_TABLE: Record<number, { count: number; adjustment: number }> = {
+  1: { count: 1, adjustment: -2.0 },
+  2: { count: 1, adjustment: -2.0 },
+  3: { count: 1, adjustment: -2.0 },
+  4: { count: 1, adjustment: -1.0 },
+  5: { count: 1, adjustment: 0 },
+  6: { count: 2, adjustment: -1.0 },
+  7: { count: 2, adjustment: 0 },
+  8: { count: 2, adjustment: 0 },
+  9: { count: 3, adjustment: 0 },
+  10: { count: 3, adjustment: 0 },
+  11: { count: 3, adjustment: 0 },
+  12: { count: 4, adjustment: 0 },
+  13: { count: 4, adjustment: 0 },
+  14: { count: 4, adjustment: 0 },
+  15: { count: 5, adjustment: 0 },
+  16: { count: 5, adjustment: 0 },
+  17: { count: 6, adjustment: 0 },
+  18: { count: 6, adjustment: 0 },
+  19: { count: 7, adjustment: 0 },
+  20: { count: 8, adjustment: 0 },
+};
+
+function getRoundScoreDifferential(round: Round) {
+  // Rounds recorded before course_tee_sets existed (or without a matched tee set) have no
+  // rating/slope: fall back to a neutral slope (113, the WHS average) and a course rating
+  // equal to par, which reduces the differential to the round's plain score-to-par.
+  const slopeRating = round.slope_rating ?? WHS_NEUTRAL_SLOPE_RATING;
+  const courseRating = round.course_rating ?? round.par;
+
+  return ((round.total_score - courseRating) * 113) / slopeRating;
+}
+
+function truncateToOneDecimal(value: number) {
+  return Math.trunc(value * 10) / 10;
+}
+
+export function getEstimatedHandicapIndex(rounds: Round[]) {
   if (rounds.length === 0) return null;
 
-  const recentRounds = rounds.slice(0, 8);
-  const averageToPar = recentRounds.reduce((sum, round) => sum + (round.total_score - round.par), 0) / recentRounds.length;
+  const mostRecentRounds = [...rounds]
+    .sort((left, right) => new Date(right.played_at).getTime() - new Date(left.played_at).getTime())
+    .slice(0, WHS_MAX_DIFFERENTIAL_ROUNDS);
 
-  return roundToSingleDecimal(Math.max(0, averageToPar * 0.9));
+  const { count, adjustment } = WHS_DIFFERENTIAL_TABLE[mostRecentRounds.length];
+  const bestDifferentials = mostRecentRounds
+    .map(getRoundScoreDifferential)
+    .sort((left, right) => left - right)
+    .slice(0, count);
+
+  const averageDifferential = bestDifferentials.reduce((sum, value) => sum + value, 0) / bestDifferentials.length;
+
+  return truncateToOneDecimal((averageDifferential + adjustment) * 0.96);
 }
 
 export function getBestRound(rounds: Round[]) {

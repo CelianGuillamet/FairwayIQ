@@ -2,6 +2,7 @@ import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-nati
 import { Colors, Radius, Spacing, Typography } from '../../constants';
 import type { HoleViewData } from '../../lib/hole-view';
 import { getScoreDescriptor } from '../../lib/hole-view';
+import type { GreenDistances } from '../../lib/gps';
 import type { TeeKey, TeeOption } from '../../lib/golf-courses';
 import type { RoundDraftHole } from '../../types';
 import { AppBadge } from '../ui/AppBadge';
@@ -13,6 +14,8 @@ type Props = {
   teeKey: TeeKey;
   teeOptions: TeeOption[];
   onSelectTee: (teeKey: TeeKey) => void;
+  liveGreenDistances?: GreenDistances | null;
+  gpsHintLabel?: string | null;
 };
 
 function toneToColor(tone: string): string {
@@ -33,12 +36,25 @@ function hazardLabel(hazard: HoleViewData['hazards'][number]) {
   }
 }
 
-export function HoleOverviewCard({ courseName, hole, holeView, teeKey, teeOptions, onSelectTee }: Props) {
+export function HoleOverviewCard({
+  courseName,
+  hole,
+  holeView,
+  teeKey,
+  teeOptions,
+  onSelectTee,
+  liveGreenDistances,
+  gpsHintLabel,
+}: Props) {
   const selectedTee = teeOptions.find((t) => t.key === teeKey) ?? teeOptions[0];
   const distance =
     (selectedTee ? holeView.distanceByTee[selectedTee.key] : undefined) ??
     Object.values(holeView.distanceByTee).find((d) => typeof d === 'number') ??
     0;
+
+  const hasLiveGreenDistances =
+    !!liveGreenDistances &&
+    (liveGreenDistances.front != null || liveGreenDistances.center != null || liveGreenDistances.back != null);
 
   const descriptor  = hole.completed ? getScoreDescriptor(hole.score, hole.par) : null;
   const scoreColor  = descriptor ? toneToColor(descriptor.tone) : null;
@@ -88,6 +104,24 @@ export function HoleOverviewCard({ courseName, hole, holeView, teeKey, teeOption
           <AppBadge label="Estimée" tone="neutral" style={styles.estimationBadge} />
         )}
       </View>
+
+      {/* Live GPS distances to the green, when available */}
+      {hasLiveGreenDistances && liveGreenDistances ? (
+        <View style={styles.gpsRow}>
+          <View style={styles.gpsDot} />
+          <Text style={styles.gpsLabel}>
+            {[
+              liveGreenDistances.front != null ? `Avant ${liveGreenDistances.front}m` : null,
+              liveGreenDistances.center != null ? `Milieu ${liveGreenDistances.center}m` : null,
+              liveGreenDistances.back != null ? `Fond ${liveGreenDistances.back}m` : null,
+            ]
+              .filter(Boolean)
+              .join(' · ')}
+          </Text>
+        </View>
+      ) : gpsHintLabel ? (
+        <Text style={styles.gpsHint}>{gpsHintLabel}</Text>
+      ) : null}
 
       {/* Difficulty + hazard chips */}
       <View style={styles.chipsRow}>
@@ -221,6 +255,30 @@ const styles = StyleSheet.create({
   estimationBadge: {
     paddingHorizontal: Spacing.xs,
     paddingVertical: 2,
+  },
+
+  // ── Live GPS ──
+  gpsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Spacing.xs,
+  },
+  gpsDot: {
+    width: 6,
+    height: 6,
+    borderRadius: Radius.full,
+    backgroundColor: Colors.accentBlue,
+  },
+  gpsLabel: {
+    ...Typography.caption,
+    color: Colors.accentBlue,
+    fontWeight: '600' as const,
+  },
+  gpsHint: {
+    ...Typography.caption,
+    color: Colors.textDim,
+    textAlign: 'center',
   },
 
   // ── Chips ──

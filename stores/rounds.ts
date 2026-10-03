@@ -18,6 +18,35 @@ type RoundsState = {
   removeRound: (roundId: string) => void;
 };
 
+// rounds.tee_set_id has no FK to course_tee_sets, so it can't be embedded in the
+// select; fetch ratings separately and merge them in for the WHS handicap calc.
+async function hydrateRoundsWithTeeRatings(rounds: Round[]): Promise<Round[]> {
+  const teeSetIds = Array.from(
+    new Set(rounds.map((round) => round.tee_set_id).filter((id): id is string => !!id))
+  );
+
+  if (teeSetIds.length === 0) {
+    return rounds;
+  }
+
+  const { data: teeSets } = await supabase
+    .from('course_tee_sets')
+    .select('id, course_rating, slope_rating')
+    .in('id', teeSetIds);
+
+  const ratingByTeeSetId = new Map(
+    (teeSets ?? []).map((teeSet) => [
+      teeSet.id as string,
+      { course_rating: teeSet.course_rating, slope_rating: teeSet.slope_rating },
+    ])
+  );
+
+  return rounds.map((round) => ({
+    ...round,
+    ...(round.tee_set_id ? ratingByTeeSetId.get(round.tee_set_id) : undefined),
+  }));
+}
+
 export const useRoundsStore = create<RoundsState>((set, get) => ({
   rounds: [],
   loading: true,
@@ -39,8 +68,10 @@ export const useRoundsStore = create<RoundsState>((set, get) => ({
       return;
     }
 
+    const rounds = await hydrateRoundsWithTeeRatings(data ?? []);
+
     set({
-      rounds: data ?? [],
+      rounds,
       loading: false,
       initialized: true,
       error: null,
@@ -66,8 +97,10 @@ export const useRoundsStore = create<RoundsState>((set, get) => ({
       return;
     }
 
+    const newRounds = await hydrateRoundsWithTeeRatings(data ?? []);
+
     set({
-      rounds: [...rounds, ...(data ?? [])],
+      rounds: [...rounds, ...newRounds],
       loadingMore: false,
       hasMore: (data?.length ?? 0) === PAGE_SIZE,
     });

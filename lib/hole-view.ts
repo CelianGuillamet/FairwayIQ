@@ -1,5 +1,5 @@
 import type { RoundDraftHole } from '../types';
-import type { GolfCourse, TeeKey, TeeOption } from './golf-courses';
+import type { CourseHoleGpsPoint, GolfCourse, TeeKey, TeeOption } from './golf-courses';
 import { getCourseHoleDetails, getDefaultTeeKey, getTeeOptions } from './golf-courses';
 
 type HoleShape = 'straight' | 'dogleg-left' | 'dogleg-right';
@@ -17,6 +17,7 @@ export type HoleViewData = {
   summary: string;
   gpsPointCount: number;
   gpsAvailable: boolean;
+  gpsPoints: CourseHoleGpsPoint[];
 };
 
 export type ScoreDescriptor = {
@@ -180,7 +181,8 @@ export function buildHoleViewData(input: {
 
   const baseViews = input.scorecard.map((hole) => {
     const courseHoleDetail = courseHoleDetails?.find((detail) => detail.holeNumber === hole.hole_number) ?? null;
-    const gpsPointCount = courseHoleDetail?.gpsPoints?.length ?? 0;
+    const gpsPoints = courseHoleDetail?.gpsPoints ?? [];
+    const gpsPointCount = gpsPoints.length;
     const generatedDistances = buildDistanceByTee(courseKey, hole, teeOptions);
     const hasCompleteCatalogDistances = courseHoleDetail
       ? teeOptions.every((teeOption) => typeof courseHoleDetail.distanceByTee[teeOption.key] === 'number')
@@ -207,6 +209,7 @@ export function buildHoleViewData(input: {
       summary: buildSummary(courseHoleDetail?.par ?? hole.par, shape, hazards),
       gpsPointCount,
       gpsAvailable: gpsPointCount > 0 || (courseHoleDetail?.latitude != null && courseHoleDetail?.longitude != null),
+      gpsPoints,
       difficultyScore: buildDifficultyScore(distanceByTee, defaultTeeKey, shape, hazards, courseHoleDetail?.par ?? hole.par),
     };
   });
@@ -232,6 +235,7 @@ export function buildHoleViewData(input: {
       summary: hole.summary,
       gpsPointCount: hole.gpsPointCount,
       gpsAvailable: hole.gpsAvailable,
+      gpsPoints: hole.gpsPoints,
     } satisfies HoleViewData;
   });
 }

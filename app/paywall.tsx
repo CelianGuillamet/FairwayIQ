@@ -43,6 +43,21 @@ export default function PaywallScreen() {
       });
   }, []);
 
+  const monthlyPackage = offerings?.monthly ?? null;
+  const annualPackage = offerings?.annual ?? null;
+  const monthlyPriceString = monthlyPackage?.product.priceString ?? null;
+  const annualPriceString = annualPackage?.product.priceString ?? null;
+  const annualPricePerMonthString = annualPackage?.product.pricePerMonthString ?? null;
+  const selectedPriceLabel = loadingOfferings
+    ? '...'
+    : selectedPlan === 'annual'
+      ? annualPriceString
+        ? `${annualPriceString}/an`
+        : null
+      : monthlyPriceString
+        ? `${monthlyPriceString}/mois`
+        : null;
+
   const handlePurchase = async () => {
     if (!offerings) {
       if (__DEV__) {
@@ -140,14 +155,14 @@ export default function PaywallScreen() {
         <View style={styles.plansRow}>
           <PlanCard
             label="Mensuel"
-            price={loadingOfferings ? '...' : '4,99 €'}
+            price={loadingOfferings ? '...' : monthlyPriceString ?? '—'}
             period="/mois"
             selected={selectedPlan === 'monthly'}
             onPress={() => setSelectedPlan('monthly')}
           />
           <PlanCard
             label="Annuel"
-            price={loadingOfferings ? '...' : '34,99 €'}
+            price={loadingOfferings ? '...' : annualPriceString ?? '—'}
             period="/an"
             badge="Meilleur choix"
             selected={selectedPlan === 'annual'}
@@ -155,8 +170,10 @@ export default function PaywallScreen() {
           />
         </View>
 
-        {selectedPlan === 'annual' ? (
-          <Text style={styles.savingsText}>Soit 2,92 €/mois · nettement plus intéressant que le mensuel</Text>
+        {selectedPlan === 'annual' && !loadingOfferings && annualPricePerMonthString ? (
+          <Text style={styles.savingsText}>
+            Soit {annualPricePerMonthString}/mois · nettement plus intéressant que le mensuel
+          </Text>
         ) : null}
 
         <AppButton
@@ -176,7 +193,7 @@ export default function PaywallScreen() {
         />
 
         <Text style={styles.trialNote}>
-          7 jours gratuits, puis {selectedPlan === 'annual' ? '34,99 €/an' : '4,99 €/mois'}. Annulable à tout moment.
+          7 jours gratuits, puis {selectedPriceLabel ?? 'prix indisponible'}. Annulable à tout moment.
         </Text>
 
         <Text style={styles.legal}>
