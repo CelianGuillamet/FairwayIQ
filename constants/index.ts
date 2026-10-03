@@ -1,5 +1,6 @@
 export * from './colors';
 export * from './design';
+export * from './legal';
 
 export const HANDICAP_LEVELS = [
   { label: 'Débutant (30+)', value: 36 },
