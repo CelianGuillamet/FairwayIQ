@@ -181,6 +181,13 @@ const COURSE_CATALOG_NEGATIVE_CACHE_TTL_HOURS = Number(Deno.env.get('COURSE_CATA
 
 class ProviderNotFoundError extends Error {}
 class RateLimitExceededError extends Error {}
+class ClientError extends Error {
+  constructor(readonly status: number, message: string) {
+    super(message);
+  }
+}
+
+const GENERIC_ERROR_MESSAGE = 'Service temporairement indisponible. Réessaie plus tard.';
 
 function jsonResponse(status: number, body: unknown) {
   return new Response(JSON.stringify(body), {
@@ -350,7 +357,7 @@ async function resolveAuthenticatedUser(request: Request) {
   const authorization = request.headers.get('Authorization');
 
   if (!authorization) {
-    throw new Error('Authorization manquant.');
+    throw new ClientError(401, 'Authorization manquant.');
   }
 
   ensureSupabaseConfig();
@@ -366,7 +373,7 @@ async function resolveAuthenticatedUser(request: Request) {
   const { data, error } = await supabase.auth.getUser();
 
   if (error || !data.user) {
-    throw new Error('Utilisateur non authentifié.');
+    throw new ClientError(401, 'Utilisateur non authentifié.');
   }
 
   return data.user;
@@ -2032,7 +2039,7 @@ Deno.serve(async (request) => {
 
     await enforceRateLimit(admin, user.id);
 
-    const payload = await request.json() as unknown;
+    const payload = await request.json().catch(() => null) as unknown;
 
     if (isSearchCoursesRequest(payload)) {
       return await handleSearchCourses(admin, payload);
@@ -2048,7 +2055,11 @@ Deno.serve(async (request) => {
       return jsonResponse(429, { error: error.message });
     }
 
-    const message = error instanceof Error ? error.message : 'Erreur interne.';
-    return jsonResponse(500, { error: message });
+    if (error instanceof ClientError) {
+      return jsonResponse(error.status, { error: error.message });
+    }
+
+    console.error('course-catalog: erreur inattendue', error);
+    return jsonResponse(500, { error: GENERIC_ERROR_MESSAGE });
   }
 });

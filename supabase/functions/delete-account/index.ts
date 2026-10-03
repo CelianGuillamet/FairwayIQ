@@ -10,6 +10,14 @@ const SUPABASE_URL = Deno.env.get('SUPABASE_URL');
 const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY');
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
 
+const GENERIC_ERROR_MESSAGE = 'La suppression du compte a échoué. Réessaie plus tard.';
+
+class ClientError extends Error {
+  constructor(readonly status: number, message: string) {
+    super(message);
+  }
+}
+
 function jsonResponse(status: number, body: unknown) {
   return new Response(JSON.stringify(body), {
     status,
@@ -40,7 +48,7 @@ async function resolveAuthenticatedUser(request: Request) {
   const authorization = request.headers.get('Authorization');
 
   if (!authorization) {
-    throw new Error('Authorization manquant.');
+    throw new ClientError(401, 'Authorization manquant.');
   }
 
   ensureSupabaseConfig();
@@ -56,7 +64,7 @@ async function resolveAuthenticatedUser(request: Request) {
   const { data, error } = await supabase.auth.getUser();
 
   if (error || !data.user) {
-    throw new Error('Utilisateur non authentifié.');
+    throw new ClientError(401, 'Utilisateur non authentifié.');
   }
 
   return data.user;
@@ -133,7 +141,11 @@ Deno.serve(async (request) => {
 
     return jsonResponse(200, { success: true });
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Erreur interne.';
-    return jsonResponse(500, { error: message });
+    if (error instanceof ClientError) {
+      return jsonResponse(error.status, { error: error.message });
+    }
+
+    console.error('delete-account: erreur inattendue', error);
+    return jsonResponse(500, { error: GENERIC_ERROR_MESSAGE });
   }
 });

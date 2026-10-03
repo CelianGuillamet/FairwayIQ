@@ -41,6 +41,8 @@ const PREMIUM_IGNORED_EVENT_TYPES = new Set([
   'TEST',
 ]);
 
+const GENERIC_ERROR_MESSAGE = 'Service temporairement indisponible.';
+
 function jsonResponse(status: number, body: unknown) {
   return new Response(JSON.stringify(body), {
     status,
@@ -158,7 +160,7 @@ Deno.serve(async (request) => {
       return jsonResponse(401, { error: 'Authorization invalide.' });
     }
 
-    const payload = await request.json() as unknown;
+    const payload = await request.json().catch(() => null) as unknown;
 
     if (!isRevenueCatWebhookPayload(payload)) {
       return jsonResponse(400, { error: 'Payload invalide.' });
@@ -169,7 +171,7 @@ Deno.serve(async (request) => {
 
     return jsonResponse(200, { received: true });
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Erreur interne.';
-    return jsonResponse(500, { error: message });
+    console.error('revenuecat-webhook: erreur inattendue', error);
+    return jsonResponse(500, { error: GENERIC_ERROR_MESSAGE });
   }
 });
