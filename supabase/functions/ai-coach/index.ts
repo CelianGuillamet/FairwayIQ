@@ -56,14 +56,29 @@ type PostRoundDebriefRequest = {
   history: Array<{ role: 'user' | 'assistant'; content: string }>;
 };
 
+type AnthropicMessage = {
+  role: 'user' | 'assistant';
+  content: string;
+};
+
+type AnthropicMessageRequest = {
+  max_tokens: number;
+  system?: string;
+  messages: AnthropicMessage[];
+  tools?: Array<{ name: string; description: string; input_schema: Record<string, unknown> }>;
+  tool_choice?: { type: 'tool'; name: string };
+};
+
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 };
 
-const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY');
-const OPENAI_MODEL = Deno.env.get('OPENAI_MODEL_PRIMARY') ?? 'gpt-5.4-mini';
+const ANTHROPIC_API_URL = 'https://api.anthropic.com/v1/messages';
+const ANTHROPIC_VERSION = '2023-06-01';
+const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY');
+const ANTHROPIC_MODEL = Deno.env.get('ANTHROPIC_MODEL_PRIMARY')?.trim() || 'claude-haiku-4-5-20251001';
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL');
 const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY');
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
@@ -72,34 +87,53 @@ const AI_COACH_DAILY_LIMIT_PREMIUM = readDailyLimit('AI_COACH_DAILY_LIMIT_PREMIU
 const DIAGNOSTIC_CATEGORIES = ['putting', 'short_game', 'approach', 'driving', 'mental'] as const;
 const DIAGNOSTIC_CATEGORY_SET = new Set<string>(DIAGNOSTIC_CATEGORIES);
 
+const DIAGNOSTIC_TOOL_NAME = 'submit_round_diagnostic';
+
 const diagnosticResultJsonSchema = {
   type: 'object',
   additionalProperties: false,
   properties: {
     strengths: {
       type: 'array',
+      description: 'Points forts du joueur sur ce round, une courte phrase chacun.',
       items: { type: 'string' },
+      minItems: 1,
+      maxItems: 3,
     },
     weaknesses: {
       type: 'array',
+      description: 'Points faibles du joueur sur ce round, une courte phrase chacun.',
       items: { type: 'string' },
+      minItems: 1,
+      maxItems: 3,
     },
     weekly_plan: {
       type: 'string',
+      description: 'Plan d’entraînement pour cette semaine en 2-3 phrases concrètes avec des exercices spécifiques.',
     },
     raw_analysis: {
       type: 'string',
+      description: 'Analyse détaillée du round en 3-4 phrases, avec les coups gagnants/perdants principaux.',
     },
     recommended_categories: {
       type: 'array',
+      description: 'Catégories d’entraînement à travailler en priorité, selon les lacunes identifiées.',
       items: {
         type: 'string',
         enum: DIAGNOSTIC_CATEGORIES,
       },
+      minItems: 1,
+      maxItems: 3,
     },
   },
   required: ['strengths', 'weaknesses', 'weekly_plan', 'raw_analysis', 'recommended_categories'],
 } as const;
+
+const diagnosticTool = {
+  name: DIAGNOSTIC_TOOL_NAME,
+  description: 'Enregistre le diagnostic structuré du round analysé.',
+  input_schema: diagnosticResultJsonSchema,
+};
 
 function jsonResponse(status: number, body: unknown) {
   return new Response(JSON.stringify(body), {
@@ -213,14 +247,7 @@ ROUND ANALYSÉ:
 - Pénalités: ${round.penalties ?? 0}
 ${round.notes ? `- Notes du joueur: ${round.notes}` : ''}${buildScorecardContext(scorecard)}
 
-Réponds UNIQUEMENT en JSON valide, sans markdown ni texte hors JSON, avec cette structure exacte:
-{
-  "strengths": ["point fort 1", "point fort 2"],
-  "weaknesses": ["point faible 1", "point faible 2"],
-  "weekly_plan": "Plan d'entraînement pour cette semaine en 2-3 phrases concrètes avec des exercices spécifiques.",
-  "raw_analysis": "Analyse détaillée du round en 3-4 phrases, avec les coups gagnants/perdants principaux.",
-  "recommended_categories": ["putting", "short_game"]
-}
+Fournis ton diagnostic en français en appelant l'outil ${DIAGNOSTIC_TOOL_NAME}.
 Les catégories disponibles sont: "putting", "short_game", "approach", "driving", "mental". Inclus 1 à 3 catégories selon les lacunes identifiées.`;
 }
 
@@ -236,48 +263,57 @@ Ne donne pas plus de 5 phrases.
 Privilégie une seule priorité claire si le round dérive dans plusieurs directions.`;
 }
 
-function extractOutputText(responsePayload: Record<string, unknown>) {
-  if (typeof responsePayload.output_text === 'string' && responsePayload.output_text.trim().length > 0) {
-    return responsePayload.output_text.trim();
-  }
+function buildDebriefMessages(payload: PostRoundDebriefRequest): AnthropicMessage[] {
+  const history = payload.history.filter((message) => (
+    isObject(message)
+    && (message.role === 'user' || message.role === 'assistant')
+    && typeof message.content === 'string'
+    && message.content.trim().length > 0
+  ));
 
-  const output = responsePayload.output;
+  // The Messages API requires the conversation to start with a user turn, but the
+  // persisted opening message of a debrief session is an assistant turn.
+  const firstUserIndex = history.findIndex((message) => message.role === 'user');
+  const conversation = firstUserIndex === -1 ? [] : history.slice(firstUserIndex);
 
-  if (!Array.isArray(output)) {
-    throw new Error('Réponse OpenAI sans contenu exploitable.');
-  }
-
-  const texts = output.flatMap((item) => {
-    if (!isObject(item) || !Array.isArray(item.content)) {
-      return [];
-    }
-
-    return item.content.flatMap((contentPart) => (
-      isObject(contentPart) && typeof contentPart.text === 'string'
-        ? [contentPart.text]
-        : []
-    ));
-  });
-
-  if (texts.length === 0) {
-    throw new Error('Réponse OpenAI vide.');
-  }
-
-  return texts.join('\n').trim();
+  return [
+    ...conversation.map((message) => ({
+      role: message.role,
+      content: message.content,
+    })),
+    {
+      role: 'user',
+      content: payload.userMessage,
+    },
+  ];
 }
 
-function extractJsonObject(rawText: string) {
-  try {
-    return JSON.parse(rawText) as unknown;
-  } catch {
-    const jsonCandidate = rawText.match(/\{[\s\S]*\}/)?.[0];
+function extractOutputText(contentBlocks: unknown[]) {
+  const texts = contentBlocks.flatMap((block) => (
+    isObject(block) && block.type === 'text' && typeof block.text === 'string'
+      ? [block.text]
+      : []
+  ));
 
-    if (!jsonCandidate) {
-      throw new Error('Le modèle n’a pas renvoyé un JSON valide.');
-    }
+  const text = texts.join('\n').trim();
 
-    return JSON.parse(jsonCandidate) as unknown;
+  if (text.length === 0) {
+    throw new Error('Réponse Anthropic vide.');
   }
+
+  return text;
+}
+
+function extractToolInput(contentBlocks: unknown[], toolName: string) {
+  const toolUse = contentBlocks.find((block) => (
+    isObject(block) && block.type === 'tool_use' && block.name === toolName
+  ));
+
+  if (!isObject(toolUse)) {
+    throw new Error('Réponse Anthropic sans résultat structuré exploitable.');
+  }
+
+  return toolUse.input;
 }
 
 function parseStringArray(value: unknown, field: keyof DiagnosticResult, maxItems: number) {
@@ -331,72 +367,57 @@ function parseDiagnosticResult(value: unknown): DiagnosticResult {
   };
 }
 
-async function createOpenAIResponse(input: Record<string, unknown>) {
-  if (!OPENAI_API_KEY) {
-    throw new Error('La variable OPENAI_API_KEY est absente côté serveur.');
+async function createAnthropicMessage(request: AnthropicMessageRequest) {
+  if (!ANTHROPIC_API_KEY) {
+    throw new Error('La variable ANTHROPIC_API_KEY est absente côté serveur.');
   }
 
-  const response = await fetch('https://api.openai.com/v1/responses', {
+  const response = await fetch(ANTHROPIC_API_URL, {
     method: 'POST',
     headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${OPENAI_API_KEY}`,
+      'x-api-key': ANTHROPIC_API_KEY,
+      'anthropic-version': ANTHROPIC_VERSION,
+      'content-type': 'application/json',
     },
     body: JSON.stringify({
-      model: OPENAI_MODEL,
-      store: false,
-      ...input,
+      model: ANTHROPIC_MODEL,
+      ...request,
     }),
   });
 
   if (!response.ok) {
     const errorText = await response.text();
-    throw new Error(`OpenAI a renvoyé ${response.status}: ${errorText}`);
+    throw new Error(`Anthropic a renvoyé ${response.status}: ${errorText}`);
   }
 
-  const payload = await response.json() as Record<string, unknown>;
-  return extractOutputText(payload);
+  const payload = await response.json() as unknown;
+
+  if (!isObject(payload) || !Array.isArray(payload.content)) {
+    throw new Error('Réponse Anthropic sans contenu exploitable.');
+  }
+
+  return payload.content as unknown[];
 }
 
 async function analyzeRound(payload: AnalyzeRoundRequest) {
-  const rawText = await createOpenAIResponse({
-    input: buildAnalyzePrompt(payload),
-    max_output_tokens: 900,
-    text: {
-      format: {
-        type: 'json_schema',
-        name: 'fairwayiq_round_diagnostic',
-        strict: true,
-        schema: diagnosticResultJsonSchema,
-      },
-    },
+  const contentBlocks = await createAnthropicMessage({
+    max_tokens: 900,
+    messages: [{ role: 'user', content: buildAnalyzePrompt(payload) }],
+    tools: [diagnosticTool],
+    tool_choice: { type: 'tool', name: DIAGNOSTIC_TOOL_NAME },
   });
 
-  return parseDiagnosticResult(extractJsonObject(rawText));
+  return parseDiagnosticResult(extractToolInput(contentBlocks, DIAGNOSTIC_TOOL_NAME));
 }
 
 async function postRoundDebrief(payload: PostRoundDebriefRequest) {
-  const rawText = await createOpenAIResponse({
-    instructions: buildDebriefInstructions(payload),
-    input: [
-      ...payload.history.map((message) => ({
-        role: message.role,
-        content: message.content,
-      })),
-      {
-        role: 'user',
-        content: payload.userMessage,
-      },
-    ],
-    max_output_tokens: 400,
-    text: {
-      format: {
-        type: 'text',
-      },
-    },
+  const contentBlocks = await createAnthropicMessage({
+    max_tokens: 400,
+    system: buildDebriefInstructions(payload),
+    messages: buildDebriefMessages(payload),
   });
 
-  return rawText;
+  return extractOutputText(contentBlocks);
 }
 
 async function resolveAuthenticatedUser(request: Request) {

@@ -35,7 +35,28 @@ Variables requises dans `.env.local` :
 | `EXPO_PUBLIC_SUPABASE_URL` | URL de ton projet Supabase |
 | `EXPO_PUBLIC_SUPABASE_ANON_KEY` | Clé publique Supabase (anon) |
 
-> Les clés sensibles (OpenAI, service role) se configurent directement dans les secrets Supabase Edge Functions, jamais dans le bundle Expo.
+> Les clés sensibles (Anthropic, service role) se configurent directement dans les secrets Supabase Edge Functions, jamais dans le bundle Expo.
+
+## Coach IA (Edge Function `ai-coach`)
+
+La fonction `supabase/functions/ai-coach` appelle l'API Messages d'Anthropic (Claude). Le diagnostic de round passe par un appel d'outil forcé (tool use) dont le résultat est validé côté serveur ; le débrief est une réponse texte.
+
+Secrets Supabase à définir (jamais dans le bundle Expo) :
+
+| Secret | Description | Défaut |
+|---|---|---|
+| `ANTHROPIC_API_KEY` | Clé API Anthropic (obligatoire) | — |
+| `ANTHROPIC_MODEL_PRIMARY` | Modèle Claude utilisé | `claude-haiku-4-5-20251001` |
+| `AI_COACH_DAILY_LIMIT_FREE` | Appels IA par jour, utilisateur gratuit (<= 0 : illimité) | `3` |
+| `AI_COACH_DAILY_LIMIT_PREMIUM` | Appels IA par jour, utilisateur premium (<= 0 : illimité) | `30` |
+
+```bash
+supabase secrets set ANTHROPIC_API_KEY=your-anthropic-server-key
+supabase secrets set ANTHROPIC_MODEL_PRIMARY=claude-sonnet-4-6   # optionnel
+supabase functions deploy ai-coach
+```
+
+Le modèle doit accepter un `tool_choice` forcé : Sonnet 5.5, Opus 5.5 et Fable 5.1 le refusent (erreur 400).
 
 ## Lancer l'app
 
