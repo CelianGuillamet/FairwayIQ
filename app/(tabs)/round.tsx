@@ -94,7 +94,6 @@ export default function RoundScreen() {
   const [livePosition, setLivePosition]     = useState<{ latitude: number; longitude: number } | null>(null);
   const courseRequestRef  = useRef(0);
   const autoAdvanceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const gpsRequestedRef = useRef(false);
 
   const progress   = useMemo(() => getScorecardProgress(scorecard), [scorecard]);
   const aggregate  = useMemo(() => aggregateScorecard(scorecard), [scorecard]);
@@ -171,8 +170,7 @@ export default function RoundScreen() {
   }, [progress.completedHoles, setupExpanded]);
 
   useEffect(() => {
-    if (setupExpanded || !courseHasAnyGpsData || gpsRequestedRef.current) return;
-    gpsRequestedRef.current = true;
+    if (setupExpanded || !courseHasAnyGpsData) return;
 
     let cancelled = false;
     let subscription: Location.LocationSubscription | null = null;
