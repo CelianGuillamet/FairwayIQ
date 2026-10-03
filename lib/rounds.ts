@@ -423,13 +423,15 @@ export function getRoundPerformanceSummary(round: Round) {
 }
 
 const WHS_MAX_DIFFERENTIAL_ROUNDS = 20;
+const WHS_MIN_DIFFERENTIAL_ROUNDS = 3;
 const WHS_NEUTRAL_SLOPE_RATING = 113;
+const WHS_MAX_HANDICAP_INDEX = 54;
+const FULL_ROUND_HOLES = 18;
 
-// WHS Rule 5.1: how many of the lowest differentials to average, and the small
-// upward adjustment applied when fewer than 20 scores are available.
+// WHS Rule 5.2a: how many of the lowest differentials to average, and the small
+// adjustment applied when fewer than 20 scores are available. No index exists
+// below 3 scores, hence no entries for 1 and 2.
 const WHS_DIFFERENTIAL_TABLE: Record<number, { count: number; adjustment: number }> = {
-  1: { count: 1, adjustment: -2.0 },
-  2: { count: 1, adjustment: -2.0 },
   3: { count: 1, adjustment: -2.0 },
   4: { count: 1, adjustment: -1.0 },
   5: { count: 1, adjustment: 0 },
@@ -450,11 +452,24 @@ const WHS_DIFFERENTIAL_TABLE: Record<number, { count: number; adjustment: number
   20: { count: 8, adjustment: 0 },
 };
 
+export type HandicapIndexEstimate = {
+  index: number | null;
+  estimated: boolean;
+  excludedNineHoleRounds: number;
+};
+
+function hasCourseRatingAndSlope(round: Round) {
+  return round.course_rating != null && round.slope_rating != null && round.slope_rating > 0;
+}
+
 function getRoundScoreDifferential(round: Round) {
   // Rounds recorded before course_tee_sets existed (or without a matched tee set) have no
   // rating/slope: fall back to a neutral slope (113, the WHS average) and a course rating
   // equal to par, which reduces the differential to the round's plain score-to-par.
-  const slopeRating = round.slope_rating ?? WHS_NEUTRAL_SLOPE_RATING;
+  // total_score stands in for the adjusted gross score: net double bogey capping needs the
+  // per-hole scores, which a Round does not carry.
+  const slopeRating =
+    round.slope_rating != null && round.slope_rating > 0 ? round.slope_rating : WHS_NEUTRAL_SLOPE_RATING;
   const courseRating = round.course_rating ?? round.par;
 
   return ((round.total_score - courseRating) * 113) / slopeRating;
@@ -464,12 +479,20 @@ function truncateToOneDecimal(value: number) {
   return Math.trunc(value * 10) / 10;
 }
 
-export function getEstimatedHandicapIndex(rounds: Round[]) {
-  if (rounds.length === 0) return null;
+function sortByMostRecent(rounds: Round[]) {
+  return [...rounds].sort((left, right) => new Date(right.played_at).getTime() - new Date(left.played_at).getTime());
+}
 
-  const mostRecentRounds = [...rounds]
-    .sort((left, right) => new Date(right.played_at).getTime() - new Date(left.played_at).getTime())
-    .slice(0, WHS_MAX_DIFFERENTIAL_ROUNDS);
+// Only 18-hole rounds feed the index: the stored course rating and slope are 18-hole values,
+// and the app has neither a 9-hole rating nor the existing index needed to convert a 9-hole score.
+export function getHandicapIndexEstimate(rounds: Round[]): HandicapIndexEstimate {
+  const fullRounds = rounds.filter((round) => round.holes === FULL_ROUND_HOLES);
+  const excludedNineHoleRounds = rounds.length - fullRounds.length;
+  const mostRecentRounds = sortByMostRecent(fullRounds).slice(0, WHS_MAX_DIFFERENTIAL_ROUNDS);
+
+  if (mostRecentRounds.length < WHS_MIN_DIFFERENTIAL_ROUNDS) {
+    return { index: null, estimated: false, excludedNineHoleRounds };
+  }
 
   const { count, adjustment } = WHS_DIFFERENTIAL_TABLE[mostRecentRounds.length];
   const bestDifferentials = mostRecentRounds
@@ -479,13 +502,103 @@ export function getEstimatedHandicapIndex(rounds: Round[]) {
 
   const averageDifferential = bestDifferentials.reduce((sum, value) => sum + value, 0) / bestDifferentials.length;
 
-  return truncateToOneDecimal((averageDifferential + adjustment) * 0.96);
+  return {
+    index: Math.min(truncateToOneDecimal(averageDifferential + adjustment), WHS_MAX_HANDICAP_INDEX),
+    estimated: mostRecentRounds.some((round) => !hasCourseRatingAndSlope(round)),
+    excludedNineHoleRounds,
+  };
 }
 
-export function getBestRound(rounds: Round[]) {
-  if (rounds.length === 0) return null;
+export function getEstimatedHandicapIndex(rounds: Round[]) {
+  return getHandicapIndexEstimate(rounds).index;
+}
 
-  return [...rounds].sort((left, right) => {
+export function getHandicapIndexCard(rounds: Round[]) {
+  const { index, estimated, excludedNineHoleRounds } = getHandicapIndexEstimate(rounds);
+  const exclusionNote = excludedNineHoleRounds > 0 ? ' · 9 trous exclus' : '';
+
+  if (index == null) {
+    return {
+      label: 'Handicap Index',
+      value: '--',
+      helper: `au moins ${WHS_MIN_DIFFERENTIAL_ROUNDS} parties de ${FULL_ROUND_HOLES} trous${exclusionNote}`,
+    };
+  }
+
+  return {
+    label: estimated ? 'Handicap Index estimé' : 'Handicap Index',
+    value: index.toString(),
+    helper: `méthode WHS, non officiel${exclusionNote}`,
+  };
+}
+
+export function normalizeTo18Holes(value: number, holes: number) {
+  return (value * FULL_ROUND_HOLES) / holes;
+}
+
+function averagePer18Holes(rounds: Round[], getValue: (round: Round) => number | null) {
+  const values = rounds.flatMap((round) => {
+    const value = getValue(round);
+    return value == null ? [] : [normalizeTo18Holes(value, round.holes)];
+  });
+
+  if (values.length === 0) return null;
+
+  return roundToSingleDecimal(values.reduce((sum, value) => sum + value, 0) / values.length);
+}
+
+export function getAverageScorePer18Holes(rounds: Round[]) {
+  return averagePer18Holes(rounds, (round) => round.total_score);
+}
+
+export function getAverageScoreToParPer18Holes(rounds: Round[]) {
+  return averagePer18Holes(rounds, (round) => round.total_score - round.par);
+}
+
+export function getAveragePuttsPer18Holes(rounds: Round[]) {
+  return averagePer18Holes(rounds, (round) => round.putts);
+}
+
+export function getAveragePenaltyCount(rounds: Round[]) {
+  return averagePer18Holes(rounds, (round) => round.penalties ?? 0);
+}
+
+const TREND_WINDOW = 3;
+
+function averageScoreToPar(rounds: Round[]) {
+  const total = rounds.reduce((sum, round) => sum + round.total_score - round.par, 0);
+  return roundToSingleDecimal(total / rounds.length);
+}
+
+// Compares the latest 3 rounds with the 3 before them, only among rounds with the same number
+// of holes (18-hole rounds first; 9-hole rounds only when there are too few 18-hole ones).
+// The delta is in strokes over that number of holes.
+export function getScoreToParTrend(rounds: Round[]) {
+  const sortedRounds = sortByMostRecent(rounds);
+
+  for (const holes of [18, 9] as const) {
+    const sameHolesRounds = sortedRounds.filter((round) => round.holes === holes);
+
+    if (sameHolesRounds.length <= TREND_WINDOW) continue;
+
+    const recentAverage = averageScoreToPar(sameHolesRounds.slice(0, TREND_WINDOW));
+    const previousAverage = averageScoreToPar(sameHolesRounds.slice(TREND_WINDOW, TREND_WINDOW * 2));
+
+    return { holes, delta: roundToSingleDecimal(previousAverage - recentAverage) };
+  }
+
+  return null;
+}
+
+// A 9-hole score is never ranked against an 18-hole one: 9-hole rounds only compete
+// among themselves when there is no 18-hole round at all.
+export function getBestRound(rounds: Round[]) {
+  const fullRounds = rounds.filter((round) => round.holes === FULL_ROUND_HOLES);
+  const comparableRounds = fullRounds.length > 0 ? fullRounds : rounds;
+
+  if (comparableRounds.length === 0) return null;
+
+  return [...comparableRounds].sort((left, right) => {
     const leftDiff = left.total_score - left.par;
     const rightDiff = right.total_score - right.par;
 
@@ -495,11 +608,4 @@ export function getBestRound(rounds: Round[]) {
 
     return left.total_score - right.total_score;
   })[0];
-}
-
-export function getAveragePenaltyCount(rounds: Round[]) {
-  if (rounds.length === 0) return null;
-
-  const total = rounds.reduce((sum, round) => sum + (round.penalties ?? 0), 0);
-  return roundToSingleDecimal(total / rounds.length);
 }
