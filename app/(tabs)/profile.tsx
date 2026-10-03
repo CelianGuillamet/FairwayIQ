@@ -4,6 +4,7 @@ import { router } from 'expo-router';
 import { useAuthStore } from '../../stores/auth';
 import { useRoundsStore } from '../../stores/rounds';
 import { useDrillsStore } from '../../stores/drills';
+import { useSubscriptionStore } from '../../stores/subscription';
 import { Colors, GOALS, PLAY_FREQUENCIES, Spacing, Typography } from '../../constants';
 import { DecorativeBackground } from '../../components/ui/DecorativeBackground';
 import { AppCard } from '../../components/ui/AppCard';
@@ -12,28 +13,28 @@ import { AppBadge } from '../../components/ui/AppBadge';
 import { PageHeader } from '../../components/ui/PageHeader';
 import {
   getAveragePenaltyCount,
+  getAverageScorePer18Holes,
+  getAverageScoreToParPer18Holes,
   getBestRound,
-  getEstimatedHandicapIndex,
+  getHandicapIndexCard,
 } from '../../lib/rounds';
-
-function average(values: number[]) {
-  if (values.length === 0) return null;
-  return Math.round((values.reduce((sum, value) => sum + value, 0) / values.length) * 10) / 10;
-}
 
 export default function ProfileScreen() {
   const { profile, signOut } = useAuthStore();
   const { rounds } = useRoundsStore();
   const { getTotalDone, getStreak } = useDrillsStore();
+  const isPremium = useSubscriptionStore((state) => state.isPremium);
+  const subscriptionLoading = useSubscriptionStore((state) => state.loading);
   const insets = useSafeAreaInsets();
 
   const goalLabel = GOALS.find((goal) => goal.value === profile?.goal)?.label ?? profile?.goal ?? '--';
   const frequencyLabel = PLAY_FREQUENCIES.find((frequency) => frequency.value === profile?.play_frequency)?.label ?? '--';
-  const estimatedHandicapIndex = getEstimatedHandicapIndex(rounds);
+  const handicapIndexCard = getHandicapIndexCard(rounds);
   const bestRound = getBestRound(rounds);
   const averagePenaltyCount = getAveragePenaltyCount(rounds);
-  const scoringAverage = average(rounds.map((round) => round.total_score));
-  const averageToPar = average(rounds.map((round) => round.total_score - round.par));
+  const scoringAverage = getAverageScorePer18Holes(rounds);
+  const averageToPar = getAverageScoreToParPer18Holes(rounds);
+  const subscriptionLabel = isPremium ? 'Premium actif' : subscriptionLoading ? '--' : 'Passer à Premium';
 
   const handleSignOut = () => {
     Alert.alert('Déconnexion', 'Es-tu sûr de vouloir te déconnecter ?', [
@@ -72,16 +73,16 @@ export default function ProfileScreen() {
 
         <View style={styles.metricsGrid}>
           <MetricCard label="Rounds" value={rounds.length.toString()} helper="historique" />
-          <MetricCard label="Handicap Index estimé" value={estimatedHandicapIndex != null ? estimatedHandicapIndex.toString() : '--'} helper="méthode WHS, non officiel" />
-          <MetricCard label="Meilleur score" value={bestRound ? `${bestRound.total_score}` : '--'} helper={bestRound ? `${bestRound.total_score - bestRound.par > 0 ? '+' : ''}${bestRound.total_score - bestRound.par}` : '—'} />
+          <MetricCard label={handicapIndexCard.label} value={handicapIndexCard.value} helper={handicapIndexCard.helper} />
+          <MetricCard label="Meilleur score" value={bestRound ? `${bestRound.total_score}` : '--'} helper={bestRound ? `${bestRound.total_score - bestRound.par > 0 ? '+' : ''}${bestRound.total_score - bestRound.par} · ${bestRound.holes} trous` : '—'} />
           <MetricCard label="Streak drills" value={getStreak().toString()} helper="jours" />
         </View>
 
         <AppCard style={styles.section}>
           <Text style={styles.sectionTitle}>Repères de jeu</Text>
-          <InfoRow label="Score moyen" value={scoringAverage != null ? `${scoringAverage}` : '--'} />
-          <InfoRow label="Moyenne vs par" value={averageToPar != null ? `${averageToPar > 0 ? '+' : ''}${averageToPar}` : '--'} />
-          <InfoRow label="Pénalités moyennes" value={averagePenaltyCount != null ? `${averagePenaltyCount}` : '--'} />
+          <InfoRow label="Score moyen (18 trous)" value={scoringAverage != null ? `${scoringAverage}` : '--'} />
+          <InfoRow label="Moyenne vs par (18 trous)" value={averageToPar != null ? `${averageToPar > 0 ? '+' : ''}${averageToPar}` : '--'} />
+          <InfoRow label="Pénalités moyennes (18 trous)" value={averagePenaltyCount != null ? `${averagePenaltyCount}` : '--'} />
           <InfoRow label="Drills complétés" value={getTotalDone().toString()} />
         </AppCard>
 
@@ -93,7 +94,7 @@ export default function ProfileScreen() {
 
         <AppCard style={styles.section}>
           <Text style={styles.sectionTitle}>Application</Text>
-          <InfoRow label="Abonnement" value="Premium disponible" accent />
+          <InfoRow label="Abonnement" value={subscriptionLabel} accent />
           <InfoRow label="Version" value="1.0.0" />
         </AppCard>
 

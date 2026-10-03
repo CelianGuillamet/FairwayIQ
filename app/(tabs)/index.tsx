@@ -32,9 +32,13 @@ import {
 } from '../../lib/drill-library';
 import {
   getAveragePenaltyCount,
+  getAveragePuttsPer18Holes,
+  getAverageScoreToParPer18Holes,
   getBestRound,
-  getEstimatedHandicapIndex,
+  getHandicapIndexCard,
   getRoundPerformanceSummary,
+  getScoreToParTrend,
+  normalizeTo18Holes,
 } from '../../lib/rounds';
 
 function average(values: number[]) {
@@ -102,32 +106,21 @@ function getFocusInsight(rounds: Round[]) {
 }
 
 function getTrendLabel(rounds: Round[]) {
-  if (rounds.length < 4) {
+  const trend = getScoreToParTrend(rounds);
+
+  if (trend == null) {
     return 'Pas encore assez de rounds pour isoler une tendance robuste.';
   }
 
-  const recent = rounds.slice(0, 3);
-  const previous = rounds.slice(3, 6);
-
-  if (previous.length === 0) {
-    return 'Pas encore assez de rounds pour isoler une tendance robuste.';
-  }
-
-  const recentAverage = average(recent.map((round) => round.total_score - round.par));
-  const previousAverage = average(previous.map((round) => round.total_score - round.par));
-
-  if (recentAverage == null || previousAverage == null) {
-    return 'Pas encore assez de rounds pour isoler une tendance robuste.';
-  }
-
-  const delta = Math.round((previousAverage - recentAverage) * 10) / 10;
+  const { delta, holes } = trend;
+  const holesNote = holes === 9 ? ' (rounds de 9 trous)' : '';
 
   if (delta >= 1.5) {
-    return `Tu gagnes environ ${delta} coups vs par sur les derniers rounds.`;
+    return `Tu gagnes environ ${delta} coups vs par sur les derniers rounds${holesNote}.`;
   }
 
   if (delta <= -1.5) {
-    return `Le niveau glisse d’environ ${Math.abs(delta)} coups vs par. Reviens aux fondamentaux.`;
+    return `Le niveau glisse d’environ ${Math.abs(delta)} coups vs par${holesNote}. Reviens aux fondamentaux.`;
   }
 
   return 'La courbe est stable. Le prochain gain viendra d’un seul compartiment mieux ciblé.';
@@ -188,25 +181,25 @@ export default function DashboardScreen() {
   const chartWidth = width - 32;
   const latestRound = rounds[0] ?? null;
   const focusInsight = getFocusInsight(rounds);
-  const estimatedHandicapIndex = getEstimatedHandicapIndex(rounds);
+  const handicapIndexCard = getHandicapIndexCard(rounds);
   const bestRound = getBestRound(rounds);
   const averagePenaltyCount = getAveragePenaltyCount(rounds);
   const trendLabel = getTrendLabel(rounds);
 
   const scoreRounds = useMemo(() => rounds.slice(0, 10).reverse(), [rounds]);
-  const scoreData = scoreRounds.map((round) => round.total_score - round.par);
+  const scoreData = scoreRounds.map((round) => normalizeTo18Holes(round.total_score - round.par, round.holes));
   const scoreLabels = scoreRounds.map((round) => format(new Date(round.played_at), 'dd/MM'));
 
   const puttRounds = scoreRounds.filter((round) => round.putts != null);
-  const puttsData = puttRounds.map((round) => round.putts as number);
+  const puttsData = puttRounds.map((round) => normalizeTo18Holes(round.putts as number, round.holes));
   const puttsLabels = puttRounds.map((round) => format(new Date(round.played_at), 'dd/MM'));
 
   const girRounds = scoreRounds.filter((round) => round.gir != null);
   const girData = girRounds.map((round) => Math.round(((round.gir as number) / round.holes) * 100));
   const girLabels = girRounds.map((round) => format(new Date(round.played_at), 'dd/MM'));
 
-  const averageScoreToPar = average(rounds.map((round) => round.total_score - round.par));
-  const averagePutts = average(rounds.filter((round) => round.putts != null).map((round) => round.putts as number));
+  const averageScoreToPar = getAverageScoreToParPer18Holes(rounds);
+  const averagePutts = getAveragePuttsPer18Holes(rounds);
   const averageGirPct = average(
     rounds.filter((round) => round.gir != null).map((round) => Math.round(((round.gir as number) / round.holes) * 100))
   );
@@ -339,14 +332,14 @@ export default function DashboardScreen() {
             />
 
             <View style={styles.statsGrid}>
-              <PrimaryStatCard label="Handicap Index estimé" value={estimatedHandicapIndex != null ? estimatedHandicapIndex.toString() : '--'} helper="méthode WHS, non officiel" />
-              <PrimaryStatCard label="Moyenne vs par" value={averageScoreToPar != null ? `${averageScoreToPar > 0 ? '+' : ''}${averageScoreToPar}` : '--'} helper="sur les rounds" />
-              <PrimaryStatCard label="Meilleur round" value={bestRound ? `${bestRound.total_score}` : '--'} helper={bestRound ? `${bestRound.total_score - bestRound.par > 0 ? '+' : ''}${bestRound.total_score - bestRound.par}` : '—'} />
-              <PrimaryStatCard label="Pénalités moy." value={averagePenaltyCount != null ? averagePenaltyCount.toString() : '--'} helper="par round" />
+              <PrimaryStatCard label={handicapIndexCard.label} value={handicapIndexCard.value} helper={handicapIndexCard.helper} />
+              <PrimaryStatCard label="Moyenne vs par" value={averageScoreToPar != null ? `${averageScoreToPar > 0 ? '+' : ''}${averageScoreToPar}` : '--'} helper="ramenée à 18 trous" />
+              <PrimaryStatCard label="Meilleur round" value={bestRound ? `${bestRound.total_score}` : '--'} helper={bestRound ? `${bestRound.total_score - bestRound.par > 0 ? '+' : ''}${bestRound.total_score - bestRound.par} · ${bestRound.holes} trous` : '—'} />
+              <PrimaryStatCard label="Pénalités moy." value={averagePenaltyCount != null ? averagePenaltyCount.toString() : '--'} helper="par 18 trous" />
             </View>
 
             <View style={styles.secondaryStatsRow}>
-              <MiniStatCard label="Putts" value={averagePutts != null ? averagePutts.toString() : '--'} />
+              <MiniStatCard label="Putts / 18 trous" value={averagePutts != null ? averagePutts.toString() : '--'} />
               <MiniStatCard label="GIR" value={averageGirPct != null ? `${averageGirPct}%` : '--'} />
               <MiniStatCard label="Fairways" value={averageFairwayPct != null ? `${averageFairwayPct}%` : '--'} />
             </View>
@@ -354,14 +347,14 @@ export default function DashboardScreen() {
             {scoreData.length >= 2 ? (
               <ChartCard title="Évolution du score vs par">
                 <LineChart data={scoreData} labels={scoreLabels} width={chartWidth} color={Colors.accentBlue} />
-                <Text style={styles.chartHint}>Plus bas est meilleur. Lecture sur les 10 derniers rounds.</Text>
+                <Text style={styles.chartHint}>Plus bas est meilleur. Lecture sur les 10 derniers rounds, ramenée à 18 trous.</Text>
               </ChartCard>
             ) : null}
 
             {puttsData.length >= 2 ? (
               <ChartCard title="Évolution du putting">
                 <LineChart data={puttsData} labels={puttsLabels} width={chartWidth} color={Colors.warning} />
-                <Text style={styles.chartHint}>Plus bas est meilleur.</Text>
+                <Text style={styles.chartHint}>Plus bas est meilleur. Putts ramenés à 18 trous.</Text>
               </ChartCard>
             ) : null}
 
