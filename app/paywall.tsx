@@ -19,11 +19,8 @@ import { AppButton } from '../components/ui/AppButton';
 import { PageHeader } from '../components/ui/PageHeader';
 
 const FEATURES = [
-  { icon: '🤖', title: 'Diagnostic IA illimité', desc: 'Analyse chaque round avec un feedback plus fin et plus exploitable.' },
   { icon: '💬', title: 'Débrief conversationnel', desc: 'Pose tes questions après le round et clarifie les coups qui t’ont coûté des points.' },
-  { icon: '📈', title: 'Progression visuelle', desc: 'Lis l’évolution du score, du putting, du GIR et des pénalités.' },
-  { icon: '📅', title: 'Plan hebdomadaire', desc: 'Reçois des priorités réalistes selon ton profil et ton dernier diagnostic.' },
-  { icon: '🔔', title: 'Rappels utiles', desc: 'Maintiens une routine avec des rappels intelligents, sans friction.' },
+  { icon: '🤖', title: 'Coach IA étendu', desc: 'Jusqu’à 30 analyses et échanges avec le coach IA par jour, contre 3 en version gratuite.' },
 ] as const;
 
 type PlanKey = 'monthly' | 'annual';
