@@ -2,6 +2,8 @@ export type PlanBlock =
   | { kind: 'paragraph'; text: string }
   | { kind: 'item'; marker: string; text: string };
 
+export const BULLET_MARKER = '•';
+
 const BULLET = /^[-–—•*·]\s+(.+)$/;
 const NUMBERED = /^(\d{1,2})[.)]\s+(.+)$/;
 
@@ -13,7 +15,7 @@ export function parsePlanText(text: string): PlanBlock[] {
     .map((line): PlanBlock => {
       const bullet = BULLET.exec(line);
       if (bullet) {
-        return { kind: 'item', marker: '•', text: bullet[1].trim() };
+        return { kind: 'item', marker: BULLET_MARKER, text: bullet[1].trim() };
       }
 
       const numbered = NUMBERED.exec(line);

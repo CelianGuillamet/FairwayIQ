@@ -1,5 +1,5 @@
 import { StyleSheet, Text, View } from 'react-native';
-import { Fonts, Numerals, Typography } from '../../constants';
+import { Numerals, Typography } from '../../constants';
 import type { ThemeColors } from '../../constants';
 import { useThemedStyles } from '../../lib/theme';
 import type { RoundStat } from './round-summary';
@@ -63,7 +63,6 @@ const createStyles = (colors: ThemeColors) =>
       color: colors.ink3,
     },
     suffix: {
-      fontFamily: Fonts.sans,
       fontSize: 15,
       letterSpacing: 0,
       color: colors.ink3,
