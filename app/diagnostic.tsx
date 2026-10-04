@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
   ActivityIndicator,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -8,16 +9,24 @@ import {
 } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Colors } from '../constants';
+import { Radius, Spacing, Typography } from '../constants';
+import type { ThemeColors } from '../constants';
+import { useTheme, useThemedStyles } from '../lib/theme';
 import type { DiagnosticResult } from '../lib/claude';
 import { useDrillsStore } from '../stores/drills';
 import { useRoundsStore } from '../stores/rounds';
+import { useSubscriptionStore } from '../stores/subscription';
 import { fetchDiagnosticByRound } from '../lib/diagnostics';
 import { parseDiagnosisParam, parseDiagnosticResult } from '../lib/diagnostic-shape';
-import { DecorativeBackground } from '../components/ui/DecorativeBackground';
-import { AppCard } from '../components/ui/AppCard';
 import { AppButton } from '../components/ui/AppButton';
+import { AppCard } from '../components/ui/AppCard';
+import { Icon } from '../components/ui/Icon';
 import { PageHeader } from '../components/ui/PageHeader';
+import { InsightList } from '../components/rounds-detail/InsightList';
+import { NoticeRow } from '../components/rounds-detail/NoticeRow';
+import { PlanText } from '../components/rounds-detail/PlanText';
+import { goBackOrHome } from '../components/rounds-detail/navigation';
+import { formatSigned } from '../components/rounds-detail/round-summary';
 
 const CATEGORY_LABELS: Record<string, string> = {
   putting: 'Putting',
@@ -27,6 +36,10 @@ const CATEGORY_LABELS: Record<string, string> = {
   mental: 'Mental',
 };
 
+const UNSAVED_TITLE = 'Diagnostic non enregistré';
+const UNSAVED_MESSAGE =
+  'Il a été établi sans le coach IA (hors ligne) ou n’a pas pu être sauvegardé. Il disparaît à la fermeture de l’écran : relance-le depuis le détail du round pour le retrouver.';
+
 export default function DiagnosticScreen() {
   const { roundId: roundIdParam, diagnosis } = useLocalSearchParams<{
     roundId?: string | string[];
@@ -34,10 +47,16 @@ export default function DiagnosticScreen() {
   }>();
   const roundId = typeof roundIdParam === 'string' ? roundIdParam : undefined;
   const { setRecommendedCategories } = useDrillsStore();
+  const round = useRoundsStore((state) => state.rounds.find((entry) => entry.id === roundId));
+  const isPremium = useSubscriptionStore((state) => state.isPremium);
+  const subscriptionLoading = useSubscriptionStore((state) => state.loading);
+  const { colors } = useTheme();
+  const styles = useThemedStyles(createStyles);
   const insets = useSafeAreaInsets();
   const paramDiagnosis = useMemo(() => parseDiagnosisParam(diagnosis), [diagnosis]);
 
   const [result, setResult] = useState<DiagnosticResult | null>(null);
+  const [unsaved, setUnsaved] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -65,9 +84,11 @@ export default function DiagnosticScreen() {
         const diagnostic = await fetchDiagnosticByRound(roundId);
         if (cancelled) return;
 
-        const shown = (diagnostic ? parseDiagnosticResult(diagnostic) : null) ?? fallback;
+        const stored = diagnostic ? parseDiagnosticResult(diagnostic) : null;
+        const shown = stored ?? fallback;
         if (shown) {
           setResult(shown);
+          setUnsaved(!stored);
         } else {
           setError(diagnostic ? 'Diagnostic illisible.' : 'Aucun diagnostic enregistré pour ce round.');
         }
@@ -76,6 +97,7 @@ export default function DiagnosticScreen() {
 
         if (fallback) {
           setResult(fallback);
+          setUnsaved(true);
         } else {
           setError(currentError?.message ?? 'Impossible de charger le diagnostic.');
         }
@@ -99,9 +121,8 @@ export default function DiagnosticScreen() {
 
   if (loading) {
     return (
-      <View style={styles.loadingState}>
-        <DecorativeBackground />
-        <ActivityIndicator size="large" color={Colors.text} />
+      <View style={styles.centered}>
+        <ActivityIndicator size="large" color={colors.ink} />
         <Text style={styles.loadingText}>Chargement du diagnostic...</Text>
       </View>
     );
@@ -109,203 +130,210 @@ export default function DiagnosticScreen() {
 
   if (!result) {
     return (
-      <View style={styles.loadingState}>
-        <DecorativeBackground />
+      <View style={styles.centered}>
         <Text style={styles.errorText}>{error ?? 'Diagnostic introuvable.'}</Text>
-        <AppButton label="Retour au dashboard" variant="secondary" onPress={() => router.replace('/(tabs)')} />
+        <AppButton label="Retour à l’accueil" variant="secondary" onPress={() => router.replace('/(tabs)')} />
       </View>
     );
   }
 
+  const debriefLocked = !isPremium && !subscriptionLoading;
+  const subtitle = round
+    ? `${round.course_name ?? 'Parcours'} · ${round.total_score} coups (${formatSigned(round.total_score - round.par)})`
+    : undefined;
+  const hasStrengths = result.strengths?.length > 0;
+  const hasWeaknesses = result.weaknesses?.length > 0;
+  const hasCategories = result.recommended_categories?.length > 0;
+
   return (
     <View style={styles.container}>
-      <DecorativeBackground />
-      <ScrollView contentContainerStyle={[styles.content, { paddingTop: insets.top + 16 }]}>
-        <PageHeader
-          eyebrow="Diagnostic"
-          title="Lecture du round"
-          subtitle="Une synthèse claire des signaux importants, avec un axe de progression immédiatement exploitable."
-        />
+      <ScrollView
+        contentContainerStyle={[styles.content, { paddingTop: insets.top + Spacing.xs }]}
+        showsVerticalScrollIndicator={false}
+      >
+        <PageHeader onBack={goBackOrHome} title="Diagnostic du round" subtitle={subtitle} />
 
-        <AppCard accent="highlight" style={styles.heroCard}>
-          <Text style={styles.heroEyebrow}>Lecture globale</Text>
-          <Text style={styles.heroText}>{result.raw_analysis}</Text>
-        </AppCard>
+        {unsaved ? <NoticeRow title={UNSAVED_TITLE} message={UNSAVED_MESSAGE} style={styles.notice} /> : null}
 
-        {result.recommended_categories?.length > 0 ? (
-          <AppCard style={styles.card}>
-            <Text style={styles.cardTitle}>Priorités d’entraînement</Text>
-            <View style={styles.categoryRow}>
-              {result.recommended_categories.map((category) => (
-                <View key={category} style={styles.categoryChip}>
-                  <Text style={styles.categoryChipText}>{CATEGORY_LABELS[category] ?? category}</Text>
-                </View>
-              ))}
-            </View>
-          </AppCard>
+        <Section title="Lecture globale" first>
+          <PlanText text={result.raw_analysis} size="lead" />
+        </Section>
+
+        {hasStrengths ? (
+          <Section title="Points forts">
+            <InsightList items={result.strengths} tone="strength" />
+          </Section>
         ) : null}
 
-        <AppCard style={styles.card}>
-          <Text style={styles.cardTitle}>Points forts</Text>
-          {result.strengths?.map((strength, index) => (
-            <BulletRow key={`${strength}-${index}`} text={strength} tone="positive" />
-          ))}
+        {hasWeaknesses ? (
+          <Section title="Axes d’amélioration">
+            <InsightList items={result.weaknesses} tone="weakness" />
+          </Section>
+        ) : null}
+
+        <AppCard style={styles.planCard}>
+          <Text style={styles.sectionTitle} accessibilityRole="header">Plan de la semaine</Text>
+          <PlanText text={result.weekly_plan} />
         </AppCard>
 
-        <AppCard style={styles.card}>
-          <Text style={styles.cardTitle}>Axes d’amélioration</Text>
-          {result.weaknesses?.map((weakness, index) => (
-            <BulletRow key={`${weakness}-${index}`} text={weakness} tone="warning" />
-          ))}
-        </AppCard>
+        {hasCategories ? (
+          <Section title="Priorités d’entraînement" plain>
+            <View style={styles.chips}>
+              {result.recommended_categories.map((category) => {
+                const label = CATEGORY_LABELS[category] ?? category;
 
-        <AppCard accent="highlight" style={styles.card}>
-          <Text style={styles.cardTitle}>Plan de la semaine</Text>
-          <Text style={styles.planText}>{result.weekly_plan}</Text>
-        </AppCard>
+                return (
+                  <Pressable
+                    key={category}
+                    style={({ pressed }) => [styles.chip, pressed && styles.pressed]}
+                    onPress={() => router.push('/(tabs)/drills')}
+                    accessibilityRole="link"
+                    accessibilityLabel={`${label}, ouvrir les exercices`}
+                  >
+                    <Text style={styles.chipLabel}>{label}</Text>
+                    <Icon name="chevron-right" size={16} color={colors.ink3} />
+                  </Pressable>
+                );
+              })}
+            </View>
+          </Section>
+        ) : null}
 
-        <AppButton
-          label="Voir les drills recommandés"
-          onPress={() => router.push('/(tabs)/drills')}
-          style={styles.primaryAction}
-        />
-
-        <AppButton
-          label="Débrief avec le coach IA"
-          variant="secondary"
-          onPress={() => router.push({ pathname: '/debrief', params: { roundId } })}
-          style={styles.secondaryAction}
-        />
-
-        <AppButton
-          label="Voir le round en détail"
-          variant="secondary"
-          onPress={() => router.push({ pathname: '/round-detail', params: { roundId } })}
-          style={styles.secondaryAction}
-        />
-
-        <AppButton
-          label="Retour au dashboard"
-          variant="ghost"
-          onPress={() => router.replace('/(tabs)')}
-          style={styles.ghostAction}
-        />
+        <View style={styles.secondary}>
+          <AppButton
+            label="Ouvrir le débrief"
+            variant="secondary"
+            icon={debriefLocked ? 'lock' : undefined}
+            accessibilityHint={debriefLocked ? 'Réservé aux abonnés Premium' : undefined}
+            onPress={() => router.push({ pathname: '/debrief', params: { roundId } })}
+          />
+          <AppButton
+            label="Voir le round en détail"
+            variant="ghost"
+            onPress={() => router.push({ pathname: '/round-detail', params: { roundId } })}
+          />
+          <AppButton
+            label="Retour à l’accueil"
+            variant="ghost"
+            onPress={() => router.replace('/(tabs)')}
+          />
+        </View>
       </ScrollView>
+
+      <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, Spacing.sm) }]}>
+        <AppButton label="Voir les exercices" onPress={() => router.push('/(tabs)/drills')} />
+      </View>
     </View>
   );
 }
 
-function BulletRow({ text, tone }: { text: string; tone: 'positive' | 'warning' }) {
+function Section({
+  title,
+  first = false,
+  plain = false,
+  children,
+}: {
+  title: string;
+  first?: boolean;
+  plain?: boolean;
+  children: ReactNode;
+}) {
+  const styles = useThemedStyles(createStyles);
+
   return (
-    <View style={styles.bulletRow}>
-      <Text style={[styles.bulletDot, tone === 'positive' ? styles.positive : styles.warning]}>●</Text>
-      <Text style={styles.bulletText}>{text}</Text>
+    <View style={[styles.section, !first && !plain && styles.sectionDivided, plain && styles.sectionPlain]}>
+      <Text style={styles.sectionTitle} accessibilityRole="header">{title}</Text>
+      {children}
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.background,
-  },
-  content: {
-    paddingHorizontal: 20,
-    paddingBottom: 40,
-  },
-  loadingState: {
-    flex: 1,
-    backgroundColor: Colors.background,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 24,
-  },
-  loadingText: {
-    color: Colors.textMuted,
-    fontSize: 15,
-    marginTop: 12,
-  },
-  errorText: {
-    color: Colors.error,
-    fontSize: 16,
-    textAlign: 'center',
-    marginBottom: 16,
-  },
-  heroCard: {
-    marginBottom: 16,
-  },
-  heroEyebrow: {
-    color: Colors.textDim,
-    fontSize: 12,
-    fontWeight: '800',
-    textTransform: 'uppercase',
-    letterSpacing: 0.8,
-    marginBottom: 8,
-  },
-  heroText: {
-    color: Colors.text,
-    fontSize: 16,
-    lineHeight: 24,
-  },
-  card: {
-    marginBottom: 16,
-  },
-  cardTitle: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: Colors.text,
-    marginBottom: 12,
-  },
-  categoryRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-  },
-  categoryChip: {
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: Colors.accentBlue,
-    backgroundColor: Colors.surfaceAccent,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-  },
-  categoryChipText: {
-    color: Colors.accentBlue,
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  bulletRow: {
-    flexDirection: 'row',
-    marginBottom: 10,
-  },
-  bulletDot: {
-    marginRight: 10,
-    marginTop: 2,
-  },
-  bulletText: {
-    fontSize: 15,
-    color: Colors.text,
-    lineHeight: 22,
-    flex: 1,
-  },
-  positive: {
-    color: Colors.accentBlue,
-  },
-  warning: {
-    color: Colors.warning,
-  },
-  planText: {
-    color: Colors.text,
-    fontSize: 15,
-    lineHeight: 23,
-  },
-  primaryAction: {
-    marginBottom: 10,
-  },
-  secondaryAction: {
-    marginBottom: 10,
-  },
-  ghostAction: {
-    marginTop: 2,
-  },
-});
+const createStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: colors.bg,
+    },
+    content: {
+      paddingHorizontal: Spacing.lg,
+      paddingBottom: Spacing.xl,
+    },
+    centered: {
+      flex: 1,
+      backgroundColor: colors.bg,
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingHorizontal: Spacing.xl,
+    },
+    loadingText: {
+      ...Typography.body,
+      color: colors.ink2,
+      marginTop: Spacing.sm,
+    },
+    errorText: {
+      ...Typography.bodyStrong,
+      color: colors.error,
+      textAlign: 'center',
+      marginBottom: Spacing.md,
+    },
+    notice: {
+      marginBottom: Spacing.lg,
+    },
+    section: {
+      gap: Spacing.sm,
+    },
+    sectionDivided: {
+      marginTop: Spacing.lg,
+      paddingTop: Spacing.lg,
+      borderTopWidth: 1,
+      borderTopColor: colors.line,
+    },
+    sectionPlain: {
+      marginTop: Spacing.lg,
+    },
+    sectionTitle: {
+      ...Typography.titleMd,
+      fontSize: 20,
+      lineHeight: 24,
+      color: colors.ink,
+    },
+    planCard: {
+      marginTop: Spacing.lg,
+      gap: Spacing.sm,
+    },
+    chips: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: Spacing.xs,
+    },
+    chip: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Spacing.xxs,
+      minHeight: 44,
+      paddingLeft: Spacing.md,
+      paddingRight: Spacing.sm,
+      borderRadius: Radius.full,
+      borderWidth: 1,
+      borderColor: colors.lineStrong,
+      backgroundColor: colors.surface,
+    },
+    chipLabel: {
+      ...Typography.bodyStrong,
+      color: colors.ink,
+    },
+    pressed: {
+      opacity: 0.7,
+    },
+    secondary: {
+      marginTop: Spacing.xl,
+      gap: Spacing.xxs,
+    },
+    footer: {
+      paddingHorizontal: Spacing.lg,
+      paddingTop: Spacing.sm,
+      borderTopWidth: 1,
+      borderTopColor: colors.line,
+      backgroundColor: colors.bg,
+    },
+  });
