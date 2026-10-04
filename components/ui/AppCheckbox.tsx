@@ -1,6 +1,9 @@
 import type { ReactNode } from 'react';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { Colors, Radius, Spacing, Typography } from '../../constants';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Typography } from '../../constants';
+import type { ThemeColors } from '../../constants';
+import { useTheme, useThemedStyles } from '../../lib/theme';
+import { Icon } from './Icon';
 
 type Props = {
   checked: boolean;
@@ -11,19 +14,23 @@ type Props = {
 };
 
 export function AppCheckbox({ checked, onToggle, accessibilityLabel, children, hint }: Props) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(createStyles);
+
   return (
     <View style={styles.wrapper}>
       <View style={styles.row}>
-        <TouchableOpacity
-          style={[styles.box, checked && styles.boxChecked]}
+        <Pressable
+          style={styles.target}
           onPress={onToggle}
           accessibilityRole="checkbox"
           accessibilityState={{ checked }}
           accessibilityLabel={accessibilityLabel}
-          hitSlop={Spacing.xs}
         >
-          {checked ? <Text style={styles.check}>✓</Text> : null}
-        </TouchableOpacity>
+          <View style={[styles.box, checked && styles.boxChecked]}>
+            {checked ? <Icon name="check" size={16} strokeWidth={3} color={colors.onInk} /> : null}
+          </View>
+        </Pressable>
         <Text style={styles.label} onPress={onToggle}>
           {children}
         </Text>
@@ -33,47 +40,46 @@ export function AppCheckbox({ checked, onToggle, accessibilityLabel, children, h
   );
 }
 
-const styles = StyleSheet.create({
-  wrapper: {
-    marginBottom: Spacing.md,
-  },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 12,
-  },
-  box: {
-    width: 22,
-    height: 22,
-    borderRadius: Radius.sm,
-    borderWidth: 1.5,
-    borderColor: Colors.borderStrong,
-    backgroundColor: Colors.backgroundSoft,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 1,
-  },
-  boxChecked: {
-    backgroundColor: Colors.text,
-    borderColor: Colors.text,
-  },
-  check: {
-    color: Colors.background,
-    fontSize: 14,
-    lineHeight: 16,
-    fontWeight: '900',
-  },
-  label: {
-    flex: 1,
-    color: Colors.textMuted,
-    ...Typography.label,
-    fontWeight: '400',
-    lineHeight: 20,
-  },
-  hint: {
-    color: Colors.textDim,
-    ...Typography.caption,
-    marginTop: 6,
-    marginLeft: 34,
-  },
-});
+const createStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+    wrapper: {
+      marginBottom: 12,
+    },
+    row: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+    },
+    target: {
+      width: 44,
+      height: 44,
+      marginLeft: -10,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    box: {
+      width: 24,
+      height: 24,
+      borderRadius: 6,
+      borderWidth: 1.5,
+      borderColor: colors.lineStrong,
+      backgroundColor: colors.surface,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    boxChecked: {
+      backgroundColor: colors.ink,
+      borderColor: colors.ink,
+    },
+    label: {
+      ...Typography.body,
+      flex: 1,
+      color: colors.ink2,
+      paddingTop: 11,
+    },
+    hint: {
+      ...Typography.caption,
+      color: colors.ink3,
+      marginTop: 2,
+      marginLeft: 34,
+    },
+  });

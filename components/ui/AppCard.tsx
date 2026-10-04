@@ -1,6 +1,8 @@
 import type { ReactNode } from 'react';
 import { StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
-import { Colors, Radius, Shadows, Spacing } from '../../constants';
+import { Radius, Spacing } from '../../constants';
+import type { ThemeColors } from '../../constants';
+import { useThemedStyles } from '../../lib/theme';
 
 type Props = {
   children: ReactNode;
@@ -9,6 +11,8 @@ type Props = {
 };
 
 export function AppCard({ children, style, accent = 'default' }: Props) {
+  const styles = useThemedStyles(createStyles);
+
   return (
     <View
       style={[
@@ -18,50 +22,26 @@ export function AppCard({ children, style, accent = 'default' }: Props) {
         style,
       ]}
     >
-      {accent !== 'default' ? (
-        <View
-          pointerEvents="none"
-          style={[
-            styles.accentLine,
-            accent === 'highlight' ? styles.accentLineHighlight : styles.accentLineSoft,
-          ]}
-        />
-      ) : null}
       {children}
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  card: {
-    backgroundColor: Colors.surface,
-    position: 'relative',
-    overflow: 'hidden',
-    borderRadius: Radius.xl,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    padding: Spacing.xl,
-    shadowColor: Colors.black,
-    ...Shadows.card,
-  },
-  cardHighlight: {
-    backgroundColor: Colors.surfaceAccent,
-    borderColor: Colors.borderStrong,
-  },
-  cardSoft: {
-    backgroundColor: Colors.backgroundSoft,
-  },
-  accentLine: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    bottom: 0,
-    width: 3,
-  },
-  accentLineHighlight: {
-    backgroundColor: Colors.text,
-  },
-  accentLineSoft: {
-    backgroundColor: Colors.accentBlue,
-  },
-});
+const createStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+    card: {
+      backgroundColor: colors.surface,
+      borderRadius: Radius.xl,
+      borderWidth: 1,
+      borderColor: colors.line,
+      padding: 18,
+    },
+    cardHighlight: {
+      borderColor: colors.ink,
+      borderWidth: 1.5,
+    },
+    cardSoft: {
+      backgroundColor: colors.sunk,
+      borderColor: colors.sunk,
+    },
+  });
