@@ -11,7 +11,7 @@ import {
 import { Link, router } from 'expo-router';
 import * as Linking from 'expo-linking';
 import { supabase } from '../../lib/supabase';
-import { AI_DATA_NOTICE, Colors, PRIVACY_POLICY_URL, TERMS_OF_USE_URL } from '../../constants';
+import { Colors, PRIVACY_POLICY_URL, TERMS_OF_USE_URL } from '../../constants';
 import { openLegalUrl } from '../../lib/legal';
 import { DecorativeBackground } from '../../components/ui/DecorativeBackground';
 import { AppCard } from '../../components/ui/AppCard';
@@ -38,7 +38,7 @@ export default function RegisterScreen() {
     if (!acceptedLegal) {
       Alert.alert(
         'Erreur',
-        'Accepte les conditions d’utilisation et la politique de confidentialité pour créer ton compte.'
+        'Accepte les conditions d’utilisation, la politique de confidentialité et le traitement de tes données par le coach IA pour créer ton compte.'
       );
       return;
     }
@@ -98,7 +98,7 @@ export default function RegisterScreen() {
         <AppCard accent="highlight" style={styles.formCard}>
           <Text style={styles.formTitle}>Inscription</Text>
           <Text style={styles.formSubtitle}>
-            Un email de confirmation peut être nécessaire selon ta configuration Supabase.
+            Crée ton compte pour sauvegarder tes parties. Un email de confirmation peut t’être envoyé pour valider ton adresse.
           </Text>
 
           <AppInput
@@ -121,13 +121,28 @@ export default function RegisterScreen() {
             autoComplete="new-password"
           />
 
+          <View style={styles.aiDisclosure}>
+            <Text style={styles.aiDisclosureTitle}>Coach IA et tes données</Text>
+            <Text style={styles.aiDisclosureText}>
+              Pour générer ton feedback, le coach IA envoie les données de tes parties et tes notes à
+              Anthropic (Claude). Le détail des données transmises est décrit dans notre{' '}
+              <Text
+                style={styles.legalLink}
+                accessibilityRole="link"
+                onPress={() => void openLegalUrl(PRIVACY_POLICY_URL)}
+              >
+                politique de confidentialité
+              </Text>
+              .
+            </Text>
+          </View>
+
           <AppCheckbox
             checked={acceptedLegal}
             onToggle={() => setAcceptedLegal((value) => !value)}
-            accessibilityLabel="J’accepte les conditions d’utilisation et la politique de confidentialité"
-            hint={AI_DATA_NOTICE}
+            accessibilityLabel="J’accepte les conditions d’utilisation, la politique de confidentialité et le traitement de mes données par le coach IA décrit ci-dessus"
           >
-            J’accepte les{' '}
+            J’accepte le traitement décrit ci-dessus, les{' '}
             <Text
               style={styles.legalLink}
               accessibilityRole="link"
@@ -224,6 +239,20 @@ const styles = StyleSheet.create({
     lineHeight: 21,
     marginTop: 6,
     marginBottom: 18,
+  },
+  aiDisclosure: {
+    marginBottom: 16,
+  },
+  aiDisclosureTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: Colors.text,
+    marginBottom: 4,
+  },
+  aiDisclosureText: {
+    fontSize: 13,
+    color: Colors.textMuted,
+    lineHeight: 19,
   },
   primaryButton: {
     marginTop: 6,

@@ -12,9 +12,12 @@ Application mobile de coaching golf alimentée par l'IA. Enregistrez vos parties
 
 ## Prérequis
 
-- Node.js 18+
-- Expo CLI (`npm install -g expo-cli`)
+- Node.js 20.19.4 ou plus récent (requis par React Native 0.81)
 - Un projet Supabase configuré
+- Pour les builds App Store : un compte Expo et EAS CLI (`npm install -g eas-cli`)
+- Pour déployer les Edge Functions : Supabase CLI
+
+Aucune installation globale d'Expo n'est nécessaire : les commandes passent par `npx expo` et les scripts npm.
 
 ## Installation
 
@@ -22,20 +25,34 @@ Application mobile de coaching golf alimentée par l'IA. Enregistrez vos parties
 npm install
 ```
 
-Copier le fichier d'exemple et renseigner les variables :
+Copier le fichier d'exemple et renseigner les variables **client** :
 
 ```bash
 cp .env.example .env.local
 ```
 
-Variables requises dans `.env.local` :
+`.env.example` contient deux sections : la section 1 (client, `EXPO_PUBLIC_*`) est faite pour `.env.local` ; la section 2 (serveur) est commentée et ne doit jamais être recopiée dans `.env.local`.
 
-| Variable | Description |
-|---|---|
-| `EXPO_PUBLIC_SUPABASE_URL` | URL de ton projet Supabase |
-| `EXPO_PUBLIC_SUPABASE_ANON_KEY` | Clé publique Supabase (anon) |
+Variables client dans `.env.local` (publiques : elles sont embarquées dans l'app) :
 
-> Les clés sensibles (Anthropic, service role) se configurent directement dans les secrets Supabase Edge Functions, jamais dans le bundle Expo.
+| Variable | Description | Obligatoire |
+|---|---|---|
+| `EXPO_PUBLIC_SUPABASE_URL` | URL de ton projet Supabase | Oui (l'app plante au lancement sans) |
+| `EXPO_PUBLIC_SUPABASE_ANON_KEY` | Clé publique Supabase (anon) | Oui (l'app plante au lancement sans) |
+| `EXPO_PUBLIC_PRIVACY_POLICY_URL` | URL de la politique de confidentialité | Oui pour l'App Store (liens vides sinon) |
+| `EXPO_PUBLIC_TERMS_URL` | URL des conditions d'utilisation | Oui pour l'App Store (liens vides sinon) |
+| `EXPO_PUBLIC_REVENUECAT_IOS_KEY` / `EXPO_PUBLIC_REVENUECAT_ANDROID_KEY` | Clés SDK publiques RevenueCat | Pour les achats |
+| `EXPO_PUBLIC_SENTRY_DSN` | DSN Sentry | Pour le suivi des crashs |
+
+> Les secrets serveur (Anthropic, webhook RevenueCat, etc.) se définissent uniquement avec `supabase secrets set`, jamais dans `.env.local` ni dans le bundle Expo. `SUPABASE_URL`, `SUPABASE_ANON_KEY` et `SUPABASE_SERVICE_ROLE_KEY` sont injectées automatiquement par Supabase dans les Edge Functions.
+
+`lib/env-check.ts` exporte `assertClientEnv()`, qui lève en développement une erreur explicite listant les variables client manquantes (en production, elle journalise seulement l'erreur). Pour l'activer, appelle-la dans `lib/supabase.ts` juste avant `createClient(...)` :
+
+```ts
+import { assertClientEnv } from './env-check';
+
+assertClientEnv();
+```
 
 ## Coach IA (Edge Function `ai-coach`)
 
@@ -84,6 +101,42 @@ npm run ios
 # Android
 npm run android
 ```
+
+## Builds EAS (TestFlight / App Store)
+
+Les builds cloud EAS ne lisent pas `.env.local` (ignoré par le dépôt). Sans configuration, un build partirait **sans connexion Supabase (crash au lancement) et avec des liens légaux vides**. Les variables client sont donc stockées côté EAS ; chaque profil de `eas.json` (`development`, `preview`, `production`) charge l'environnement EAS du même nom via `"environment"`.
+
+Créer les variables (valeurs publiques, visibilité `plaintext`) pour chaque environnement utilisé. Les valeurs ci-dessous sont des exemples à remplacer :
+
+```bash
+eas login
+eas env:set --name EXPO_PUBLIC_SUPABASE_URL --value https://your-project.supabase.co --environment production --environment preview --visibility plaintext
+eas env:set --name EXPO_PUBLIC_SUPABASE_ANON_KEY --value your-public-anon-key --environment production --environment preview --visibility plaintext
+eas env:set --name EXPO_PUBLIC_PRIVACY_POLICY_URL --value https://example.com/privacy --environment production --environment preview --visibility plaintext
+eas env:set --name EXPO_PUBLIC_TERMS_URL --value https://example.com/terms --environment production --environment preview --visibility plaintext
+```
+
+Faire de même pour `EXPO_PUBLIC_REVENUECAT_IOS_KEY`, `EXPO_PUBLIC_REVENUECAT_ANDROID_KEY` et `EXPO_PUBLIC_SENTRY_DSN`. Sur les anciennes versions d'EAS CLI, `eas env:set` s'appelle `eas env:create`. Vérification : `eas env:list --environment production`.
+
+Pour les mises à jour OTA, passer le même environnement : `eas update --environment production`.
+
+### Sentry (source maps et symboles de debug)
+
+Le plugin `@sentry/react-native` lit `SENTRY_ORG` et `SENTRY_PROJECT` dans l'environnement au moment du build (`app.json` est statique et ne peut pas les interpoler ; l'avertissement « Missing config for organization, project » est normal). Les définir côté EAS :
+
+```bash
+eas env:set --name SENTRY_ORG --value your-org-slug --environment production --visibility plaintext
+eas env:set --name SENTRY_PROJECT --value your-project-slug --environment production --visibility plaintext
+eas env:set --name SENTRY_AUTH_TOKEN --value your-auth-token --environment production --visibility secret
+```
+
+`SENTRY_AUTH_TOKEN` est un secret : ne l'écris jamais dans `eas.json`, `app.json` ni `.env.local`. `eas.json` définit `SENTRY_ALLOW_FAILURE=true` pour tous les profils : si ces variables manquent, `sentry-cli` n'interrompt pas le build (le crash reporting fonctionne, mais sans source maps). Pour désactiver complètement l'envoi, ajoute `SENTRY_DISABLE_AUTO_UPLOAD=true` dans le bloc `env` du profil.
+
+### Avant la soumission
+
+- `eas.json` > `submit.production.ios` : remplacer `YOUR_APPLE_ID_EMAIL`, `YOUR_APP_STORE_CONNECT_APP_ID` et `YOUR_APPLE_TEAM_ID`.
+- Les deux URL légales doivent être publiées (voir `legal-site/`) et définies dans l'environnement EAS `production`.
+- Le numéro de build iOS est incrémenté automatiquement (`autoIncrement`, `appVersionSource: remote`).
 
 ## Structure du projet
 
