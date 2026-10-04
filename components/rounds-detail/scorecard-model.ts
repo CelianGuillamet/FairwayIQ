@@ -1,4 +1,4 @@
-import { SCORE_NOTATION_LABELS, getScoreNotation } from '../../lib/score-notation';
+import { describeStrokes } from '../../lib/score-labels';
 import type { RoundDraftHole } from '../../types';
 
 export const SCORECARD_COLUMNS = 9;
@@ -60,10 +60,7 @@ export function describeHole(cell: ScorecardCell): string {
     return `Trou ${cell.number}, non saisi`;
   }
 
-  const notation = SCORE_NOTATION_LABELS[getScoreNotation(cell.strokes, cell.par)];
-  const strokes = `${cell.strokes} coup${cell.strokes > 1 ? 's' : ''}`;
-
-  return `Trou ${cell.number}, par ${cell.par}, ${strokes}, ${notation}`;
+  return `Trou ${cell.number}, par ${cell.par}, ${describeStrokes(cell.strokes, cell.par)}`;
 }
 
 const TOTAL_NAMES: Record<ScorecardHalf['key'], string> = {

@@ -26,7 +26,7 @@ import { InsightList } from '../components/rounds-detail/InsightList';
 import { NoticeRow } from '../components/rounds-detail/NoticeRow';
 import { PlanText } from '../components/rounds-detail/PlanText';
 import { goBackOrHome } from '../components/rounds-detail/navigation';
-import { formatSigned } from '../components/rounds-detail/round-summary';
+import { describeToPar } from '../lib/score-labels';
 
 const CATEGORY_LABELS: Record<string, string> = {
   putting: 'Putting',
@@ -139,7 +139,7 @@ export default function DiagnosticScreen() {
 
   const debriefLocked = !isPremium && !subscriptionLoading;
   const subtitle = round
-    ? `${round.course_name ?? 'Parcours'} · ${round.total_score} coups (${formatSigned(round.total_score - round.par)})`
+    ? `${round.course_name ?? 'Parcours'} · ${round.total_score} coups, ${describeToPar(round.total_score - round.par)}`
     : undefined;
   const hasStrengths = result.strengths?.length > 0;
   const hasWeaknesses = result.weaknesses?.length > 0;

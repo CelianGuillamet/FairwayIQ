@@ -1,18 +1,13 @@
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
+import { formatScoreToPar } from '../../lib/score-labels';
 import type { Round, RoundAggregate } from '../../types';
 
 const MISSING = '–';
 const PERCENT = ' %';
 
-export function formatSigned(value: number): string {
-  if (value > 0) return `+${value}`;
-  if (value < 0) return `−${Math.abs(value)}`;
-  return '0';
-}
-
 export function describeScoreToPar(scoreToPar: number): string {
-  return scoreToPar === 0 ? 'Au par' : `${formatSigned(scoreToPar)} par rapport au par`;
+  return scoreToPar === 0 ? 'Au par' : `${formatScoreToPar(scoreToPar)} par rapport au par`;
 }
 
 export function formatRoundDate(playedAt: string): string {

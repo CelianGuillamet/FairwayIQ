@@ -84,13 +84,13 @@ describe('buildScorecardHalves', () => {
 
 describe('describeHole', () => {
   it('spells out the hole, par, strokes and notation', () => {
-    expect(describeHole({ number: 7, par: 5, strokes: 7 })).toBe('Trou 7, par 5, 7 coups, double bogey ou plus');
+    expect(describeHole({ number: 7, par: 5, strokes: 7 })).toBe('Trou 7, par 5, 7 coups, double bogey');
     expect(describeHole({ number: 8, par: 3, strokes: 2 })).toBe('Trou 8, par 3, 2 coups, birdie');
     expect(describeHole({ number: 3, par: 4, strokes: 4 })).toBe('Trou 3, par 4, 4 coups, par');
   });
 
-  it('uses the singular for a single stroke', () => {
-    expect(describeHole({ number: 2, par: 3, strokes: 1 })).toBe('Trou 2, par 3, 1 coup, eagle ou mieux');
+  it('speaks a hole in one in the singular', () => {
+    expect(describeHole({ number: 2, par: 3, strokes: 1 })).toBe('Trou 2, par 3, 1 coup, trou en un');
   });
 
   it('flags a hole that was not entered', () => {

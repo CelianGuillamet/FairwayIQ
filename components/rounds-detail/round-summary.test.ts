@@ -4,7 +4,6 @@ import {
   buildRoundSubtitle,
   describeScoreToPar,
   formatRoundDate,
-  formatSigned,
 } from './round-summary';
 
 const aggregate: RoundAggregate = {
@@ -34,14 +33,6 @@ const legacyRound = {
   fairways_total: 14,
   penalties: null,
 };
-
-describe('formatSigned', () => {
-  it('signs positives and uses a true minus for negatives', () => {
-    expect(formatSigned(9)).toBe('+9');
-    expect(formatSigned(-3)).toBe('−3');
-    expect(formatSigned(0)).toBe('0');
-  });
-});
 
 describe('describeScoreToPar', () => {
   it('describes a score over, under and on par', () => {
