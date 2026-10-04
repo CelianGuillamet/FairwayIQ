@@ -13,12 +13,14 @@ import {
 import { useLocalSearchParams, router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase } from '../lib/supabase';
+import { buildOpeningMessage, sortDebriefMessages } from '../lib/debrief-messages';
+import { getErrorCode } from '../lib/round-save';
 import { AiCoachLimitError, AiCoachPremiumRequiredError, postRoundDebrief } from '../lib/claude';
 import { useAuthStore } from '../stores/auth';
 import { useRoundsStore } from '../stores/rounds';
 import { useSubscriptionStore } from '../stores/subscription';
 import { Colors } from '../constants';
-import type { Round } from '../types';
+import type { Profile, Round } from '../types';
 import { DecorativeBackground } from '../components/ui/DecorativeBackground';
 import { AppCard } from '../components/ui/AppCard';
 import { AppButton } from '../components/ui/AppButton';
@@ -30,14 +32,13 @@ type Message = {
   created_at?: string;
 };
 
-const OPENING_MESSAGE = (score: number, par: number, name: string): string =>
-  `Bonjour ${name}. J'ai analyse ton round de ${score} coups (${score > par ? '+' : ''}${score - par}). Qu'est-ce qui t'a le plus marque aujourd'hui ?`;
+const PERSIST_FAILED_NOTICE = 'Cette conversation n’a pas pu être sauvegardée : elle ne sera pas retrouvée à la réouverture.';
 
 function buildFallbackReply(score: number, par: number) {
   const scoreDiff = score - par;
 
   if (scoreDiff >= 12) {
-    return 'Le coach IA est indisponible pour le moment. Repars des trous qui ont vraiment fait basculer le round: penalites, trois-putts, mauvais choix de club.';
+    return 'Le coach IA est indisponible pour le moment. Repars des trous qui ont vraiment fait basculer le round: pénalités, trois-putts, mauvais choix de club.';
   }
 
   if (scoreDiff >= 5) {
@@ -59,30 +60,56 @@ export default function DebriefScreen() {
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [sessionId, setSessionId] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const sessionInitRef = useRef<{ roundId: string; promise: Promise<string | null> } | null>(null);
   const flatListRef = useRef<FlatList>(null);
   const insets = useSafeAreaInsets();
+  const resolvedRoundId = round?.id;
+  const userId = user?.id;
+  const profileId = profile?.id;
 
   useEffect(() => {
-    if (!round || !profile || !user || !isPremium) {
+    if (!resolvedRoundId || !profileId || !userId || !isPremium) {
       return;
     }
 
-    void initSession();
-  }, [round, profile, user, isPremium]);
+    void ensureSession();
+  }, [resolvedRoundId, profileId, userId, isPremium]);
 
-  const initSession = async () => {
+  const ensureSession = (): Promise<string | null> => {
     if (!round || !profile || !user) {
-      return null;
+      return Promise.resolve(null);
     }
 
+    if (sessionInitRef.current?.roundId === round.id) {
+      return sessionInitRef.current.promise;
+    }
+
+    const promise = initSession(round, profile, user.id).catch((error) => {
+      console.warn('[debrief] failed to init session', getErrorCode(error));
+      setNotice(PERSIST_FAILED_NOTICE);
+      return null;
+    });
+    sessionInitRef.current = { roundId: round.id, promise };
+
+    void promise.then((activeSessionId) => {
+      if (!activeSessionId && sessionInitRef.current?.promise === promise) {
+        sessionInitRef.current = null;
+      }
+    });
+
+    return promise;
+  };
+
+  const initSession = async (currentRound: Round, currentProfile: Profile, currentUserId: string) => {
     const { data: existing, error: existingError } = await supabase
       .from('debrief_sessions')
       .select('id, debrief_messages(id, role, content, created_at)')
-      .eq('round_id', round.id)
+      .eq('round_id', currentRound.id)
       .maybeSingle();
 
     if (existingError) {
-      console.warn('[debrief] failed to load session', existingError.message);
+      console.warn('[debrief] failed to load session', getErrorCode(existingError));
     }
 
     if (existing) {
@@ -90,11 +117,7 @@ export default function DebriefScreen() {
       const existingMessages = ((existing as any).debrief_messages as Message[] | undefined) ?? [];
 
       if (existingMessages.length > 0) {
-        setMessages(
-          [...existingMessages].sort((left, right) =>
-            (left.created_at ?? '').localeCompare(right.created_at ?? '')
-          )
-        );
+        setMessages(sortDebriefMessages(existingMessages));
         return existing.id;
       }
     }
@@ -102,35 +125,73 @@ export default function DebriefScreen() {
     const opener: Message = {
       id: 'opener',
       role: 'assistant',
-      content: OPENING_MESSAGE(round.total_score, round.par, profile.display_name ?? 'Joueur'),
+      content: buildOpeningMessage(currentRound.total_score, currentRound.par, currentProfile.display_name ?? 'Joueur'),
     };
 
-    const activeSessionId = existing?.id ?? await (async () => {
-      const { data: session, error } = await supabase
-        .from('debrief_sessions')
-        .insert({ user_id: user.id, round_id: round.id })
-        .select('id')
-        .single();
-
-      if (error) {
-        console.warn('[debrief] failed to create session', error.message);
-        return null;
-      }
-
-      return session.id;
-    })();
+    const activeSessionId = existing?.id ?? await createSession(currentRound.id, currentUserId);
 
     if (activeSessionId) {
       setSessionId(activeSessionId);
-      await supabase.from('debrief_messages').insert({
+
+      const { error: openerError } = await supabase.from('debrief_messages').insert({
         session_id: activeSessionId,
         role: 'assistant',
         content: opener.content,
       });
+
+      if (openerError) {
+        console.warn('[debrief] failed to save opener', getErrorCode(openerError));
+        setNotice(PERSIST_FAILED_NOTICE);
+      }
+    } else {
+      setNotice(PERSIST_FAILED_NOTICE);
     }
 
     setMessages((previousMessages) => previousMessages.length === 0 ? [opener] : previousMessages);
     return activeSessionId;
+  };
+
+  const createSession = async (currentRoundId: string, currentUserId: string) => {
+    const { data: session, error } = await supabase
+      .from('debrief_sessions')
+      .insert({ user_id: currentUserId, round_id: currentRoundId })
+      .select('id')
+      .single();
+
+    if (error) {
+      console.warn('[debrief] failed to create session', getErrorCode(error));
+      return null;
+    }
+
+    return session.id as string;
+  };
+
+  // Two sequential inserts: a single multi-row insert gives both rows the same created_at,
+  // which leaves their order undefined on reload.
+  const persistExchange = async (activeSessionId: string, userText: string, assistantText: string) => {
+    try {
+      const { error: userError } = await supabase
+        .from('debrief_messages')
+        .insert({ session_id: activeSessionId, role: 'user', content: userText });
+
+      if (userError) {
+        console.warn('[debrief] failed to save user message', getErrorCode(userError));
+        setNotice(PERSIST_FAILED_NOTICE);
+        return;
+      }
+
+      const { error: assistantError } = await supabase
+        .from('debrief_messages')
+        .insert({ session_id: activeSessionId, role: 'assistant', content: assistantText });
+
+      if (assistantError) {
+        console.warn('[debrief] failed to save assistant message', getErrorCode(assistantError));
+        setNotice(PERSIST_FAILED_NOTICE);
+      }
+    } catch (error) {
+      console.warn('[debrief] failed to save messages', getErrorCode(error));
+      setNotice(PERSIST_FAILED_NOTICE);
+    }
   };
 
   const sendMessage = async () => {
@@ -154,12 +215,11 @@ export default function DebriefScreen() {
       const assistantMsg: Message = { id: (Date.now() + 1).toString(), role: 'assistant', content: reply };
       setMessages((previousMessages) => [...previousMessages, assistantMsg]);
 
-      const activeSessionId = sessionId ?? await initSession();
+      const activeSessionId = sessionId ?? await ensureSession();
       if (activeSessionId) {
-        await supabase.from('debrief_messages').insert([
-          { session_id: activeSessionId, role: 'user', content: text },
-          { session_id: activeSessionId, role: 'assistant', content: reply },
-        ]);
+        await persistExchange(activeSessionId, text, reply);
+      } else {
+        setNotice(PERSIST_FAILED_NOTICE);
       }
     } catch (error) {
       if (error instanceof AiCoachPremiumRequiredError) {
@@ -262,6 +322,8 @@ export default function DebriefScreen() {
         renderItem={({ item }) => <MessageBubble message={item} />}
         onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: false })}
       />
+
+      {notice ? <Text style={styles.noticeText}>{notice}</Text> : null}
 
       {loading ? (
         <View style={styles.typingRow}>
@@ -424,6 +486,12 @@ const styles = StyleSheet.create({
   },
   bubbleTextUser: {
     color: Colors.text,
+  },
+  noticeText: {
+    color: Colors.warning,
+    fontSize: 13,
+    paddingHorizontal: 20,
+    paddingTop: 8,
   },
   typingRow: {
     flexDirection: 'row',
