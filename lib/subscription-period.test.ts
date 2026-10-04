@@ -19,7 +19,7 @@ describe('describeSubscriptionPeriod', () => {
 
     expect(describeSubscriptionPeriod({ plan: 'annual', expires_at: expires })).toEqual({
       planLabel: 'Annuel',
-      until: 'Valable jusqu’au 4 novembre 2026',
+      until: 'valable jusqu’au 4 novembre 2026',
     });
     expect(describeSubscriptionPeriod({ plan: 'monthly', expires_at: expires }).planLabel).toBe('Mensuel');
   });

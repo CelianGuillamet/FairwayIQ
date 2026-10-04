@@ -25,7 +25,7 @@ export async function fetchSubscriptionPeriod(userId: string): Promise<Subscript
 export function describeSubscriptionPeriod(period: SubscriptionPeriod | null | undefined) {
   const planLabel = period?.plan === 'annual' ? 'Annuel' : period?.plan === 'monthly' ? 'Mensuel' : null;
   const expiry = period?.expires_at ? new Date(period.expires_at) : null;
-  const until = expiry && !Number.isNaN(expiry.getTime()) ? `Valable jusqu’au ${format(expiry, 'd MMMM yyyy', { locale: fr })}` : null;
+  const until = expiry && !Number.isNaN(expiry.getTime()) ? `valable jusqu’au ${format(expiry, 'd MMMM yyyy', { locale: fr })}` : null;
 
   return { planLabel, until };
 }
