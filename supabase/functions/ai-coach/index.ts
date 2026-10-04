@@ -99,8 +99,18 @@ const MAX_PREVIOUS_ROUNDS = 10;
 const MAX_SCORECARD_HOLES = 18;
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const CONTROL_CHARACTERS = /[\u0000-\u0008\u000B-\u001F\u007F-\u009F\u200B-\u200F\u2028-\u202E\u2060-\u2064\u2066-\u2069\uFEFF]/g;
-const LONE_SURROGATES = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g;
+const charRange = (from: number, to: number) => `${String.fromCharCode(from)}-${String.fromCharCode(to)}`;
+// Built from code points so the invisible characters never sit in the source text (a raw U+2028 breaks a regex literal).
+const CONTROL_CHARACTERS = new RegExp(
+  `[${[[0x00, 0x08], [0x0b, 0x1f], [0x7f, 0x9f], [0x200b, 0x200f], [0x2028, 0x202e], [0x2060, 0x2064], [0x2066, 0x2069], [0xfeff, 0xfeff]]
+    .map(([from, to]) => charRange(from, to))
+    .join('')}]`,
+  'g',
+);
+const LONE_SURROGATES = new RegExp(
+  `[${charRange(0xd800, 0xdbff)}](?![${charRange(0xdc00, 0xdfff)}])|(?<![${charRange(0xd800, 0xdbff)}])[${charRange(0xdc00, 0xdfff)}]`,
+  'g',
+);
 
 const DIAGNOSTIC_TOOL_NAME = 'submit_round_diagnostic';
 
