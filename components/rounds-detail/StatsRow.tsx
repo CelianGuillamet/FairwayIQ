@@ -64,6 +64,7 @@ const createStyles = (colors: ThemeColors) =>
     },
     suffix: {
       fontSize: 15,
+      lineHeight: 16,
       letterSpacing: 0,
       color: colors.ink3,
     },
