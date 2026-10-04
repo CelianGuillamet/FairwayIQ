@@ -41,7 +41,7 @@ export function DrillCard({
   const category = DRILL_CATEGORY_LABELS[drill.category];
   const goal = extractDrillGoal(drill.description);
   const detail = [
-    DRILL_DIFFICULTY_LABELS[drill.difficulty],
+    goal ? DRILL_DIFFICULTY_LABELS[drill.difficulty] : null,
     totalCompletions > 0 ? `${totalCompletions}× réalisé` : null,
   ]
     .filter(Boolean)
@@ -78,7 +78,7 @@ export function DrillCard({
       {expanded ? (
         <View style={styles.details}>
           <Text style={styles.description}>{drill.description}</Text>
-          <Text style={styles.detailMeta}>{detail}</Text>
+          {detail ? <Text style={styles.detailMeta}>{detail}</Text> : null}
           <View style={styles.actions}>
             {drill.youtube_url ? (
               <TextAction
