@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import {
-  View, Text, TextInput, TouchableOpacity,
+  View, Text, TextInput, Pressable,
   StyleSheet, Keyboard,
 } from 'react-native';
 import { searchCourses, type CourseSearchResult, type GolfCourse } from '../../lib/golf-courses';
-import { Colors, Radius, Spacing, Typography } from '../../constants';
+import { Radius, Shadows, Spacing, Typography } from '../../constants';
+import type { ThemeColors } from '../../constants';
+import { useTheme, useThemedStyles } from '../../lib/theme';
 
 type Props = {
   value: string;
@@ -13,6 +15,8 @@ type Props = {
 };
 
 export function CourseSearch({ value, onSelect, onChangeText }: Props) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(createStyles);
   const [results, setResults] = useState<CourseSearchResult[]>([]);
   const [focused, setFocused] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -82,9 +86,11 @@ export function CourseSearch({ value, onSelect, onChangeText }: Props) {
   return (
     <View style={styles.wrapper}>
       <TextInput
-        style={styles.input}
+        style={[styles.input, focused && styles.inputFocused]}
         placeholder="Rechercher un parcours..."
-        placeholderTextColor={Colors.textDim}
+        placeholderTextColor={colors.ink3}
+        selectionColor={colors.ink}
+        accessibilityLabel="Rechercher un parcours"
         value={value}
         onChangeText={handleChange}
         onFocus={() => setFocused(true)}
@@ -98,77 +104,88 @@ export function CourseSearch({ value, onSelect, onChangeText }: Props) {
               <Text style={styles.loadingLabel}>Recherche des parcours...</Text>
             </View>
           ) : null}
-          {results.map((course) => (
-            <TouchableOpacity
-              key={course.id}
-              style={[styles.result, course.isCustom && styles.customResult]}
-              onPress={() => handleSelect(course)}
-            >
-              <Text style={styles.resultName}>
-                {course.isCustom ? `Utiliser "${course.name}"` : course.name}
-              </Text>
-              <Text style={styles.resultMeta}>
-                {course.isCustom
-                  ? `Parcours non trouve · Par ${course.par18} par defaut`
-                  : `${course.city} · Par ${course.par18} · ${course.holes} trous${course.latitude != null && course.longitude != null ? ' · GPS' : ''}`}
-              </Text>
-            </TouchableOpacity>
-          ))}
+          {results.map((course) => {
+            const name = course.isCustom ? `Utiliser « ${course.name} »` : course.name;
+            const meta = course.isCustom
+              ? `Parcours non trouvé · Par ${course.par18} par défaut`
+              : `${course.city} · Par ${course.par18} · ${course.holes} trous${course.latitude != null && course.longitude != null ? ' · GPS' : ''}`;
+
+            return (
+              <Pressable
+                key={course.id}
+                style={({ pressed }) => [styles.result, course.isCustom && styles.customResult, pressed && styles.pressed]}
+                onPress={() => handleSelect(course)}
+                accessibilityRole="button"
+                accessibilityLabel={`${name}, ${meta}`}
+              >
+                <Text style={styles.resultName}>{name}</Text>
+                <Text style={styles.resultMeta}>{meta}</Text>
+              </Pressable>
+            );
+          })}
         </View>
       )}
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  wrapper: { position: 'relative', zIndex: 10 },
-  input: {
-    backgroundColor: Colors.backgroundSoft,
-    borderWidth: 1,
-    borderColor: Colors.borderStrong,
-    borderRadius: Radius.lg,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: 15,
-    color: Colors.text,
-    fontSize: 16,
-  },
-  dropdown: {
-    position: 'absolute',
-    top: '100%',
-    left: 0,
-    right: 0,
-    backgroundColor: Colors.surfaceElevated,
-    borderWidth: 1,
-    borderColor: Colors.borderStrong,
-    borderRadius: Radius.lg,
-    marginTop: Spacing.xs,
-    overflow: 'hidden',
-    zIndex: 100,
-    elevation: 8,
-    shadowColor: Colors.black,
-    shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.22,
-    shadowRadius: 20,
-  },
-  result: {
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
-  },
-  customResult: {
-    backgroundColor: Colors.surface,
-  },
-  loadingState: {
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
-  },
-  loadingLabel: {
-    ...Typography.caption,
-    color: Colors.textMuted,
-  },
-  resultName: { ...Typography.bodyStrong, color: Colors.text },
-  resultMeta: { ...Typography.caption, color: Colors.textMuted, marginTop: 4 },
-});
+const createStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+    wrapper: { position: 'relative', zIndex: 10 },
+    input: {
+      ...Typography.body,
+      fontSize: 16,
+      minHeight: 48,
+      backgroundColor: colors.surface,
+      borderWidth: 1.5,
+      borderColor: colors.line,
+      borderRadius: Radius.md,
+      paddingHorizontal: Spacing.md,
+      paddingVertical: 12,
+      color: colors.ink,
+    },
+    inputFocused: {
+      borderColor: colors.ink,
+    },
+    dropdown: {
+      position: 'absolute',
+      top: '100%',
+      left: 0,
+      right: 0,
+      backgroundColor: colors.surface,
+      borderWidth: 1,
+      borderColor: colors.lineStrong,
+      borderRadius: Radius.lg,
+      marginTop: Spacing.xs,
+      overflow: 'hidden',
+      zIndex: 100,
+      shadowColor: '#000000',
+      ...Shadows.elevated,
+    },
+    result: {
+      minHeight: 56,
+      justifyContent: 'center',
+      paddingHorizontal: Spacing.md,
+      paddingVertical: Spacing.sm,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.line,
+    },
+    customResult: {
+      backgroundColor: colors.sunk,
+    },
+    pressed: {
+      opacity: 0.7,
+    },
+    loadingState: {
+      paddingHorizontal: Spacing.md,
+      paddingVertical: Spacing.md,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.line,
+    },
+    loadingLabel: {
+      ...Typography.caption,
+      color: colors.ink2,
+    },
+    resultName: { ...Typography.bodyStrong, color: colors.ink },
+    resultMeta: { ...Typography.caption, color: colors.ink2, marginTop: 2 },
+  });
