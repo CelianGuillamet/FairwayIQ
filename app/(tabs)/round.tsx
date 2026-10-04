@@ -5,17 +5,19 @@ import {
   LayoutAnimation,
   PanResponder,
   Platform,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
-  TouchableOpacity,
   UIManager,
   View,
 } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import * as Location from 'expo-location';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Colors, Radius, Spacing, Typography } from '../../constants';
+import { Numerals, Radius, Spacing, Typography } from '../../constants';
+import type { ThemeColors } from '../../constants';
+import { useTheme, useThemedStyles } from '../../lib/theme';
 import { useAuthStore } from '../../stores/auth';
 import { useRoundsStore } from '../../stores/rounds';
 import {
@@ -26,12 +28,14 @@ import {
 } from '../../lib/claude';
 import { DIAGNOSTIC_SAVE_FAILED_MESSAGE, persistDiagnostic } from '../../lib/diagnostics';
 import { CourseSearch } from '../../components/ui/CourseSearch';
-import { DecorativeBackground } from '../../components/ui/DecorativeBackground';
 import { HoleNavigation } from '../../components/rounds/HoleNavigation';
 import { HoleOverviewCard } from '../../components/rounds/HoleOverviewCard';
-import { HoleScoringPanel } from '../../components/rounds/HoleScoringPanel';
+import { HoleActionBar, HoleScoringPanel } from '../../components/rounds/HoleScoringPanel';
 import { AppButton } from '../../components/ui/AppButton';
 import { AppInput } from '../../components/ui/AppInput';
+import { ChoiceTile } from '../../components/ui/ChoiceTile';
+import { Icon } from '../../components/ui/Icon';
+import { SegmentedControl } from '../../components/ui/SegmentedControl';
 import {
   getCourseById,
   getCourseParSequence,
@@ -46,6 +50,7 @@ import {
 import { buildHoleViewData } from '../../lib/hole-view';
 import { getGreenDistances } from '../../lib/gps';
 import { clearRoundDraft, loadRoundDraft, saveRoundDraft } from '../../lib/round-draft';
+import { describeToPar, formatHolesPlayed, formatScoreToPar } from '../../lib/score-labels';
 import {
   buildSaveRoundArgs,
   createClientRequestId,
@@ -74,10 +79,6 @@ function getDefaultPar(holes: 9 | 18) {
   return holes === 18 ? 72 : 36;
 }
 
-function formatScoreToPar(value: number) {
-  return value === 0 ? 'E' : `${value > 0 ? '+' : ''}${value}`;
-}
-
 function animateLayout() {
   LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
 }
@@ -86,6 +87,8 @@ export default function RoundScreen() {
   const { user, profile } = useAuthStore();
   const { upsertRound, rounds } = useRoundsStore();
   const insets = useSafeAreaInsets();
+  const { colors } = useTheme();
+  const styles = useThemedStyles(createStyles);
 
   const [courseName, setCourseName]         = useState('');
   const [selectedCourse, setSelectedCourse] = useState<GolfCourse | null>(null);
@@ -106,6 +109,7 @@ export default function RoundScreen() {
   const courseRequestRef  = useRef(0);
   const savingRef         = useRef(false);
   const autoAdvanceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const holeScrollRef     = useRef<ScrollView>(null);
 
   const progress   = useMemo(() => getScorecardProgress(scorecard), [scorecard]);
   const aggregate  = useMemo(() => aggregateScorecard(scorecard), [scorecard]);
@@ -169,6 +173,10 @@ export default function RoundScreen() {
   useEffect(() => {
     if (currentHoleNumber > holes) setCurrentHoleNumber(holes);
   }, [currentHoleNumber, holes]);
+
+  useEffect(() => {
+    holeScrollRef.current?.scrollTo({ y: 0, animated: false });
+  }, [currentHoleNumber]);
 
   useEffect(() => {
     setTeeKey((current) => getValidTeeKey(selectedCourse, current));
@@ -503,7 +511,6 @@ export default function RoundScreen() {
   if (!draftHydrated) {
     return (
       <View style={styles.container}>
-        <DecorativeBackground />
         <View style={styles.loadingView}>
           <Text style={styles.loadingText}>Chargement...</Text>
         </View>
@@ -515,74 +522,73 @@ export default function RoundScreen() {
   if (setupExpanded) {
     return (
       <View style={styles.container}>
-        <DecorativeBackground />
-        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
           <ScrollView
-            contentContainerStyle={[styles.setupContent, { paddingTop: insets.top + 20, paddingBottom: 96 + insets.bottom }]}
+            contentContainerStyle={[styles.setupContent, { paddingTop: insets.top + Spacing.lg }]}
             keyboardShouldPersistTaps="handled"
           >
-            {/* Header */}
-            <Text style={styles.setupEyebrow}>Round scoring</Text>
-            <Text style={styles.setupTitle}>
+            <Text style={styles.setupTitle} accessibilityRole="header">
               {setupLocked ? courseName.trim() || 'Round en cours' : 'Prépare ta partie'}
             </Text>
 
             {analyzing && (
-              <View style={styles.draftBanner}>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.draftBannerTitle}>Round enregistré</Text>
-                  <Text style={styles.draftBannerText}>Analyse du round en cours…</Text>
+              <View style={[styles.banner, styles.bannerGood]} accessibilityLiveRegion="polite">
+                <Icon name="check" size={20} color={colors.green} />
+                <View style={styles.bannerBody}>
+                  <Text style={styles.bannerTitle}>Round enregistré</Text>
+                  <Text style={styles.bannerText}>Analyse du round en cours…</Text>
                 </View>
               </View>
             )}
 
             {setupLocked && (
-              <TouchableOpacity
+              <Pressable
                 style={styles.resumeBtn}
                 onPress={() => { cancelAutoAdvance(); animateLayout(); setSetupExpanded(false); }}
+                accessibilityRole="button"
+                accessibilityLabel="Reprendre le round"
               >
-                <Text style={styles.resumeBtnLabel}>← Reprendre le round</Text>
-              </TouchableOpacity>
+                <Icon name="chevron-left" size={20} color={colors.ink2} />
+                <Text style={styles.resumeBtnLabel}>Reprendre le round</Text>
+              </Pressable>
             )}
 
-            {/* Draft banner */}
             {restoredDraftAt && (
-              <View style={styles.draftBanner}>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.draftBannerTitle}>Brouillon restauré</Text>
-                  <Text style={styles.draftBannerText}>
+              <View style={styles.banner}>
+                <View style={styles.bannerBody}>
+                  <Text style={styles.bannerTitle}>Brouillon restauré</Text>
+                  <Text style={styles.bannerText}>
                     {restoredDraftLabel ? `Repris le ${restoredDraftLabel}` : 'Repris automatiquement'}
                   </Text>
                 </View>
-                <TouchableOpacity onPress={handleDiscardDraft}>
-                  <Text style={styles.draftBannerClear}>Effacer</Text>
-                </TouchableOpacity>
+                <Pressable
+                  style={styles.bannerAction}
+                  onPress={handleDiscardDraft}
+                  accessibilityRole="button"
+                  accessibilityLabel="Effacer le brouillon"
+                >
+                  <Text style={styles.bannerActionLabel}>Effacer</Text>
+                </Pressable>
               </View>
             )}
 
-            {/* Holes toggle */}
             {!setupLocked && (
               <View style={styles.setupSection}>
                 <Text style={styles.setupLabel}>Format</Text>
-                <View style={styles.holesRow}>
-                  {([9, 18] as const).map((value) => (
-                    <TouchableOpacity
-                      key={value}
-                      style={[styles.holesBtn, holes === value && styles.holesBtnActive]}
-                      onPress={() => handleHolesToggle(value)}
-                    >
-                      <Text style={[styles.holesBtnLabel, holes === value && styles.holesBtnLabelActive]}>
-                        {value} trous
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
+                <SegmentedControl
+                  accessibilityLabel="Nombre de trous"
+                  options={[
+                    { value: '9', label: '9 trous' },
+                    { value: '18', label: '18 trous' },
+                  ]}
+                  value={String(holes)}
+                  onChange={(value) => handleHolesToggle(value === '9' ? 9 : 18)}
+                />
               </View>
             )}
 
-            {/* Course search */}
             {!setupLocked && (
-              <View style={styles.setupSection}>
+              <View style={[styles.setupSection, styles.courseSection]}>
                 <Text style={styles.setupLabel}>Parcours</Text>
                 <CourseSearch
                   value={courseName}
@@ -599,16 +605,28 @@ export default function RoundScreen() {
               </View>
             )}
 
-            {/* Locked pills */}
-            {setupLocked && (
-              <View style={styles.lockedRow}>
-                <LockedPill label="Parcours" value={courseName.trim() || 'Libre'} />
-                <LockedPill label="Format"   value={`${holes} trous`} />
-                <LockedPill label="Départ"   value={teeLabel} />
+            {!setupLocked && selectedCourse && teeOptions.length > 1 && (
+              <View style={styles.setupSection} accessibilityRole="radiogroup" accessibilityLabel="Départ">
+                <Text style={styles.setupLabel}>Départ</Text>
+                {teeOptions.map((tee) => (
+                  <ChoiceTile
+                    key={tee.key}
+                    label={tee.label}
+                    selected={tee.key === teeKey}
+                    onPress={() => { cancelAutoAdvance(); setTeeKey(tee.key); }}
+                  />
+                ))}
               </View>
             )}
 
-            {/* Notes */}
+            {setupLocked && (
+              <View style={styles.lockedCard}>
+                <LockedRow label="Parcours" value={courseName.trim() || 'Libre'} />
+                <LockedRow label="Format" value={`${holes} trous`} />
+                <LockedRow label="Départ" value={teeLabel} last />
+              </View>
+            )}
+
             <View style={styles.setupSection}>
               <AppInput
                 label="Notes"
@@ -620,19 +638,25 @@ export default function RoundScreen() {
               />
             </View>
 
-            {/* CTA */}
             <AppButton
               label={progress.completedHoles > 0
                 ? `Reprendre · trou ${currentHoleNumber}`
-                : 'Commencer le round →'}
+                : 'Commencer le round'}
+              icon="chevron-right"
+              iconPosition="right"
               onPress={() => { cancelAutoAdvance(); animateLayout(); setSetupExpanded(false); }}
               style={styles.startBtn}
             />
 
             {hasMeaningfulDraft && !setupLocked && (
-              <TouchableOpacity style={styles.discardLink} onPress={handleDiscardDraft}>
+              <Pressable
+                style={styles.discardLink}
+                onPress={handleDiscardDraft}
+                accessibilityRole="button"
+                accessibilityLabel="Réinitialiser la saisie"
+              >
                 <Text style={styles.discardLinkLabel}>Réinitialiser</Text>
-              </TouchableOpacity>
+              </Pressable>
             )}
           </ScrollView>
         </KeyboardAvoidingView>
@@ -641,64 +665,53 @@ export default function RoundScreen() {
   }
 
   // ── Scoring mode ──────────────────────────────────────────────────────────
+  const toParValue = progress.completedHoles > 0 ? formatScoreToPar(progress.liveScoreToPar) : '–';
+  const toParLabel = progress.completedHoles > 0
+    ? `${describeToPar(progress.liveScoreToPar)} ${formatHolesPlayed(progress.completedHoles)}`
+    : 'Aucun trou joué';
+
   return (
     <View style={styles.container}>
-      <DecorativeBackground />
-
-      <View style={styles.scoringLayout}>
-        {/* Status bar */}
-        <View style={[styles.statusBar, { paddingTop: insets.top + 6 }]}>
-          <View style={styles.statusLeft}>
-            <Text style={styles.statusCourse} numberOfLines={1}>
-              {courseName.trim() || 'Fast score'}
-            </Text>
-            <Text style={styles.statusMeta}>{holes} trous · départ {teeLabel}</Text>
-          </View>
-          <View style={styles.statusRight}>
-            {progress.completedHoles > 0 && (
-              <Text style={[
-                styles.statusScore,
-                progress.liveScoreToPar < 0 ? styles.statusScoreUnder :
-                progress.liveScoreToPar > 0 ? styles.statusScoreOver  :
-                styles.statusScoreEven,
-              ]}>
-                {formatScoreToPar(progress.liveScoreToPar)}
-              </Text>
-            )}
-            <Text style={styles.statusHoles}>
-              {progress.completedHoles}/{progress.totalHoles}
-            </Text>
-            <TouchableOpacity
-              style={styles.gearBtn}
-              onPress={() => { cancelAutoAdvance(); animateLayout(); setSetupExpanded(true); }}
-              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-            >
-              <Text style={styles.gearLabel}>⚙</Text>
-            </TouchableOpacity>
-          </View>
+      <View style={[styles.header, { paddingTop: insets.top + Spacing.sm }]}>
+        <View style={styles.headerLeft}>
+          <Text style={styles.headerCourse} numberOfLines={1} accessibilityRole="header">
+            {courseName.trim() || 'Score rapide'}
+          </Text>
+          <Text style={styles.headerMeta} numberOfLines={1}>{holes} trous · départ {teeLabel}</Text>
         </View>
+        <View style={styles.headerRight}>
+          <View style={styles.toPar} accessible accessibilityLabel={toParLabel}>
+            <Text style={styles.toParValue}>{toParValue}</Text>
+            <Text style={styles.toParCaption}>{formatHolesPlayed(progress.completedHoles)}</Text>
+          </View>
+          <Pressable
+            style={styles.gearBtn}
+            onPress={() => { cancelAutoAdvance(); animateLayout(); setSetupExpanded(true); }}
+            accessibilityRole="button"
+            accessibilityLabel="Réglages du round"
+          >
+            <Icon name="settings" size={22} color={colors.ink2} />
+          </Pressable>
+        </View>
+      </View>
 
-        {/* Hole progress strip */}
-        <HoleNavigation
-          currentHole={currentHoleNumber}
-          scorecard={scorecard}
-          onSelectHole={goToHole}
-          onPreviousHole={() => goToHole(currentHoleNumber - 1)}
-          onNextHole={() => goToHole(currentHoleNumber + 1)}
-        />
+      <HoleNavigation
+        currentHole={currentHoleNumber}
+        scorecard={scorecard}
+        onSelectHole={goToHole}
+      />
 
-        {/* Hole info — flex:1, scrollable on tiny screens */}
-        {currentHole && currentHoleView ? (
-          <>
-            <View style={styles.holeArea} {...swipeResponder.panHandlers}>
-              <ScrollView
-                style={{ flex: 1 }}
-                contentContainerStyle={styles.holeAreaContent}
-                showsVerticalScrollIndicator={false}
-                bounces={false}
-              >
+      {currentHole && currentHoleView ? (
+        <>
+          <View style={styles.holeArea} {...swipeResponder.panHandlers}>
+            <ScrollView
+              ref={holeScrollRef}
+              style={styles.flex}
+              contentContainerStyle={styles.holeAreaContent}
+              showsVerticalScrollIndicator={false}
+              bounces={false}
+            >
               <HoleOverviewCard
-                courseName={courseName.trim()}
                 hole={currentHole}
                 holeView={currentHoleView}
                 teeKey={teeKey}
@@ -707,253 +720,248 @@ export default function RoundScreen() {
                 liveGreenDistances={liveGreenDistances}
                 gpsHintLabel={gpsHintLabel}
               />
-              </ScrollView>
-            </View>
-
-            {/* Score panel pinned above tab bar (tab bar: bottom 12 + height 72 + insets.bottom) */}
-            <View style={{ paddingBottom: 96 + insets.bottom }}>
               <HoleScoringPanel
                 hole={currentHole}
-                canGoNext={canGoNext}
-                canSave={canSave}
-                loading={loading}
                 onApplyScore={handleApplyScore}
                 onChangeHole={handleChangeCurrentHole}
                 onResetHole={handleResetCurrentHole}
-                onNextHole={() => goToHole(currentHoleNumber + 1)}
-                onSave={() => void handleSave()}
               />
-            </View>
-          </>
-        ) : null}
-      </View>
+            </ScrollView>
+          </View>
+
+          <HoleActionBar
+            hole={currentHole}
+            canGoNext={canGoNext}
+            canSave={canSave}
+            loading={loading}
+            remainingHoles={progress.remainingHoles}
+            onNextHole={() => goToHole(currentHoleNumber + 1)}
+            onSave={() => void handleSave()}
+          />
+        </>
+      ) : null}
     </View>
   );
 }
 
 // ── Local helpers ─────────────────────────────────────────────────────────
 
-function LockedPill({ label, value }: { label: string; value: string }) {
+function LockedRow({ label, value, last = false }: { label: string; value: string; last?: boolean }) {
+  const styles = useThemedStyles(createStyles);
+
   return (
-    <View style={styles.lockedPill}>
-      <Text style={styles.lockedPillLabel}>{label}</Text>
-      <Text style={styles.lockedPillValue}>{value}</Text>
+    <View style={[styles.lockedRow, !last && styles.lockedRowDivider]} accessible accessibilityLabel={`${label} : ${value}`}>
+      <Text style={styles.lockedLabel}>{label}</Text>
+      <Text style={styles.lockedValue} numberOfLines={1}>{value}</Text>
     </View>
   );
 }
 
 // ── Styles ────────────────────────────────────────────────────────────────
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.background,
-  },
+const createStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: colors.bg,
+    },
+    flex: {
+      flex: 1,
+    },
 
-  // Loading
-  loadingView: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  loadingText: {
-    ...Typography.body,
-    color: Colors.textDim,
-  },
+    loadingView: {
+      flex: 1,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    loadingText: {
+      ...Typography.body,
+      color: colors.ink3,
+    },
 
-  // ── Setup ──
-  setupContent: {
-    paddingHorizontal: Spacing.md,
-  },
-  setupEyebrow: {
-    ...Typography.caption,
-    color: Colors.textDim,
-    textTransform: 'uppercase',
-    letterSpacing: 1.2,
-  },
-  setupTitle: {
-    ...Typography.title,
-    color: Colors.text,
-    marginTop: 6,
-    marginBottom: Spacing.lg,
-  },
-  resumeBtn: {
-    alignSelf: 'flex-start',
-    marginBottom: Spacing.lg,
-  },
-  resumeBtnLabel: {
-    ...Typography.bodyStrong,
-    color: Colors.accentBlue,
-  },
-  draftBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.md,
-    borderRadius: Radius.lg,
-    borderWidth: 1,
-    borderColor: Colors.borderStrong,
-    backgroundColor: Colors.surface,
-    padding: Spacing.md,
-    marginBottom: Spacing.lg,
-  },
-  draftBannerTitle: {
-    ...Typography.bodyStrong,
-    color: Colors.text,
-  },
-  draftBannerText: {
-    ...Typography.body,
-    color: Colors.textMuted,
-    marginTop: 2,
-  },
-  draftBannerClear: {
-    ...Typography.label,
-    color: Colors.error,
-  },
-  setupSection: {
-    marginBottom: Spacing.lg,
-  },
-  setupLabel: {
-    ...Typography.label,
-    color: Colors.textMuted,
-    textTransform: 'uppercase',
-    letterSpacing: 0.8,
-    marginBottom: Spacing.xs,
-  },
-  setupHint: {
-    ...Typography.caption,
-    color: Colors.textDim,
-    marginTop: 6,
-  },
-  holesRow: {
-    flexDirection: 'row',
-    gap: Spacing.sm,
-  },
-  holesBtn: {
-    flex: 1,
-    height: 52,
-    borderRadius: Radius.lg,
-    borderWidth: 1,
-    borderColor: Colors.borderStrong,
-    backgroundColor: Colors.surface,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  holesBtnActive: {
-    backgroundColor: Colors.text,
-    borderColor: Colors.text,
-  },
-  holesBtnLabel: {
-    ...Typography.bodyStrong,
-    color: Colors.text,
-  },
-  holesBtnLabelActive: {
-    color: Colors.background,
-  },
-  lockedRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: Spacing.sm,
-    marginBottom: Spacing.lg,
-  },
-  lockedPill: {
-    borderRadius: Radius.lg,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surface,
-    padding: Spacing.md,
-    minWidth: '30%',
-  },
-  lockedPillLabel: {
-    ...Typography.caption,
-    color: Colors.textDim,
-    textTransform: 'uppercase',
-    letterSpacing: 0.6,
-  },
-  lockedPillValue: {
-    ...Typography.bodyStrong,
-    color: Colors.text,
-    marginTop: 4,
-  },
-  notesInput: {
-    minHeight: 80,
-    textAlignVertical: 'top',
-  },
-  startBtn: {
-    marginTop: Spacing.sm,
-  },
-  discardLink: {
-    alignItems: 'center',
-    marginTop: Spacing.lg,
-    paddingVertical: Spacing.sm,
-  },
-  discardLinkLabel: {
-    ...Typography.label,
-    color: Colors.textDim,
-  },
+    setupContent: {
+      paddingHorizontal: Spacing.lg,
+      paddingBottom: Spacing.xl,
+    },
+    setupTitle: {
+      ...Typography.title,
+      color: colors.ink,
+      marginBottom: Spacing.lg,
+    },
+    resumeBtn: {
+      alignSelf: 'flex-start',
+      minHeight: 44,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 2,
+      marginLeft: -4,
+      marginBottom: Spacing.sm,
+    },
+    resumeBtnLabel: {
+      ...Typography.bodyStrong,
+      color: colors.ink2,
+    },
+    banner: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Spacing.sm,
+      borderRadius: Radius.lg,
+      borderWidth: 1,
+      borderColor: colors.line,
+      backgroundColor: colors.surface,
+      paddingVertical: Spacing.sm,
+      paddingLeft: Spacing.md,
+      paddingRight: Spacing.xs,
+      marginBottom: Spacing.lg,
+    },
+    bannerGood: {
+      borderColor: colors.greenBg,
+      backgroundColor: colors.greenBg,
+      paddingRight: Spacing.md,
+    },
+    bannerBody: {
+      flex: 1,
+    },
+    bannerTitle: {
+      ...Typography.bodyStrong,
+      color: colors.ink,
+    },
+    bannerText: {
+      ...Typography.body,
+      color: colors.ink2,
+      marginTop: 2,
+    },
+    bannerAction: {
+      minHeight: 44,
+      minWidth: 44,
+      paddingHorizontal: Spacing.sm,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    bannerActionLabel: {
+      ...Typography.bodyStrong,
+      color: colors.error,
+    },
+    setupSection: {
+      marginBottom: Spacing.lg,
+    },
+    courseSection: {
+      zIndex: 10,
+    },
+    setupLabel: {
+      ...Typography.label,
+      color: colors.ink2,
+      marginBottom: Spacing.xs,
+    },
+    setupHint: {
+      ...Typography.caption,
+      color: colors.ink3,
+      marginTop: 6,
+    },
+    lockedCard: {
+      borderRadius: Radius.lg,
+      borderWidth: 1,
+      borderColor: colors.line,
+      backgroundColor: colors.surface,
+      paddingHorizontal: Spacing.md,
+      marginBottom: Spacing.lg,
+    },
+    lockedRow: {
+      minHeight: 48,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: Spacing.md,
+    },
+    lockedRowDivider: {
+      borderBottomWidth: 1,
+      borderBottomColor: colors.line,
+    },
+    lockedLabel: {
+      ...Typography.body,
+      color: colors.ink3,
+    },
+    lockedValue: {
+      ...Typography.bodyStrong,
+      flex: 1,
+      textAlign: 'right',
+      color: colors.ink,
+    },
+    notesInput: {
+      minHeight: 80,
+      textAlignVertical: 'top',
+    },
+    startBtn: {
+      marginTop: Spacing.sm,
+    },
+    discardLink: {
+      alignSelf: 'center',
+      minHeight: 44,
+      justifyContent: 'center',
+      marginTop: Spacing.md,
+      paddingHorizontal: Spacing.md,
+    },
+    discardLinkLabel: {
+      ...Typography.bodyStrong,
+      color: colors.ink2,
+    },
 
-  // ── Scoring ──
-  scoringLayout: {
-    flex: 1,
-  },
-  statusBar: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    justifyContent: 'space-between',
-    paddingHorizontal: Spacing.md,
-    paddingBottom: Spacing.sm,
-    backgroundColor: Colors.background,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
-  },
-  statusLeft: {
-    flex: 1,
-    marginRight: Spacing.md,
-  },
-  statusCourse: {
-    ...Typography.heading,
-    color: Colors.text,
-  },
-  statusMeta: {
-    ...Typography.caption,
-    color: Colors.textDim,
-    marginTop: 2,
-  },
-  statusRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.sm,
-  },
-  statusScore: {
-    ...Typography.titleMd,
-    lineHeight: 28,
-  },
-  statusScoreUnder: { color: Colors.accentBlue },
-  statusScoreOver:  { color: Colors.error },
-  statusScoreEven:  { color: Colors.text },
-  statusHoles: {
-    ...Typography.bodyStrong,
-    color: Colors.textMuted,
-  },
-  gearBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: Radius.full,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surface,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  gearLabel: {
-    fontSize: 15,
-    lineHeight: 17,
-  },
-  holeArea: {
-    flex: 1,
-    overflow: 'hidden',
-  },
-  holeAreaContent: {
-    flexGrow: 1,
-    justifyContent: 'center',
-  },
-});
+    header: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      justifyContent: 'space-between',
+      gap: Spacing.sm,
+      paddingLeft: Spacing.md,
+      paddingRight: Spacing.xs,
+      paddingBottom: Spacing.xs,
+    },
+    headerLeft: {
+      flex: 1,
+      paddingTop: Spacing.xxs,
+    },
+    headerCourse: {
+      ...Typography.titleMd,
+      color: colors.ink,
+    },
+    headerMeta: {
+      ...Typography.body,
+      fontSize: 13,
+      lineHeight: 18,
+      color: colors.ink2,
+      marginTop: 2,
+    },
+    headerRight: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+    },
+    toPar: {
+      alignItems: 'flex-end',
+      paddingTop: Spacing.xxs,
+      paddingRight: Spacing.xs,
+    },
+    toParValue: {
+      ...Typography.title,
+      ...Numerals,
+      color: colors.ink,
+    },
+    toParCaption: {
+      ...Typography.caption,
+      color: colors.ink3,
+    },
+    gearBtn: {
+      width: 44,
+      height: 44,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    holeArea: {
+      flex: 1,
+    },
+    holeAreaContent: {
+      flexGrow: 1,
+      paddingHorizontal: Spacing.md,
+      paddingTop: Spacing.sm,
+      paddingBottom: Spacing.lg,
+      gap: Spacing.lg,
+    },
+  });
