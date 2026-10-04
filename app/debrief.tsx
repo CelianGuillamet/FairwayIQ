@@ -4,10 +4,11 @@ import {
   FlatList,
   KeyboardAvoidingView,
   Platform,
+  Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
-  TouchableOpacity,
   View,
 } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
@@ -19,11 +20,14 @@ import { AiCoachLimitError, AiCoachPremiumRequiredError, postRoundDebrief } from
 import { useAuthStore } from '../stores/auth';
 import { useRoundsStore } from '../stores/rounds';
 import { useSubscriptionStore } from '../stores/subscription';
-import { Colors } from '../constants';
+import { Radius, Spacing, Typography } from '../constants';
+import type { ThemeColors } from '../constants';
+import { useTheme, useThemedStyles } from '../lib/theme';
 import type { Profile, Round } from '../types';
-import { DecorativeBackground } from '../components/ui/DecorativeBackground';
-import { AppCard } from '../components/ui/AppCard';
 import { AppButton } from '../components/ui/AppButton';
+import { Icon } from '../components/ui/Icon';
+import { NoticeRow } from '../components/rounds-detail/NoticeRow';
+import { useKeyboardVisible } from '../components/rounds-detail/useKeyboardVisible';
 
 type Message = {
   id: string;
@@ -64,6 +68,10 @@ export default function DebriefScreen() {
   const sessionInitRef = useRef<{ roundId: string; promise: Promise<string | null> } | null>(null);
   const flatListRef = useRef<FlatList>(null);
   const insets = useSafeAreaInsets();
+  const { colors } = useTheme();
+  const styles = useThemedStyles(createStyles);
+  const keyboardVisible = useKeyboardVisible();
+  const [inputFocused, setInputFocused] = useState(false);
   const resolvedRoundId = round?.id;
   const userId = user?.id;
   const profileId = profile?.id;
@@ -255,8 +263,7 @@ export default function DebriefScreen() {
 
   if (!round || !profile) {
     return (
-      <View style={styles.loadingState}>
-        <DecorativeBackground />
+      <View style={styles.centered}>
         <Text style={styles.errorText}>Round introuvable.</Text>
       </View>
     );
@@ -265,44 +272,50 @@ export default function DebriefScreen() {
   if (!isPremium) {
     return (
       <View style={styles.container}>
-        <DecorativeBackground />
         <DebriefHeader round={round} topInset={insets.top} />
 
         {subscriptionLoading ? (
-          <View style={styles.loadingState}>
-            <ActivityIndicator size="small" color={Colors.text} />
+          <View style={styles.centered}>
+            <ActivityIndicator size="small" color={colors.ink} />
           </View>
         ) : (
-          <View style={styles.upsell}>
-            <AppCard accent="highlight">
-              <Text style={styles.summaryEyebrow}>Premium</Text>
-              <Text style={styles.summaryTitle}>Le débrief conversationnel est réservé aux abonnés Premium</Text>
-              <Text style={styles.summaryText}>
+          <>
+            <ScrollView contentContainerStyle={styles.upsell}>
+              <View style={styles.lockBadge}>
+                <Icon name="lock" size={22} color={colors.ink} />
+              </View>
+              <Text style={styles.upsellTitle} accessibilityRole="header">
+                Le débrief conversationnel est réservé aux abonnés Premium
+              </Text>
+              <Text style={styles.upsellText}>
                 Discute avec le coach IA après ton round pour isoler les coups qui t’ont coûté des points et savoir sur quoi travailler en priorité.
               </Text>
-              <Text style={styles.summaryText}>
-                Le diagnostic IA de ton round reste disponible gratuitement.
-              </Text>
-            </AppCard>
-            <AppButton
-              label="Découvrir Premium"
-              variant="accent"
-              onPress={() => router.push('/paywall')}
-              style={styles.upsellAction}
-            />
-          </View>
+              <View style={styles.freeRow}>
+                <View style={styles.freeMarker}>
+                  <Icon name="check" size={13} strokeWidth={2.5} color={colors.green} />
+                </View>
+                <Text style={styles.freeText}>
+                  Le diagnostic IA de ton round reste disponible gratuitement.
+                </Text>
+              </View>
+            </ScrollView>
+
+            <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, Spacing.sm) }]}>
+              <AppButton label="Découvrir Premium" onPress={() => router.push('/paywall')} />
+            </View>
+          </>
         )}
       </View>
     );
   }
+
+  const canSend = input.trim().length > 0 && !loading;
 
   return (
     <KeyboardAvoidingView
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
-      <DecorativeBackground />
-
       <DebriefHeader round={round} topInset={insets.top} />
 
       <FlatList
@@ -310,58 +323,73 @@ export default function DebriefScreen() {
         data={messages}
         keyExtractor={(message) => message.id}
         contentContainerStyle={styles.messageList}
+        keyboardShouldPersistTaps="handled"
         ListHeaderComponent={(
-          <AppCard accent="highlight" style={styles.summaryCard}>
-            <Text style={styles.summaryEyebrow}>Session debrief</Text>
-            <Text style={styles.summaryTitle}>{round.course_name ?? 'Round enregistré'}</Text>
-            <Text style={styles.summaryText}>
+          <View style={styles.intro}>
+            <Text style={styles.introTitle}>{round.course_name ?? 'Round enregistré'}</Text>
+            <Text style={styles.introText}>
               Utilise ce chat pour isoler les vrais points de bascule du round et clarifier la priorité de travail.
             </Text>
-          </AppCard>
+          </View>
         )}
         renderItem={({ item }) => <MessageBubble message={item} />}
         onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: false })}
       />
 
-      {notice ? <Text style={styles.noticeText}>{notice}</Text> : null}
+      {notice ? <NoticeRow message={notice} style={styles.notice} /> : null}
 
       {loading ? (
-        <View style={styles.typingRow}>
-          <ActivityIndicator size="small" color={Colors.text} />
+        <View style={styles.typingRow} accessibilityLiveRegion="polite">
+          <ActivityIndicator size="small" color={colors.ink2} />
           <Text style={styles.typingText}>FairwayIQ répond...</Text>
         </View>
       ) : null}
 
-      <View style={styles.inputRow}>
+      <View style={[styles.inputBar, { paddingBottom: keyboardVisible ? Spacing.sm : Math.max(insets.bottom, Spacing.sm) }]}>
         <TextInput
-          style={styles.input}
+          style={[styles.input, inputFocused && styles.inputFocused]}
           placeholder="Pose ta question..."
-          placeholderTextColor={Colors.textDim}
+          placeholderTextColor={colors.ink3}
+          selectionColor={colors.ink}
+          accessibilityLabel="Message pour le coach IA"
           value={input}
           onChangeText={setInput}
+          onFocus={() => setInputFocused(true)}
+          onBlur={() => setInputFocused(false)}
           multiline
           maxLength={500}
         />
-        <TouchableOpacity
-          style={[styles.sendBtn, (!input.trim() || loading) && styles.sendBtnDisabled]}
+        <Pressable
+          style={({ pressed }) => [styles.sendButton, !canSend && styles.sendButtonDisabled, pressed && canSend && styles.pressed]}
           onPress={() => void sendMessage()}
-          disabled={!input.trim() || loading}
+          disabled={!canSend}
+          accessibilityRole="button"
+          accessibilityLabel="Envoyer"
+          accessibilityState={{ disabled: !canSend, busy: loading }}
         >
-          <Text style={styles.sendBtnText}>↑</Text>
-        </TouchableOpacity>
+          <Icon name="arrow-up" size={22} strokeWidth={2.25} color={canSend ? colors.onRed : colors.ink3} />
+        </Pressable>
       </View>
     </KeyboardAvoidingView>
   );
 }
 
 function DebriefHeader({ round, topInset }: { round: Round; topInset: number }) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(createStyles);
+
   return (
-    <View style={[styles.header, { paddingTop: topInset + 12 }]}>
-      <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-        <Text style={styles.backBtnText}>Retour</Text>
-      </TouchableOpacity>
+    <View style={[styles.header, { paddingTop: topInset + Spacing.xs }]}>
+      <Pressable
+        onPress={() => router.back()}
+        style={styles.backButton}
+        accessibilityRole="button"
+        accessibilityLabel="Retour"
+      >
+        <Icon name="chevron-left" size={24} color={colors.ink} />
+      </Pressable>
       <View style={styles.headerInfo}>
-        <Text style={styles.headerTitle}>Débrief IA</Text>
+        <Text style={styles.headerTitle} accessibilityRole="header">Débrief IA</Text>
         <Text style={styles.headerSub}>{round.total_score} coups · par {round.par}</Text>
       </View>
     </View>
@@ -369,183 +397,229 @@ function DebriefHeader({ round, topInset }: { round: Round; topInset: number }) 
 }
 
 function MessageBubble({ message }: { message: Message }) {
+  const styles = useThemedStyles(createStyles);
   const isUser = message.role === 'user';
 
   return (
-    <View style={[styles.bubble, isUser ? styles.bubbleUser : undefined]}>
+    <View
+      style={[styles.bubble, isUser ? styles.bubbleUser : styles.bubbleAssistant]}
+      accessible
+      accessibilityLabel={`${isUser ? 'Message envoyé' : 'Réponse du coach'} : ${message.content}`}
+    >
       {!isUser ? <Text style={styles.bubbleLabel}>FairwayIQ</Text> : null}
       <Text style={[styles.bubbleText, isUser && styles.bubbleTextUser]}>{message.content}</Text>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.background,
-  },
-  loadingState: {
-    flex: 1,
-    backgroundColor: Colors.background,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 24,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingBottom: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.borderStrong,
-    gap: 12,
-  },
-  backBtn: {
-    paddingVertical: 4,
-    paddingRight: 8,
-  },
-  backBtnText: {
-    color: Colors.text,
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  headerInfo: {
-    flex: 1,
-  },
-  headerTitle: {
-    fontSize: 17,
-    fontWeight: '800',
-    color: Colors.text,
-  },
-  headerSub: {
-    fontSize: 13,
-    color: Colors.textMuted,
-    marginTop: 2,
-  },
-  upsell: {
-    padding: 16,
-    gap: 12,
-  },
-  upsellAction: {
-    marginTop: 4,
-  },
-  messageList: {
-    padding: 16,
-    gap: 12,
-    paddingBottom: 8,
-  },
-  summaryCard: {
-    marginBottom: 14,
-  },
-  summaryEyebrow: {
-    color: Colors.textDim,
-    fontSize: 12,
-    fontWeight: '800',
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-    marginBottom: 6,
-  },
-  summaryTitle: {
-    color: Colors.text,
-    fontSize: 18,
-    fontWeight: '800',
-  },
-  summaryText: {
-    color: Colors.textMuted,
-    fontSize: 14,
-    lineHeight: 21,
-    marginTop: 8,
-  },
-  bubble: {
-    maxWidth: '82%',
-    padding: 14,
-    borderRadius: 18,
-    borderBottomLeftRadius: 4,
-    backgroundColor: Colors.surface,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    alignSelf: 'flex-start',
-  },
-  bubbleUser: {
-    alignSelf: 'flex-end',
-    backgroundColor: Colors.surfaceAccent,
-    borderColor: Colors.accentBlue,
-    borderBottomLeftRadius: 18,
-    borderBottomRightRadius: 4,
-  },
-  bubbleLabel: {
-    fontSize: 11,
-    color: Colors.text,
-    fontWeight: '800',
-    marginBottom: 4,
-  },
-  bubbleText: {
-    fontSize: 15,
-    color: Colors.text,
-    lineHeight: 22,
-  },
-  bubbleTextUser: {
-    color: Colors.text,
-  },
-  noticeText: {
-    color: Colors.warning,
-    fontSize: 13,
-    paddingHorizontal: 20,
-    paddingTop: 8,
-  },
-  typingRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 8,
-    gap: 8,
-  },
-  typingText: {
-    fontSize: 13,
-    color: Colors.textMuted,
-  },
-  inputRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    paddingBottom: Platform.OS === 'ios' ? 28 : 12,
-    borderTopWidth: 1,
-    borderTopColor: Colors.borderStrong,
-    gap: 10,
-  },
-  input: {
-    flex: 1,
-    backgroundColor: Colors.surface,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    borderRadius: 20,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    color: Colors.text,
-    fontSize: 15,
-    maxHeight: 100,
-  },
-  sendBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: Colors.text,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  sendBtnDisabled: {
-    opacity: 0.4,
-  },
-  sendBtnText: {
-    color: Colors.background,
-    fontSize: 22,
-    fontWeight: '800',
-    lineHeight: 24,
-  },
-  errorText: {
-    color: Colors.error,
-    textAlign: 'center',
-    fontSize: 16,
-  },
-});
+const createStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: colors.bg,
+    },
+    centered: {
+      flex: 1,
+      backgroundColor: colors.bg,
+      justifyContent: 'center',
+      alignItems: 'center',
+      paddingHorizontal: Spacing.xl,
+    },
+    errorText: {
+      ...Typography.bodyStrong,
+      color: colors.error,
+      textAlign: 'center',
+    },
+    header: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingLeft: Spacing.xs,
+      paddingRight: Spacing.md,
+      paddingBottom: Spacing.sm,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.line,
+      gap: Spacing.xxs,
+    },
+    backButton: {
+      width: 44,
+      height: 44,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    headerInfo: {
+      flex: 1,
+    },
+    headerTitle: {
+      ...Typography.titleMd,
+      fontSize: 20,
+      lineHeight: 24,
+      color: colors.ink,
+    },
+    headerSub: {
+      ...Typography.body,
+      fontSize: 13,
+      lineHeight: 18,
+      color: colors.ink2,
+    },
+    upsell: {
+      padding: Spacing.lg,
+      paddingTop: Spacing.xl,
+      gap: Spacing.md,
+    },
+    lockBadge: {
+      width: 48,
+      height: 48,
+      borderRadius: 24,
+      backgroundColor: colors.sunk,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    upsellTitle: {
+      ...Typography.title,
+      color: colors.ink,
+    },
+    upsellText: {
+      ...Typography.body,
+      fontSize: 16,
+      lineHeight: 24,
+      color: colors.ink2,
+    },
+    freeRow: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: Spacing.sm,
+      marginTop: Spacing.xs,
+      paddingTop: Spacing.md,
+      borderTopWidth: 1,
+      borderTopColor: colors.line,
+    },
+    freeMarker: {
+      width: 22,
+      height: 22,
+      borderRadius: 11,
+      backgroundColor: colors.greenBg,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    freeText: {
+      ...Typography.body,
+      flex: 1,
+      color: colors.ink,
+    },
+    footer: {
+      paddingHorizontal: Spacing.lg,
+      paddingTop: Spacing.sm,
+      borderTopWidth: 1,
+      borderTopColor: colors.line,
+      backgroundColor: colors.bg,
+    },
+    messageList: {
+      padding: Spacing.md,
+      gap: Spacing.sm,
+      paddingBottom: Spacing.xs,
+    },
+    intro: {
+      marginBottom: Spacing.sm,
+      gap: Spacing.xxs,
+    },
+    introTitle: {
+      ...Typography.titleMd,
+      fontSize: 20,
+      lineHeight: 24,
+      color: colors.ink,
+    },
+    introText: {
+      ...Typography.body,
+      color: colors.ink2,
+    },
+    bubble: {
+      maxWidth: '86%',
+      paddingVertical: Spacing.sm,
+      paddingHorizontal: 14,
+      borderRadius: Radius.xl,
+    },
+    bubbleAssistant: {
+      alignSelf: 'flex-start',
+      backgroundColor: colors.surface,
+      borderWidth: 1,
+      borderColor: colors.line,
+      borderBottomLeftRadius: Radius.sm,
+    },
+    bubbleUser: {
+      alignSelf: 'flex-end',
+      backgroundColor: colors.ink,
+      borderBottomRightRadius: Radius.sm,
+    },
+    bubbleLabel: {
+      ...Typography.caption,
+      color: colors.ink3,
+      marginBottom: 2,
+    },
+    bubbleText: {
+      ...Typography.body,
+      lineHeight: 23,
+      color: colors.ink,
+    },
+    bubbleTextUser: {
+      color: colors.onInk,
+    },
+    notice: {
+      marginHorizontal: Spacing.md,
+      marginTop: Spacing.xs,
+    },
+    typingRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingHorizontal: Spacing.lg,
+      paddingVertical: Spacing.xs,
+      gap: Spacing.xs,
+    },
+    typingText: {
+      ...Typography.body,
+      fontSize: 13,
+      lineHeight: 18,
+      color: colors.ink2,
+    },
+    inputBar: {
+      flexDirection: 'row',
+      alignItems: 'flex-end',
+      paddingHorizontal: Spacing.md,
+      paddingTop: Spacing.sm,
+      borderTopWidth: 1,
+      borderTopColor: colors.line,
+      backgroundColor: colors.bg,
+      gap: Spacing.xs,
+    },
+    input: {
+      ...Typography.body,
+      flex: 1,
+      minHeight: 44,
+      maxHeight: 112,
+      fontSize: 16,
+      color: colors.ink,
+      backgroundColor: colors.surface,
+      borderWidth: 1.5,
+      borderColor: colors.line,
+      borderRadius: 22,
+      paddingHorizontal: Spacing.md,
+      paddingTop: 11,
+      paddingBottom: 11,
+    },
+    inputFocused: {
+      borderColor: colors.ink,
+    },
+    sendButton: {
+      width: 44,
+      height: 44,
+      borderRadius: 22,
+      backgroundColor: colors.red,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    sendButtonDisabled: {
+      backgroundColor: colors.sunk,
+    },
+    pressed: {
+      opacity: 0.8,
+    },
+  });
