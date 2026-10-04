@@ -1,53 +1,93 @@
 import type { ReactNode } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
-import { Colors, Spacing, Typography } from '../../constants';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Spacing, Typography } from '../../constants';
+import type { ThemeColors } from '../../constants';
+import { useTheme, useThemedStyles } from '../../lib/theme';
+import { Icon } from './Icon';
 
 type Props = {
   eyebrow?: string;
   title: string;
   subtitle?: string;
   trailing?: ReactNode;
+  onBack?: () => void;
+  backLabel?: string;
 };
 
-export function PageHeader({ eyebrow, title, subtitle, trailing }: Props) {
+export function PageHeader({ eyebrow, title, subtitle, trailing, onBack, backLabel = 'Retour' }: Props) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(createStyles);
+
   return (
-    <View style={styles.row}>
-      <View style={styles.content}>
-        {eyebrow ? <Text style={styles.eyebrow}>{eyebrow}</Text> : null}
-        <Text style={styles.title}>{title}</Text>
-        {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
+    <View style={styles.wrapper}>
+      {onBack ? (
+        <Pressable
+          style={styles.back}
+          onPress={onBack}
+          accessibilityRole="button"
+          accessibilityLabel={backLabel}
+          hitSlop={Spacing.xs}
+        >
+          <Icon name="chevron-left" size={20} color={colors.ink2} />
+          <Text style={styles.backLabel}>{backLabel}</Text>
+        </Pressable>
+      ) : null}
+      <View style={styles.row}>
+        <View style={styles.content}>
+          {eyebrow ? <Text style={styles.eyebrow}>{eyebrow}</Text> : null}
+          <Text style={styles.title} accessibilityRole="header">
+            {title}
+          </Text>
+          {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
+        </View>
+        {trailing ? <View style={styles.trailing}>{trailing}</View> : null}
       </View>
-      {trailing ? <View style={styles.trailing}>{trailing}</View> : null}
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  row: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    gap: Spacing.sm,
-    marginBottom: Spacing.lg,
-  },
-  content: {
-    flex: 1,
-  },
-  eyebrow: {
-    color: Colors.accentBlue,
-    ...Typography.caption,
-    marginBottom: 6,
-  },
-  title: {
-    color: Colors.text,
-    ...Typography.title,
-  },
-  subtitle: {
-    color: Colors.textMuted,
-    ...Typography.body,
-    marginTop: Spacing.xs,
-  },
-  trailing: {
-    alignItems: 'flex-end',
-  },
-});
+const createStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+    wrapper: {
+      marginBottom: Spacing.lg,
+    },
+    back: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      alignSelf: 'flex-start',
+      minHeight: 44,
+      marginLeft: -4,
+      gap: 2,
+    },
+    backLabel: {
+      ...Typography.label,
+      fontSize: 14,
+      color: colors.ink2,
+    },
+    row: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'flex-start',
+      gap: Spacing.sm,
+    },
+    content: {
+      flex: 1,
+    },
+    eyebrow: {
+      ...Typography.label,
+      color: colors.ink2,
+      marginBottom: 4,
+    },
+    title: {
+      ...Typography.title,
+      color: colors.ink,
+    },
+    subtitle: {
+      ...Typography.body,
+      color: colors.ink2,
+      marginTop: Spacing.xxs,
+    },
+    trailing: {
+      alignItems: 'flex-end',
+    },
+  });

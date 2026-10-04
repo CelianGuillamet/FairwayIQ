@@ -1,9 +1,12 @@
-import { useEffect } from 'react';
+import { useEffect, type ReactNode } from 'react';
 import { AppState } from 'react-native';
 import { Stack, router, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { Colors } from '../constants';
+import { useFonts } from 'expo-font';
+import * as SplashScreen from 'expo-splash-screen';
 import { supabase } from '../lib/supabase';
+import { fontAssets } from '../lib/fonts';
+import { ThemeProvider, useTheme } from '../lib/theme';
 import { useAuthStore } from '../stores/auth';
 import { useSubscriptionStore } from '../stores/subscription';
 import { setupNotificationResponseListener } from '../lib/notifications';
@@ -12,8 +15,33 @@ import { initSentry } from '../lib/sentry';
 import { ErrorBoundary } from '../components/ErrorBoundary';
 
 initSentry();
+void SplashScreen.preventAutoHideAsync().catch(() => {});
 
 export default function RootLayout() {
+  return (
+    <ThemeProvider>
+      <FontGate>
+        <RootNavigator />
+      </FontGate>
+    </ThemeProvider>
+  );
+}
+
+function FontGate({ children }: { children: ReactNode }) {
+  const [fontsLoaded, fontError] = useFonts(fontAssets);
+  const ready = fontsLoaded || fontError !== null;
+
+  useEffect(() => {
+    if (ready) {
+      void SplashScreen.hideAsync().catch(() => {});
+    }
+  }, [ready]);
+
+  return ready ? <>{children}</> : null;
+}
+
+function RootNavigator() {
+  const { colors, scheme } = useTheme();
   const { setSession, fetchProfile, session, loading } = useAuthStore();
   const userId = session?.user?.id ?? null;
   const onAuthCallback = useSegments()[0] === 'auth-callback';
@@ -95,8 +123,8 @@ export default function RootLayout() {
 
   return (
     <ErrorBoundary>
-      <StatusBar style="light" />
-      <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: Colors.background } }}>
+      <StatusBar style={scheme === 'dark' ? 'light' : 'dark'} />
+      <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.bg } }}>
         <Stack.Screen name="index" />
         <Stack.Screen name="(auth)" />
         <Stack.Screen name="(tabs)" />
