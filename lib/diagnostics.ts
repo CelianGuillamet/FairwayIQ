@@ -1,6 +1,7 @@
 import { supabase } from './supabase';
 import type { Diagnostic } from '../types';
 import type { DiagnosticResult } from './claude';
+import { getErrorCode } from './round-save';
 
 type SaveDiagnosticInput = {
   userId: string;
@@ -28,6 +29,28 @@ export async function saveDiagnostic({ userId, roundId, result }: SaveDiagnostic
   }
 
   return data as Diagnostic;
+}
+
+export const DIAGNOSTIC_SAVE_FAILED_MESSAGE =
+  'Le diagnostic n’a pas pu être enregistré. Il reste consultable ici ; relance-le depuis le détail du round pour le retrouver plus tard.';
+
+export type PersistDiagnosticOutcome = 'saved' | 'skipped' | 'failed';
+
+// A rule-based fallback must never replace a stored AI diagnostic, hence 'skipped'.
+export async function persistDiagnostic(
+  input: SaveDiagnosticInput & { isFallback: boolean },
+): Promise<PersistDiagnosticOutcome> {
+  if (input.isFallback) {
+    return 'skipped';
+  }
+
+  try {
+    await saveDiagnostic({ userId: input.userId, roundId: input.roundId, result: input.result });
+    return 'saved';
+  } catch (error) {
+    console.warn('[diagnostic] save failed', getErrorCode(error));
+    return 'failed';
+  }
 }
 
 export async function fetchDiagnosticByRound(roundId: string) {

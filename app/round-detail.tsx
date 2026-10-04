@@ -16,12 +16,18 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { supabase } from '../lib/supabase';
-import { AiCoachLimitError, analyzeRound, buildFallbackDiagnostic } from '../lib/claude';
-import { saveDiagnostic } from '../lib/diagnostics';
+import {
+  AiCoachLimitError,
+  analyzeRound,
+  buildFallbackDiagnostic,
+  type DiagnosticResult,
+} from '../lib/claude';
+import { DIAGNOSTIC_SAVE_FAILED_MESSAGE, persistDiagnostic } from '../lib/diagnostics';
+import { buildUpdateRoundArgs, getRoundSaveErrorMessage, updateRound } from '../lib/round-save';
 import { useRoundsStore } from '../stores/rounds';
 import { useAuthStore } from '../stores/auth';
 import { Colors, Spacing, Typography } from '../constants';
-import type { Round, RoundHole } from '../types';
+import type { Round, RoundDraftHole, RoundHole } from '../types';
 import { HoleScorecard } from '../components/rounds/HoleScorecard';
 import { DecorativeBackground } from '../components/ui/DecorativeBackground';
 import { AppCard } from '../components/ui/AppCard';
@@ -30,9 +36,6 @@ import { AppBadge } from '../components/ui/AppBadge';
 import { PageHeader } from '../components/ui/PageHeader';
 import {
   aggregateScorecard,
-  buildRoundHoleInserts,
-  buildRoundInsertFromScorecard,
-  createSyntheticScorecardFromRound,
   getRoundPerformanceSummary,
   mapStoredHolesToDraft,
   sortRoundHoles,
@@ -50,7 +53,9 @@ export default function RoundDetailScreen() {
   const [round, setRound] = useState<Round | null>(storedRound);
   const [courseName, setCourseName] = useState(storedRound?.course_name ?? '');
   const [notes, setNotes] = useState(storedRound?.notes ?? '');
-  const [scorecard, setScorecard] = useState(() => storedRound ? createSyntheticScorecardFromRound(storedRound) : []);
+  const [scorecard, setScorecard] = useState<RoundDraftHole[]>([]);
+  const [hasStoredHoles, setHasStoredHoles] = useState(false);
+  const [holesDirty, setHolesDirty] = useState(false);
   const [editing, setEditing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -68,8 +73,8 @@ export default function RoundDetailScreen() {
   }, [roundId]);
 
   const aggregate = useMemo(
-    () => scorecard.length > 0 ? aggregateScorecard(scorecard) : null,
-    [scorecard]
+    () => hasStoredHoles && scorecard.length > 0 ? aggregateScorecard(scorecard) : null,
+    [hasStoredHoles, scorecard]
   );
 
   const roundSummary = round ? getRoundPerformanceSummary(round) : null;
@@ -112,75 +117,55 @@ export default function RoundDetailScreen() {
     }
 
     const roundHoles = (roundHolesResponse.data as RoundHole[] | null) ?? [];
-    const nextScorecard =
-      roundHoles.length > 0
-        ? mapStoredHolesToDraft(sortRoundHoles(roundHoles), resolvedRound.holes)
-        : createSyntheticScorecardFromRound(resolvedRound);
+    const storedHoles = !roundHolesResponse.error && roundHoles.length > 0;
 
     setRound(resolvedRound);
     setCourseName(resolvedRound.course_name ?? '');
     setNotes(resolvedRound.notes ?? '');
-    setScorecard(nextScorecard);
+    setHasStoredHoles(storedHoles);
+    setHolesDirty(false);
+    setScorecard(storedHoles ? mapStoredHolesToDraft(sortRoundHoles(roundHoles), resolvedRound.holes) : []);
     upsertRound(resolvedRound);
     setLoading(false);
   }
 
+  const handleChangeHole = (holeNumber: number, patch: Partial<RoundDraftHole>) => {
+    setHolesDirty(true);
+    setScorecard((currentScorecard) => updateDraftHole(currentScorecard, holeNumber, patch));
+  };
+
   const handleSave = async () => {
-    if (!round) {
+    if (!round || saving) {
       return;
     }
 
-    const validationError = validateScorecard(scorecard);
+    const includeHoles = hasStoredHoles && holesDirty;
 
-    if (validationError) {
-      Alert.alert('Erreur', validationError);
-      return;
+    if (includeHoles) {
+      const validationError = validateScorecard(scorecard);
+
+      if (validationError) {
+        Alert.alert('Erreur', validationError);
+        return;
+      }
     }
 
     setSaving(true);
 
     try {
-      const roundPayload = buildRoundInsertFromScorecard({
-        userId: round.user_id,
-        playedAt: round.played_at,
-        courseId: round.course_id,
+      const updatedRound = await updateRound(buildUpdateRoundArgs({
+        roundId: round.id,
         courseName: courseName.trim() || null,
-        courseProvider: round.course_provider,
-        providerCourseId: round.provider_course_id,
-        teeKey: round.tee_key,
-        teeSetId: round.tee_set_id,
-        teeName: round.tee_name,
-        teeColor: round.tee_color,
         notes: notes.trim() || null,
-        scorecard,
-      });
+        scorecard: includeHoles ? scorecard : undefined,
+      }));
 
-      const { data: updatedRound, error: roundError } = await supabase
-        .from('rounds')
-        .update(roundPayload)
-        .eq('id', round.id)
-        .select()
-        .single();
-
-      if (roundError) {
-        throw roundError;
-      }
-
-      const { error: roundHolesError } = await supabase
-        .from('round_holes')
-        .upsert(buildRoundHoleInserts(round.id, round.user_id, scorecard), {
-          onConflict: 'round_id,hole_number',
-        });
-
-      if (roundHolesError) {
-        throw roundHolesError;
-      }
-
-      setRound(updatedRound as Round);
-      upsertRound(updatedRound as Round);
+      setRound(updatedRound);
+      upsertRound(updatedRound);
+      setHolesDirty(false);
       setEditing(false);
-    } catch (currentError: any) {
-      Alert.alert('Erreur', currentError?.message ?? 'Impossible de sauvegarder ce round.');
+    } catch (currentError) {
+      Alert.alert('Erreur', getRoundSaveErrorMessage(currentError, 'update'));
     } finally {
       setSaving(false);
     }
@@ -212,22 +197,31 @@ export default function RoundDetailScreen() {
         : round;
 
       const comparisonRounds = rounds.filter((entry) => entry.id !== round.id).slice(0, 5);
-      const diagnosis = await analyzeRound(effectiveRound, profile, comparisonRounds, scorecard)
-        .catch((analysisError) => {
-          if (analysisError instanceof AiCoachLimitError) {
-            Alert.alert('Limite atteinte', analysisError.message);
-          }
+      const scorecardForAnalysis = hasStoredHoles ? scorecard : undefined;
+      let diagnosis: DiagnosticResult;
+      let isFallback = false;
 
-          return buildFallbackDiagnostic(effectiveRound, profile, comparisonRounds, scorecard);
-        });
+      try {
+        diagnosis = await analyzeRound(effectiveRound, profile, comparisonRounds, scorecardForAnalysis);
+      } catch (analysisError) {
+        if (analysisError instanceof AiCoachLimitError) {
+          Alert.alert('Limite atteinte', analysisError.message);
+        }
 
-      await saveDiagnostic({
+        diagnosis = buildFallbackDiagnostic(effectiveRound, profile, comparisonRounds, scorecardForAnalysis);
+        isFallback = true;
+      }
+
+      const outcome = await persistDiagnostic({
         userId: user.id,
         roundId: round.id,
         result: diagnosis,
-      }).catch((currentError: any) => {
-        console.warn('[diagnostic] save failed', currentError?.message ?? currentError);
+        isFallback,
       });
+
+      if (outcome === 'failed') {
+        Alert.alert('Diagnostic non enregistré', DIAGNOSTIC_SAVE_FAILED_MESSAGE);
+      }
 
       router.push({
         pathname: '/diagnostic',
@@ -410,21 +404,32 @@ export default function RoundDetailScreen() {
           )}
         </AppCard>
 
-        <HoleScorecard
-          title={round.holes === 18 ? 'Aller' : 'Carte de score'}
-          holes={frontNine}
-          editable={editing}
-          onChangeHole={(holeNumber, patch) => setScorecard((currentScorecard) => updateDraftHole(currentScorecard, holeNumber, patch))}
-        />
+        {hasStoredHoles ? (
+          <>
+            <HoleScorecard
+              title={round.holes === 18 ? 'Aller' : 'Carte de score'}
+              holes={frontNine}
+              editable={editing}
+              onChangeHole={handleChangeHole}
+            />
 
-        {round.holes === 18 ? (
-          <HoleScorecard
-            title="Retour"
-            holes={backNine}
-            editable={editing}
-            onChangeHole={(holeNumber, patch) => setScorecard((currentScorecard) => updateDraftHole(currentScorecard, holeNumber, patch))}
-          />
-        ) : null}
+            {round.holes === 18 ? (
+              <HoleScorecard
+                title="Retour"
+                holes={backNine}
+                editable={editing}
+                onChangeHole={handleChangeHole}
+              />
+            ) : null}
+          </>
+        ) : (
+          <AppCard style={styles.infoCard}>
+            <Text style={styles.sectionTitle}>Carte de score</Text>
+            <Text style={styles.readOnlyText}>
+              Le détail trou par trou n’est pas disponible pour ce round.
+            </Text>
+          </AppCard>
+        )}
 
         {!editing ? (
           <AppButton label="Supprimer ce round" variant="secondary" onPress={handleDelete} style={styles.deleteButton} />
