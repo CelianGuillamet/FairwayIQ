@@ -1,16 +1,13 @@
 import { useEffect } from 'react';
 import { AppState } from 'react-native';
-import { Stack } from 'expo-router';
+import { Stack, router, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { router } from 'expo-router';
-import * as Linking from 'expo-linking';
 import { Colors } from '../constants';
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../stores/auth';
 import { useSubscriptionStore } from '../stores/subscription';
 import { setupNotificationResponseListener } from '../lib/notifications';
 import { identifyPurchasesUser, initPurchases, resetPurchasesUser } from '../lib/purchases';
-import { redactUrlForLogging } from '../lib/redact-url';
 import { initSentry } from '../lib/sentry';
 import { ErrorBoundary } from '../components/ErrorBoundary';
 
@@ -19,12 +16,13 @@ initSentry();
 export default function RootLayout() {
   const { setSession, fetchProfile, session, loading } = useAuthStore();
   const userId = session?.user?.id ?? null;
+  const onAuthCallback = useSegments()[0] === 'auth-callback';
 
   useEffect(() => {
-    if (!loading && !session) {
+    if (!loading && !session && !onAuthCallback) {
       router.replace('/(auth)/login');
     }
-  }, [session, loading]);
+  }, [session, loading, onAuthCallback]);
 
   useEffect(() => {
     initPurchases();
@@ -89,57 +87,9 @@ export default function RootLayout() {
       }
     });
 
-    const handleDeepLink = async (url: string) => {
-      try {
-        const parsedUrl = new URL(url);
-        const code = parsedUrl.searchParams.get('code');
-        if (code) {
-          const { data, error } = await supabase.auth.exchangeCodeForSession(code);
-          if (!error && data.session) {
-            setSession(data.session);
-            void fetchProfile();
-            router.replace('/');
-          } else if (error) {
-            console.warn('[auth] exchangeCodeForSession failed', {
-              message: error.message,
-            });
-          }
-          return;
-        }
-
-        const hash = parsedUrl.hash?.startsWith('#') ? parsedUrl.hash.slice(1) : parsedUrl.hash;
-        const hashParams = hash ? new URLSearchParams(hash) : null;
-        const access_token = parsedUrl.searchParams.get('access_token') ?? hashParams?.get('access_token') ?? null;
-        const refresh_token = parsedUrl.searchParams.get('refresh_token') ?? hashParams?.get('refresh_token') ?? null;
-        if (access_token && refresh_token) {
-          const { data, error } = await supabase.auth.setSession({ access_token, refresh_token });
-          if (!error && data.session) {
-            setSession(data.session);
-            void fetchProfile();
-            router.replace('/');
-          } else if (error) {
-            console.warn('[auth] setSession from deep link failed', {
-              message: error.message,
-            });
-          }
-        }
-      } catch (err) {
-        // URL() errors embed the full input in their message
-        const message = err instanceof Error ? err.message : String(err);
-        console.warn('[auth] Invalid deep link URL', {
-          url: redactUrlForLogging(url),
-          message: redactUrlForLogging(message),
-        });
-      }
-    };
-
-    Linking.getInitialURL().then(url => { if (url) handleDeepLink(url); });
-    const linkingSub = Linking.addEventListener('url', ({ url }) => handleDeepLink(url));
-
     return () => {
       subscription.unsubscribe();
       notifSub.remove();
-      linkingSub.remove();
     };
   }, []);
 
