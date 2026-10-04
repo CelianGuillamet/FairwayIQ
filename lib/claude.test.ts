@@ -1,4 +1,11 @@
-import { AiCoachLimitError, AiCoachPremiumRequiredError, postRoundDebrief } from './claude';
+import {
+  AI_COACH_TIMEOUT_MS,
+  AiCoachLimitError,
+  AiCoachPremiumRequiredError,
+  AiCoachTimeoutError,
+  analyzeRound,
+  postRoundDebrief,
+} from './claude';
 import { supabase } from './supabase';
 import type { Profile, Round } from '../types';
 
@@ -92,5 +99,48 @@ describe('invokeAiCoach error handling', () => {
 
     await expect(promise).rejects.not.toBeInstanceOf(AiCoachPremiumRequiredError);
     await expect(promise).rejects.toThrow('forbidden');
+  });
+});
+
+describe('invokeAiCoach timeout', () => {
+  beforeEach(() => {
+    invoke.mockReset();
+    jest.useFakeTimers();
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  it('rejects with AiCoachTimeoutError when the edge function never answers', async () => {
+    invoke.mockImplementation(() => new Promise(() => {}));
+
+    const promise = postRoundDebrief(round, profile, 'Salut', []);
+    const assertion = expect(promise).rejects.toBeInstanceOf(AiCoachTimeoutError);
+
+    await jest.advanceTimersByTimeAsync(AI_COACH_TIMEOUT_MS);
+    await assertion;
+  });
+
+  it('does not report a timeout as a daily limit or premium error', async () => {
+    invoke.mockImplementation(() => new Promise(() => {}));
+
+    const settled = analyzeRound(round, profile, []).catch((error) => error);
+
+    await jest.advanceTimersByTimeAsync(AI_COACH_TIMEOUT_MS);
+    const error = await settled;
+
+    expect(error).toBeInstanceOf(AiCoachTimeoutError);
+    expect(error).not.toBeInstanceOf(AiCoachLimitError);
+    expect(error).not.toBeInstanceOf(AiCoachPremiumRequiredError);
+    expect(error.message).toContain('trop de temps');
+  });
+
+  it('passes an abort signal to the edge function call', async () => {
+    invoke.mockResolvedValue({ data: { reply: 'Bien joue' }, error: null });
+
+    await expect(postRoundDebrief(round, profile, 'Salut', [])).resolves.toBe('Bien joue');
+
+    expect(invoke).toHaveBeenCalledWith('ai-coach', expect.objectContaining({ signal: expect.any(AbortSignal) }));
   });
 });

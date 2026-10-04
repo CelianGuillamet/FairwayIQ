@@ -1,0 +1,2 @@
+[functions.revenuecat-webhook]
+verify_jwt = false

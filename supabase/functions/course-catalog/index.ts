@@ -171,6 +171,10 @@ const GOLFAPI_AUTH_HEADER = Deno.env.get('GOLFAPI_AUTH_HEADER') ?? 'Authorizatio
 const GOLFAPI_AUTH_SCHEME = Deno.env.get('GOLFAPI_AUTH_SCHEME') ?? 'Bearer';
 const COURSE_CATALOG_STALE_HOURS = Number(Deno.env.get('COURSE_CATALOG_STALE_HOURS') ?? '720');
 const OSM_PROVIDER = 'openstreetmap';
+const OSM_FRANCE_AREA = 'area["ISO3166-1"="FR"][admin_level=2]->.fr;';
+const EXTERNAL_FETCH_TIMEOUT_MS = 20_000;
+const PROVIDER_COURSE_ID_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
+const MAX_SEARCH_QUERY_LENGTH = 100;
 const OSM_OVERPASS_URL = (Deno.env.get('OSM_OVERPASS_URL') ?? 'https://overpass-api.de/api/interpreter').replace(/\/+$/, '');
 const OSM_SEARCH_ENABLED = Deno.env.get('OSM_COURSE_SEARCH_ENABLED') === 'true';
 const OSM_DETAIL_ENABLED = Deno.env.get('OSM_COURSE_DETAIL_ENABLED') !== 'false';
@@ -235,6 +239,10 @@ function toNumberValue(value: unknown) {
   }
 
   return null;
+}
+
+function clampInt(value: number | null, min: number, max: number, fallback: number) {
+  return value == null ? fallback : Math.min(Math.max(Math.round(value), min), max);
 }
 
 function normalizeCourseValue(value: string) {
@@ -488,6 +496,7 @@ async function providerFetch(path: string, params?: Record<string, string | numb
 
   const response = await fetch(url.toString(), {
     headers,
+    signal: AbortSignal.timeout(EXTERNAL_FETCH_TIMEOUT_MS),
   });
 
   if (response.status === 404) {
@@ -1017,7 +1026,7 @@ function normalizeProviderCourseDetail(rawCoursePayload: unknown, fallbackSummar
 
   const holeDetails: ProviderHoleDetail[] = rawHoles.map((rawHole, index) => {
     const holeNumber = extractNumberByKeys(rawHole, ['hole_number', 'holeNumber', 'number']) ?? index + 1;
-    const par = extractNumberByKeys(rawHole, ['par']) ?? 4;
+    const par = clampInt(extractNumberByKeys(rawHole, ['par']), 3, 6, 4);
     const handicapIndex = extractNumberByKeys(rawHole, ['handicap_index', 'stroke_index', 'strokeIndex', 'hcp']) ?? null;
     const distanceByTee = extractDistanceEntries(rawHole, extractStringByKeys(rawHole, ['unit', 'distance_unit']) ?? fallbackUnit);
     const gpsPoints = [
@@ -1121,9 +1130,9 @@ function mapCourseSummaryToRow(course: ProviderCourseSummary) {
     country_code: course.countryCode,
     latitude: course.latitude,
     longitude: course.longitude,
-    holes: course.holes,
-    par18: course.par18,
-    par9: course.par9,
+    holes: clampInt(course.holes, 1, 54, 18),
+    par18: clampInt(course.par18, 27, 108, 72),
+    par9: clampInt(course.par9, 27, 54, 36),
     metadata: course.metadata,
     last_synced_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
@@ -1408,6 +1417,7 @@ async function overpassFetch(query: string) {
       'User-Agent': 'FairwayIQ/1.0 (+https://github.com/CelianGuillamet/FairwayIQ)',
     },
     body: `data=${encodeURIComponent(query)}`,
+    signal: AbortSignal.timeout(EXTERNAL_FETCH_TIMEOUT_MS),
   });
 
   if (!response.ok) {
@@ -1547,9 +1557,10 @@ async function syncOpenStreetMapSearch(admin: ReturnType<typeof getAdminClient>,
   }
 
   const overpassQuery = `
-    [out:json][timeout:25];
+    [out:json][timeout:20];
+    ${OSM_FRANCE_AREA}
     (
-      nwr["leisure"="golf_course"]["name"~"${escapeOverpassRegex(query.trim())}",i];
+      nwr["leisure"="golf_course"]["name"~"${escapeOverpassRegex(query.trim())}",i](area.fr);
     );
     out tags center ${Math.min(Math.max(limit * 2, 8), 24)};
   `;
@@ -1633,7 +1644,7 @@ function mapOsmHoleElementToDetail(courseId: string, element: OverpassElement, f
   return {
     id: buildHoleId(courseId, holeNumber),
     holeNumber,
-    par: toNumberValue(tags.par) ?? 4,
+    par: clampInt(toNumberValue(tags.par), 3, 6, 4),
     handicapIndex: toNumberValue(tags.handicap ?? tags.hcp ?? tags['stroke_index']),
     distanceByTee,
     latitude: anchor?.latitude ?? null,
@@ -1664,12 +1675,13 @@ async function syncOpenStreetMapCourseDetail(
 
   const elementSelector =
     osmCourseRef.type === 'node'
-      ? `node(${osmCourseRef.id});`
+      ? `node(${osmCourseRef.id})(area.fr);`
       : osmCourseRef.type === 'way'
-        ? `way(${osmCourseRef.id});`
-        : `relation(${osmCourseRef.id});`;
+        ? `way(${osmCourseRef.id})(area.fr);`
+        : `relation(${osmCourseRef.id})(area.fr);`;
   const courseElements = await overpassFetch(`
-    [out:json][timeout:30];
+    [out:json][timeout:20];
+    ${OSM_FRANCE_AREA}
     ${elementSelector}
     out body geom;
   `);
@@ -1687,9 +1699,10 @@ async function syncOpenStreetMapCourseDetail(
   }
 
   const holeElements = await overpassFetch(`
-    [out:json][timeout:45];
+    [out:json][timeout:20];
+    ${OSM_FRANCE_AREA}
     (
-      way["golf"="hole"](${boundsQuery});
+      way["golf"="hole"](${boundsQuery})(area.fr);
     );
     out body geom;
   `);
@@ -1905,7 +1918,7 @@ async function syncProviderCourseDetail(admin: ReturnType<typeof getAdminClient>
   let rawPayload: unknown;
 
   try {
-    rawPayload = await providerFetch(`/courses/${providerCourseId}`);
+    rawPayload = await providerFetch(`/courses/${encodeURIComponent(providerCourseId)}`);
   } catch (error) {
     if (!(error instanceof ProviderNotFoundError)) {
       throw error;
@@ -1949,7 +1962,7 @@ function extractProviderCourseIdFromCatalogId(courseId: string) {
 }
 
 async function handleSearchCourses(admin: ReturnType<typeof getAdminClient>, payload: SearchCoursesRequest) {
-  const query = payload.query.trim();
+  const query = payload.query.trim().slice(0, MAX_SEARCH_QUERY_LENGTH);
   const limit = Math.min(Math.max(payload.limit ?? 8, 1), 12);
   const normalizedQuery = normalizeCourseValue(query);
 
@@ -2008,6 +2021,10 @@ async function handleGetCourse(admin: ReturnType<typeof getAdminClient>, payload
     const providerCourseId = course?.providerCourseId ?? extractProviderCourseIdFromCatalogId(courseId);
 
     if (providerCourseId) {
+      if (!PROVIDER_COURSE_ID_PATTERN.test(providerCourseId)) {
+        throw new ClientError(400, 'Identifiant de parcours invalide.');
+      }
+
       course = await syncProviderCourseDetail(admin, courseId, providerCourseId);
     }
   }
