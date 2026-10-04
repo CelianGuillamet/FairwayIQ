@@ -64,8 +64,8 @@ Secrets Supabase à définir (jamais dans le bundle Expo) :
 |---|---|---|
 | `ANTHROPIC_API_KEY` | Clé API Anthropic (obligatoire) | — |
 | `ANTHROPIC_MODEL_PRIMARY` | Modèle Claude utilisé | `claude-haiku-4-5-20251001` |
-| `AI_COACH_DAILY_LIMIT_FREE` | Appels IA par jour, utilisateur gratuit (<= 0 : illimité) | `3` |
-| `AI_COACH_DAILY_LIMIT_PREMIUM` | Appels IA par jour, utilisateur premium (<= 0 : illimité) | `30` |
+| `AI_COACH_DAILY_LIMIT_FREE` | Appels IA par jour, utilisateur gratuit (`-1` ou `unlimited` : illimité ; toute autre valeur <= 0 est ignorée avec un avertissement) | `3` |
+| `AI_COACH_DAILY_LIMIT_PREMIUM` | Appels IA par jour, utilisateur premium (`-1` ou `unlimited` : illimité ; toute autre valeur <= 0 est ignorée avec un avertissement) | `30` |
 
 ```bash
 supabase secrets set ANTHROPIC_API_KEY=your-anthropic-server-key
@@ -85,7 +85,7 @@ Le modèle doit accepter un `tool_choice` forcé : Sonnet 5.5, Opus 5.5 et Fable
 | Diagnostic IA de round | Oui, 3 appels IA par jour | Oui, 30 appels IA par jour |
 | Débrief conversationnel post-round | Non | Oui |
 
-- Le quota quotidien est commun à tous les appels `ai-coach` (diagnostic et messages de débrief) et se règle via `AI_COACH_DAILY_LIMIT_FREE` / `AI_COACH_DAILY_LIMIT_PREMIUM`.
+- Le quota quotidien est commun à tous les appels `ai-coach` (diagnostic et messages de débrief), se règle via `AI_COACH_DAILY_LIMIT_FREE` / `AI_COACH_DAILY_LIMIT_PREMIUM` et change à minuit, heure de Paris. Un appel n'est pas décompté si la requête est invalide, et il est rendu si le fournisseur IA échoue.
 - Le statut Premium fait foi côté serveur : la table `subscriptions` est synchronisée par la fonction `revenuecat-webhook`, et `ai-coach` répond `403` à `post_round_debrief` pour un utilisateur non Premium (le quota n'est alors pas consommé). L'app lit la même ligne `subscriptions` pour afficher ou masquer le débrief.
 - RevenueCat est identifié avec l'UUID Supabase de l'utilisateur (`Purchases.logIn` à la connexion, `Purchases.logOut` à la déconnexion). Sans cela, le webhook reçoit un identifiant anonyme et ne peut pas retrouver l'utilisateur.
 
