@@ -1,4 +1,4 @@
-import Purchases, { LOG_LEVEL, type CustomerInfo } from 'react-native-purchases';
+import Purchases, { INTRO_ELIGIBILITY_STATUS, LOG_LEVEL, type CustomerInfo } from 'react-native-purchases';
 import { Platform } from 'react-native';
 
 const REVENUECAT_IOS_KEY = process.env.EXPO_PUBLIC_REVENUECAT_IOS_KEY ?? '';
@@ -10,6 +10,16 @@ let queue: Promise<void> = Promise.resolve();
 function enqueue(task: () => Promise<void>) {
   queue = queue.then(task);
   return queue;
+}
+
+export const PURCHASE_IDENTITY_ERROR_MESSAGE =
+  'Impossible de vérifier ton compte pour cet achat. Vérifie ta connexion, puis réessaie. Tu n’as pas été débité.';
+
+export class PurchaseIdentityError extends Error {
+  constructor() {
+    super(PURCHASE_IDENTITY_ERROR_MESSAGE);
+    this.name = 'PurchaseIdentityError';
+  }
 }
 
 function describeError(error: unknown) {
@@ -72,12 +82,58 @@ export async function getOfferings() {
   }
 }
 
-export async function purchasePackage(pkg: Parameters<typeof Purchases.purchasePackage>[0]) {
+async function readAppUserId() {
+  try {
+    return await Purchases.getAppUserID();
+  } catch {
+    return null;
+  }
+}
+
+// RevenueCat attributes a purchase to the current app user id. If login did not
+// complete it is an anonymous id that the webhook can never map to a Supabase user.
+async function ensureIdentified(userId: string) {
+  if (!configured || !userId) {
+    throw new PurchaseIdentityError();
+  }
+
+  await queue;
+
+  if ((await readAppUserId()) === userId) {
+    return;
+  }
+
+  await identifyPurchasesUser(userId);
+
+  if ((await readAppUserId()) !== userId) {
+    throw new PurchaseIdentityError();
+  }
+}
+
+export async function getIntroEligibility(productIds: string[]): Promise<Record<string, boolean>> {
+  if (productIds.length === 0) {
+    return {};
+  }
+
+  try {
+    const result = await Purchases.checkTrialOrIntroductoryPriceEligibility(productIds);
+
+    return Object.fromEntries(
+      productIds.map((id) => [id, result[id]?.status === INTRO_ELIGIBILITY_STATUS.INTRO_ELIGIBILITY_STATUS_ELIGIBLE])
+    );
+  } catch {
+    return {};
+  }
+}
+
+export async function purchasePackage(pkg: Parameters<typeof Purchases.purchasePackage>[0], userId: string) {
+  await ensureIdentified(userId);
   const { customerInfo } = await Purchases.purchasePackage(pkg);
   return customerInfo;
 }
 
-export async function restorePurchases(): Promise<CustomerInfo> {
+export async function restorePurchases(userId: string): Promise<CustomerInfo> {
+  await ensureIdentified(userId);
   return Purchases.restorePurchases();
 }
 
