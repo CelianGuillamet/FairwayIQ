@@ -1,490 +1,455 @@
-import { useMemo, useState } from 'react';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { Colors, Radius, Spacing, Typography } from '../../constants';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Fonts, Numerals, Radius, Spacing, Typography } from '../../constants';
+import type { ThemeColors } from '../../constants';
+import { describeStrokes, formatRemainingHoles, getNotationWord, getRelativeLabel } from '../../lib/score-labels';
+import { useTheme, useThemedStyles } from '../../lib/theme';
 import type { RoundDraftHole } from '../../types';
-import { getScoreDescriptor } from '../../lib/hole-view';
+import { AppButton } from '../ui/AppButton';
+import { Icon } from '../ui/Icon';
 
 type Props = {
+  hole: RoundDraftHole;
+  onApplyScore: (score: number, options?: { autoAdvance?: boolean }) => void;
+  onChangeHole: (patch: Partial<RoundDraftHole>) => void;
+  onResetHole: () => void;
+};
+
+type ActionBarProps = {
   hole: RoundDraftHole;
   canGoNext: boolean;
   canSave: boolean;
   loading: boolean;
-  onApplyScore: (score: number, options?: { autoAdvance?: boolean }) => void;
-  onChangeHole: (patch: Partial<RoundDraftHole>) => void;
-  onResetHole: () => void;
+  remainingHoles: number;
   onNextHole: () => void;
   onSave: () => void;
 };
 
+const STROKES = [1, 2, 3, 4, 5, 6] as const;
 const PUTTS = [0, 1, 2, 3, 4] as const;
+const OVERFLOW_FROM = 7;
+const MAX_SCORE = 15;
+const MAX_PENALTY = 5;
 
-function toneToColor(tone: string): string {
-  switch (tone) {
-    case 'elite':    return '#FFD055';
-    case 'positive': return Colors.accentBlue;
-    case 'neutral':  return Colors.text;
-    case 'warning':  return Colors.warning;
-    default:         return Colors.error;
-  }
-}
+export function HoleScoringPanel({ hole, onApplyScore, onChangeHole, onResetHole }: Props) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(createStyles);
 
-export function HoleScoringPanel({
-  hole,
-  canGoNext,
-  canSave,
-  loading,
-  onApplyScore,
-  onChangeHole,
-  onResetHole,
-  onNextHole,
-  onSave,
-}: Props) {
-  const [showCustom, setShowCustom] = useState(false);
+  const overflowSelected = hole.completed && hole.score >= OVERFLOW_FROM;
+  const fairwayAvailable = hole.par > 3;
+  const fairwayOn = hole.fairway_hit === true;
 
-  // Primary score range: par-2 → par+3 (6 values), always starts at ≥1
-  const scoreBase = Math.max(1, hole.par - 2);
-  const primaryScores = useMemo(
-    () => Array.from({ length: 6 }, (_, i) => scoreBase + i),
-    [scoreBase],
-  );
-
-  const inPrimary    = primaryScores.includes(hole.score);
-  const descriptor   = useMemo(() => getScoreDescriptor(hole.score, hole.par), [hole.score, hole.par]);
-  const activeColor  = toneToColor(descriptor.tone);
-
-  function handleScoreTap(score: number) {
-    setShowCustom(false);
-    onApplyScore(score, { autoAdvance: false });
-  }
+  const applyScore = (score: number) => onApplyScore(score, { autoAdvance: false });
 
   return (
     <View style={styles.panel}>
+      <View>
+        <Text style={styles.fieldLabel}>Coups</Text>
+        <View style={styles.strokes}>
+          {STROKES.map((strokes) => {
+            const selected = hole.completed && hole.score === strokes;
+            const relative = getRelativeLabel(strokes, hole.par);
 
-      {/* ── Putts row ── */}
-      <View style={styles.puttsRow}>
-        <Text style={styles.rowLabel}>Putts</Text>
-        <View style={styles.pillGroup}>
-          {PUTTS.map((n) => {
-            const active    = hole.putts === n;
-            const disabled  = n > hole.score;
             return (
-              <TouchableOpacity
-                key={n}
-                style={[styles.pill, active && styles.pillActive, disabled && styles.pillOff]}
-                onPress={() => !disabled && onChangeHole({ putts: n })}
-                disabled={disabled}
-                activeOpacity={0.65}
+              <Pressable
+                key={strokes}
+                style={({ pressed }) => [styles.strokeCell, selected && styles.cellSelected, pressed && styles.pressed]}
+                onPress={() => applyScore(strokes)}
+                accessibilityRole="button"
+                accessibilityLabel={describeStrokes(strokes, hole.par)}
+                accessibilityState={{ selected }}
               >
-                <Text style={[styles.pillText, active && styles.pillTextActive]}>{n}</Text>
-              </TouchableOpacity>
+                <Text style={[styles.strokeNumber, selected && styles.cellSelectedText]}>{strokes}</Text>
+                <Text style={[styles.strokeRelative, selected && styles.cellSelectedSubtle]}>
+                  {relative || ' '}
+                </Text>
+              </Pressable>
             );
           })}
-          {/* overflow: show current value when > 4 */}
-          {hole.putts > 4 && (
-            <View style={[styles.pill, styles.pillActive]}>
-              <Text style={[styles.pillText, styles.pillTextActive]}>{hole.putts}</Text>
+          <Pressable
+            style={({ pressed }) => [styles.strokeCell, overflowSelected && styles.cellSelected, pressed && styles.pressed]}
+            onPress={() => applyScore(overflowSelected ? hole.score : OVERFLOW_FROM)}
+            accessibilityRole="button"
+            accessibilityLabel="7 coups ou plus"
+            accessibilityState={{ selected: overflowSelected }}
+          >
+            <Text style={[styles.strokeNumber, overflowSelected && styles.cellSelectedText]}>7+</Text>
+            <Text style={styles.strokeRelative}> </Text>
+          </Pressable>
+        </View>
+
+        {overflowSelected ? (
+          <View style={styles.stepper}>
+            <Pressable
+              style={({ pressed }) => [
+                styles.stepButton,
+                hole.score <= OVERFLOW_FROM && styles.stepButtonOff,
+                pressed && styles.pressed,
+              ]}
+              onPress={() => applyScore(Math.max(OVERFLOW_FROM, hole.score - 1))}
+              disabled={hole.score <= OVERFLOW_FROM}
+              accessibilityRole="button"
+              accessibilityLabel="Un coup de moins"
+              accessibilityState={{ disabled: hole.score <= OVERFLOW_FROM }}
+            >
+              <Icon name="minus" size={24} color={colors.ink} />
+            </Pressable>
+            <View style={styles.stepperValue} accessible accessibilityLabel={describeStrokes(hole.score, hole.par)}>
+              <Text style={styles.stepperNumber}>{hole.score}</Text>
+              <Text style={styles.stepperWord}>{getNotationWord(hole.score, hole.par)}</Text>
             </View>
-          )}
-        </View>
+            <Pressable
+              style={({ pressed }) => [
+                styles.stepButton,
+                hole.score >= MAX_SCORE && styles.stepButtonOff,
+                pressed && styles.pressed,
+              ]}
+              onPress={() => applyScore(Math.min(MAX_SCORE, hole.score + 1))}
+              disabled={hole.score >= MAX_SCORE}
+              accessibilityRole="button"
+              accessibilityLabel="Un coup de plus"
+              accessibilityState={{ disabled: hole.score >= MAX_SCORE }}
+            >
+              <Icon name="plus" size={24} color={colors.ink} />
+            </Pressable>
+          </View>
+        ) : null}
       </View>
 
-      {/* ── Score row or custom stepper ── */}
-      {showCustom ? (
-        <View style={styles.customRow}>
-          <TouchableOpacity
-            style={[styles.stepBtn, hole.score <= 1 && styles.stepBtnOff]}
-            onPress={() => onApplyScore(Math.max(1, hole.score - 1), { autoAdvance: false })}
-            disabled={hole.score <= 1}
-            activeOpacity={0.65}
-          >
-            <Text style={styles.stepBtnLabel}>−</Text>
-          </TouchableOpacity>
-
-          <View style={styles.customCenter}>
-            <Text style={[styles.customScore, { color: activeColor }]}>{hole.score}</Text>
-            <Text style={[styles.customDiff,  { color: activeColor }]}>{descriptor.diffLabel}</Text>
-          </View>
-
-          <TouchableOpacity
-            style={[styles.stepBtn, hole.score >= 15 && styles.stepBtnOff]}
-            onPress={() => onApplyScore(Math.min(15, hole.score + 1), { autoAdvance: false })}
-            disabled={hole.score >= 15}
-            activeOpacity={0.65}
-          >
-            <Text style={styles.stepBtnLabel}>+</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity style={styles.backBtn} onPress={() => setShowCustom(false)}>
-            <Text style={styles.backBtnLabel}>Retour</Text>
-          </TouchableOpacity>
-        </View>
-      ) : (
-        <View style={styles.scoreRow}>
-          {primaryScores.map((score) => {
-            const desc    = getScoreDescriptor(score, hole.par);
-            const color   = toneToColor(desc.tone);
-            const active  = hole.completed && hole.score === score;
-            const isPar   = score === hole.par;
+      <View>
+        <Text style={styles.fieldLabel}>Putts</Text>
+        <View style={styles.putts}>
+          {PUTTS.map((putts) => {
+            const selected = hole.putts === putts;
+            const disabled = putts > hole.score;
 
             return (
-              <TouchableOpacity
-                key={score}
-                style={[
-                  styles.scoreBtn,
-                  active  ? { borderColor: color, backgroundColor: color + '18' } :
-                  isPar   ? styles.scoreBtnPar : null,
+              <Pressable
+                key={putts}
+                style={({ pressed }) => [
+                  styles.puttCell,
+                  selected && styles.cellSelected,
+                  disabled && styles.puttCellOff,
+                  pressed && styles.pressed,
                 ]}
-                onPress={() => handleScoreTap(score)}
-                activeOpacity={0.6}
+                onPress={() => onChangeHole({ putts })}
+                disabled={disabled}
+                accessibilityRole="button"
+                accessibilityLabel={`${putts} putt${putts > 1 ? 's' : ''}`}
+                accessibilityState={{ selected, disabled }}
               >
-                <Text style={[
-                  styles.scoreBtnNum,
-                  { color: active ? color : isPar ? Colors.text : Colors.textMuted },
-                ]}>
-                  {score}
+                <Text style={[styles.puttNumber, selected && styles.cellSelectedText, disabled && styles.puttNumberOff]}>
+                  {putts}
                 </Text>
-                <Text style={[styles.scoreBtnHint, { color: active ? color : Colors.textDim }]}>
-                  {isPar ? 'par' : desc.diffLabel}
-                </Text>
-              </TouchableOpacity>
+              </Pressable>
             );
           })}
-
-          {/* "more" / overflow button */}
-          <TouchableOpacity
-            style={[
-              styles.scoreBtn,
-              !inPrimary && hole.completed
-                ? { borderColor: activeColor, backgroundColor: activeColor + '18' }
-                : styles.scoreBtnMore,
-            ]}
-            onPress={() => setShowCustom(true)}
-            activeOpacity={0.6}
-          >
-            {!inPrimary && hole.completed ? (
-              <>
-                <Text style={[styles.scoreBtnNum, { color: activeColor }]}>{hole.score}</Text>
-                <Text style={[styles.scoreBtnHint, { color: activeColor }]}>{descriptor.diffLabel}</Text>
-              </>
-            ) : (
-              <Text style={styles.moreLabel}>···</Text>
-            )}
-          </TouchableOpacity>
+          {hole.putts > PUTTS[PUTTS.length - 1] ? (
+            <View
+              style={[styles.puttCell, styles.cellSelected]}
+              accessible
+              accessibilityLabel={`${hole.putts} putts`}
+              accessibilityState={{ selected: true }}
+            >
+              <Text style={[styles.puttNumber, styles.cellSelectedText]}>{hole.putts}</Text>
+            </View>
+          ) : null}
         </View>
-      )}
-
-      {/* ── Actions row ── */}
-      <View style={styles.actionsRow}>
-        {/* GIR */}
-        <TouchableOpacity
-          style={[styles.chip, hole.gir && styles.chipOn]}
-          onPress={() => onChangeHole({ gir: !hole.gir })}
-          activeOpacity={0.7}
-        >
-          <Text style={[styles.chipText, hole.gir && styles.chipTextOn]}>GIR</Text>
-        </TouchableOpacity>
-
-        {/* Fairway — hidden for par 3 */}
-        {hole.par > 3 ? (
-          <TouchableOpacity
-            style={[styles.chip, hole.fairway_hit === true && styles.chipOn]}
-            onPress={() => onChangeHole({ fairway_hit: hole.fairway_hit !== true })}
-            activeOpacity={0.7}
-          >
-            <Text style={[styles.chipText, hole.fairway_hit === true && styles.chipTextOn]}>FW</Text>
-          </TouchableOpacity>
-        ) : (
-          <View style={[styles.chip, styles.chipDim]}>
-            <Text style={styles.chipTextDim}>FW</Text>
-          </View>
-        )}
-
-        {/* Penalty — tap cycles 0→5 then resets */}
-        <TouchableOpacity
-          style={[styles.chip, hole.penalty > 0 && styles.chipPenalty]}
-          onPress={() => onChangeHole({ penalty: hole.penalty < 5 ? hole.penalty + 1 : 0 })}
-          activeOpacity={0.7}
-        >
-          <Text style={[styles.chipText, hole.penalty > 0 && styles.chipTextPenalty]}>
-            {hole.penalty > 0 ? `+${hole.penalty} Pén` : 'Pén'}
-          </Text>
-        </TouchableOpacity>
-
-        <View style={styles.spacer} />
-
-        {/* Reset */}
-        <TouchableOpacity
-          style={styles.iconBtn}
-          onPress={onResetHole}
-          activeOpacity={0.7}
-          accessibilityRole="button"
-          accessibilityLabel="Réinitialiser le trou"
-        >
-          <Text style={styles.iconBtnLabel}>↺</Text>
-        </TouchableOpacity>
-
-        {/* Next hole */}
-        {hole.completed && canGoNext && (
-          <TouchableOpacity style={styles.nextBtn} onPress={onNextHole} activeOpacity={0.75}>
-            <Text style={styles.nextBtnLabel}>→</Text>
-          </TouchableOpacity>
-        )}
-
-        {/* Finaliser — shown when all holes complete */}
-        {canSave && (
-          <TouchableOpacity
-            style={[styles.saveBtn, loading && styles.saveBtnBusy]}
-            onPress={onSave}
-            disabled={loading}
-            activeOpacity={0.75}
-          >
-            <Text style={styles.saveBtnLabel}>{loading ? '...' : 'Finaliser'}</Text>
-          </TouchableOpacity>
-        )}
       </View>
+
+      <View style={styles.toggles}>
+        <Pressable
+          style={({ pressed }) => [styles.toggle, hole.gir && styles.toggleOn, pressed && styles.pressed]}
+          onPress={() => onChangeHole({ gir: !hole.gir })}
+          accessibilityRole="button"
+          accessibilityLabel="Green en régulation"
+          accessibilityState={{ selected: hole.gir }}
+        >
+          {hole.gir ? <Icon name="check" size={16} strokeWidth={2.5} color={colors.green} /> : null}
+          <Text style={[styles.toggleText, hole.gir && styles.toggleTextOn]}>Green</Text>
+        </Pressable>
+
+        <Pressable
+          style={({ pressed }) => [
+            styles.toggle,
+            fairwayOn && styles.toggleOn,
+            !fairwayAvailable && styles.toggleOff,
+            pressed && styles.pressed,
+          ]}
+          onPress={() => onChangeHole({ fairway_hit: !fairwayOn })}
+          disabled={!fairwayAvailable}
+          accessibilityRole="button"
+          accessibilityLabel="Fairway"
+          accessibilityHint={fairwayAvailable ? undefined : 'Indisponible sur un par 3'}
+          accessibilityState={{ selected: fairwayOn, disabled: !fairwayAvailable }}
+        >
+          {fairwayOn ? <Icon name="check" size={16} strokeWidth={2.5} color={colors.green} /> : null}
+          <Text style={[styles.toggleText, fairwayOn && styles.toggleTextOn, !fairwayAvailable && styles.toggleTextOff]}>
+            Fairway
+          </Text>
+        </Pressable>
+
+        <Pressable
+          style={({ pressed }) => [
+            styles.toggle,
+            hole.penalty > 0 && styles.togglePenalty,
+            pressed && styles.pressed,
+          ]}
+          onPress={() => onChangeHole({ penalty: hole.penalty < MAX_PENALTY ? hole.penalty + 1 : 0 })}
+          accessibilityRole="button"
+          accessibilityLabel={hole.penalty > 0 ? `Pénalités : ${hole.penalty}` : 'Pénalité'}
+          accessibilityHint={`Ajoute une pénalité, revient à zéro après ${MAX_PENALTY}`}
+          accessibilityState={{ selected: hole.penalty > 0 }}
+        >
+          <Text style={[styles.toggleText, hole.penalty > 0 && styles.toggleTextPenalty]}>
+            {hole.penalty > 0 ? `${hole.penalty} pénalité${hole.penalty > 1 ? 's' : ''}` : 'Pénalité'}
+          </Text>
+        </Pressable>
+      </View>
+
+      <Pressable
+        style={({ pressed }) => [styles.reset, pressed && styles.pressed]}
+        onPress={onResetHole}
+        accessibilityRole="button"
+        accessibilityLabel="Réinitialiser le trou"
+      >
+        <Icon name="refresh" size={18} color={colors.ink2} />
+        <Text style={styles.resetText}>Réinitialiser le trou</Text>
+      </Pressable>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  panel: {
-    backgroundColor: Colors.backgroundSoft,
-    borderTopWidth: 1,
-    borderTopColor: Colors.borderStrong,
-    paddingHorizontal: Spacing.md,
-    paddingTop: Spacing.sm,
-    paddingBottom: Spacing.sm,
-    gap: Spacing.sm,
-  },
+export function HoleActionBar({
+  hole,
+  canGoNext,
+  canSave,
+  loading,
+  remainingHoles,
+  onNextHole,
+  onSave,
+}: ActionBarProps) {
+  const styles = useThemedStyles(createStyles);
+  const isLastHole = !canGoNext;
 
-  // ── Putts ──
-  puttsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.md,
-  },
-  rowLabel: {
-    ...Typography.caption,
-    color: Colors.textDim,
-    textTransform: 'uppercase',
-    letterSpacing: 0.8,
-    width: 42,
-  },
-  pillGroup: {
-    flex: 1,
-    flexDirection: 'row',
-    gap: Spacing.xs,
-  },
-  pill: {
-    flex: 1,
-    height: 40,
-    borderRadius: Radius.md,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surface,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  pillActive: {
-    borderColor: Colors.text,
-    backgroundColor: Colors.surfaceAccent,
-  },
-  pillOff: {
-    opacity: 0.22,
-  },
-  pillText: {
-    ...Typography.bodyStrong,
-    color: Colors.textMuted,
-  },
-  pillTextActive: {
-    color: Colors.text,
-  },
+  const remainingHint = isLastHole && !canSave ? formatRemainingHoles(remainingHoles) : undefined;
+  const accessibilityHint =
+    remainingHint ?? (!isLastHole && !hole.completed ? 'Choisis d’abord le nombre de coups' : undefined);
 
-  // ── Score row ──
-  scoreRow: {
-    flexDirection: 'row',
-    gap: 5,
-  },
-  scoreBtn: {
-    flex: 1,
-    height: 64,
-    borderRadius: Radius.md,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surface,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 2,
-  },
-  scoreBtnPar: {
-    borderColor: Colors.borderStrong,
-    backgroundColor: Colors.surfaceElevated,
-  },
-  scoreBtnMore: {
-    borderColor: Colors.border,
-    backgroundColor: Colors.surface,
-  },
-  scoreBtnNum: {
-    fontSize: 20,
-    lineHeight: 24,
-    fontWeight: '800' as const,
-  },
-  scoreBtnHint: {
-    ...Typography.caption,
-    letterSpacing: 0.4,
-  },
-  moreLabel: {
-    ...Typography.heading,
-    color: Colors.textDim,
-    letterSpacing: 3,
-    lineHeight: 22,
-  },
+  return (
+    <View style={styles.footer}>
+      {remainingHint ? <Text style={styles.footerHint}>{remainingHint}</Text> : null}
+      {isLastHole ? (
+        <AppButton
+          label="Terminer le round"
+          icon="check"
+          iconPosition="right"
+          onPress={onSave}
+          disabled={!canSave}
+          loading={loading}
+          accessibilityHint={accessibilityHint}
+          style={styles.cta}
+        />
+      ) : (
+        <AppButton
+          label="Trou suivant"
+          icon="chevron-right"
+          iconPosition="right"
+          onPress={onNextHole}
+          disabled={!hole.completed}
+          accessibilityHint={accessibilityHint}
+          style={styles.cta}
+        />
+      )}
+    </View>
+  );
+}
 
-  // ── Custom stepper ──
-  customRow: {
-    flexDirection: 'row',
-    height: 64,
-    alignItems: 'center',
-    gap: Spacing.sm,
-    borderRadius: Radius.md,
-    borderWidth: 1,
-    borderColor: Colors.borderStrong,
-    backgroundColor: Colors.surface,
-    paddingHorizontal: Spacing.md,
-  },
-  stepBtn: {
-    width: 48,
-    height: 48,
-    borderRadius: Radius.full,
-    backgroundColor: Colors.surfaceElevated,
-    borderWidth: 1,
-    borderColor: Colors.borderStrong,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  stepBtnOff: {
-    opacity: 0.28,
-  },
-  stepBtnLabel: {
-    color: Colors.text,
-    fontSize: 26,
-    lineHeight: 28,
-    fontWeight: '900' as const,
-  },
-  customCenter: {
-    flex: 1,
-    alignItems: 'center',
-    gap: 2,
-  },
-  customScore: {
-    fontSize: 32,
-    lineHeight: 36,
-    fontWeight: '900' as const,
-  },
-  customDiff: {
-    ...Typography.label,
-    letterSpacing: 0.5,
-  },
-  backBtn: {
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: Spacing.xs,
-    borderRadius: Radius.full,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  backBtnLabel: {
-    ...Typography.label,
-    color: Colors.textMuted,
-  },
+const createStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+    panel: {
+      gap: Spacing.md,
+    },
+    fieldLabel: {
+      ...Typography.label,
+      color: colors.ink2,
+      marginBottom: Spacing.xs,
+    },
+    pressed: {
+      opacity: 0.7,
+    },
+    cellSelected: {
+      backgroundColor: colors.ink,
+      borderColor: colors.ink,
+    },
+    cellSelectedText: {
+      color: colors.onInk,
+    },
+    cellSelectedSubtle: {
+      color: colors.onInk,
+      opacity: 0.8,
+    },
 
-  // ── Actions row ──
-  actionsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.xs,
-    minHeight: 44,
-  },
-  chip: {
-    height: 40,
-    paddingHorizontal: Spacing.md,
-    borderRadius: Radius.full,
-    borderWidth: 1,
-    borderColor: Colors.borderStrong,
-    backgroundColor: Colors.surface,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  chipOn: {
-    borderColor: Colors.text,
-    backgroundColor: Colors.surfaceAccent,
-  },
-  chipDim: {
-    opacity: 0.3,
-  },
-  chipPenalty: {
-    borderColor: Colors.error,
-  },
-  chipText: {
-    ...Typography.label,
-    color: Colors.textMuted,
-  },
-  chipTextOn: {
-    color: Colors.text,
-  },
-  chipTextDim: {
-    ...Typography.label,
-    color: Colors.textDim,
-  },
-  chipTextPenalty: {
-    color: Colors.error,
-  },
-  spacer: {
-    flex: 1,
-  },
-  iconBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: Radius.full,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surface,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  iconBtnLabel: {
-    color: Colors.textDim,
-    fontSize: 17,
-    lineHeight: 19,
-    fontWeight: '700' as const,
-  },
-  nextBtn: {
-    height: 44,
-    minWidth: 56,
-    paddingHorizontal: Spacing.lg,
-    borderRadius: Radius.full,
-    backgroundColor: Colors.text,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  nextBtnLabel: {
-    color: Colors.background,
-    fontSize: 18,
-    lineHeight: 20,
-    fontWeight: '800' as const,
-  },
-  saveBtn: {
-    height: 44,
-    paddingHorizontal: Spacing.lg,
-    borderRadius: Radius.full,
-    backgroundColor: Colors.text,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  saveBtnBusy: {
-    opacity: 0.55,
-  },
-  saveBtnLabel: {
-    ...Typography.bodyStrong,
-    color: Colors.background,
-  },
-});
+    strokes: {
+      flexDirection: 'row',
+      gap: 4,
+    },
+    strokeCell: {
+      flex: 1,
+      minHeight: 54,
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 2,
+      backgroundColor: colors.surface,
+      borderWidth: 1,
+      borderColor: colors.line,
+      borderRadius: Radius.md,
+    },
+    strokeNumber: {
+      fontFamily: Fonts.sansBold,
+      fontSize: 20,
+      lineHeight: 24,
+      color: colors.ink,
+      ...Numerals,
+    },
+    strokeRelative: {
+      ...Typography.caption,
+      color: colors.ink3,
+    },
+
+    stepper: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Spacing.sm,
+      marginTop: Spacing.xs,
+    },
+    stepButton: {
+      width: 54,
+      height: 54,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderWidth: 1.5,
+      borderColor: colors.ink,
+      borderRadius: Radius.md,
+    },
+    stepButtonOff: {
+      borderColor: colors.line,
+      opacity: 0.5,
+    },
+    stepperValue: {
+      flex: 1,
+      alignItems: 'center',
+    },
+    stepperNumber: {
+      ...Typography.title,
+      ...Numerals,
+      color: colors.ink,
+    },
+    stepperWord: {
+      ...Typography.caption,
+      color: colors.ink2,
+    },
+
+    putts: {
+      flexDirection: 'row',
+      gap: 6,
+    },
+    puttCell: {
+      flex: 1,
+      minHeight: 48,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.surface,
+      borderWidth: 1,
+      borderColor: colors.line,
+      borderRadius: Radius.md,
+    },
+    puttCellOff: {
+      backgroundColor: 'transparent',
+      borderStyle: 'dashed',
+    },
+    puttNumber: {
+      fontFamily: Fonts.sansBold,
+      fontSize: 17,
+      lineHeight: 22,
+      color: colors.ink,
+      ...Numerals,
+    },
+    puttNumberOff: {
+      color: colors.ink3,
+    },
+
+    toggles: {
+      flexDirection: 'row',
+      gap: Spacing.xs,
+    },
+    toggle: {
+      flex: 1,
+      minHeight: 48,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 6,
+      paddingHorizontal: Spacing.xs,
+      borderWidth: 1,
+      borderColor: colors.lineStrong,
+      borderRadius: Radius.full,
+    },
+    toggleOn: {
+      backgroundColor: colors.greenBg,
+      borderColor: colors.green,
+    },
+    toggleOff: {
+      borderStyle: 'dashed',
+      borderColor: colors.line,
+    },
+    togglePenalty: {
+      backgroundColor: colors.warningBg,
+      borderColor: colors.warning,
+    },
+    toggleText: {
+      ...Typography.bodyStrong,
+      fontSize: 14,
+      color: colors.ink,
+    },
+    toggleTextOn: {
+      color: colors.green,
+    },
+    toggleTextOff: {
+      color: colors.ink3,
+    },
+    toggleTextPenalty: {
+      color: colors.warning,
+    },
+
+    reset: {
+      alignSelf: 'center',
+      minHeight: 44,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      paddingHorizontal: Spacing.md,
+    },
+    resetText: {
+      ...Typography.bodyStrong,
+      fontSize: 14,
+      color: colors.ink2,
+    },
+
+    footer: {
+      paddingHorizontal: Spacing.md,
+      paddingTop: Spacing.sm,
+      paddingBottom: Spacing.sm,
+      gap: Spacing.xs,
+      backgroundColor: colors.bg,
+      borderTopWidth: 1,
+      borderTopColor: colors.line,
+    },
+    footerHint: {
+      ...Typography.caption,
+      color: colors.ink2,
+      textAlign: 'center',
+    },
+    cta: {
+      minHeight: 54,
+    },
+  });
