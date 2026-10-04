@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   KeyboardAvoidingView,
@@ -12,14 +12,19 @@ import {
   UIManager,
   View,
 } from 'react-native';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import * as Location from 'expo-location';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors, Radius, Spacing, Typography } from '../../constants';
 import { useAuthStore } from '../../stores/auth';
 import { useRoundsStore } from '../../stores/rounds';
-import { AiCoachLimitError, analyzeRound, buildFallbackDiagnostic } from '../../lib/claude';
-import { saveDiagnostic } from '../../lib/diagnostics';
+import {
+  AiCoachLimitError,
+  analyzeRound,
+  buildFallbackDiagnostic,
+  type DiagnosticResult,
+} from '../../lib/claude';
+import { DIAGNOSTIC_SAVE_FAILED_MESSAGE, persistDiagnostic } from '../../lib/diagnostics';
 import { CourseSearch } from '../../components/ui/CourseSearch';
 import { DecorativeBackground } from '../../components/ui/DecorativeBackground';
 import { HoleNavigation } from '../../components/rounds/HoleNavigation';
@@ -41,14 +46,18 @@ import {
 import { buildHoleViewData } from '../../lib/hole-view';
 import { getGreenDistances } from '../../lib/gps';
 import { clearRoundDraft, loadRoundDraft, saveRoundDraft } from '../../lib/round-draft';
-import { supabase } from '../../lib/supabase';
-import type { RoundDraftHole } from '../../types';
+import {
+  buildSaveRoundArgs,
+  createClientRequestId,
+  getErrorCode,
+  getRoundSaveErrorMessage,
+  saveRound,
+} from '../../lib/round-save';
+import type { Round, RoundDraftHole } from '../../types';
 import {
   aggregateScorecard,
   applyParSequenceToScorecard,
   applyTargetParToScorecard,
-  buildRoundHoleInserts,
-  buildRoundInsertFromScorecard,
   createDefaultScorecard,
   getScorecardProgress,
   resetDraftHole,
@@ -75,7 +84,7 @@ function animateLayout() {
 
 export default function RoundScreen() {
   const { user, profile } = useAuthStore();
-  const { addRound, removeRound, rounds } = useRoundsStore();
+  const { upsertRound, rounds } = useRoundsStore();
   const insets = useSafeAreaInsets();
 
   const [courseName, setCourseName]         = useState('');
@@ -86,6 +95,8 @@ export default function RoundScreen() {
   const [scorecard, setScorecard]           = useState<RoundDraftHole[]>(() => createDefaultScorecard(18));
   const [notes, setNotes]                   = useState('');
   const [loading, setLoading]               = useState(false);
+  const [analyzing, setAnalyzing]           = useState(false);
+  const [clientRequestId, setClientRequestId] = useState(() => createClientRequestId());
   const [courseLoading, setCourseLoading]   = useState(false);
   const [draftHydrated, setDraftHydrated]   = useState(false);
   const [restoredDraftAt, setRestoredDraftAt] = useState<string | null>(null);
@@ -93,6 +104,7 @@ export default function RoundScreen() {
   const [gpsPermission, setGpsPermission]   = useState<'undetermined' | 'granted' | 'denied'>('undetermined');
   const [livePosition, setLivePosition]     = useState<{ latitude: number; longitude: number } | null>(null);
   const courseRequestRef  = useRef(0);
+  const savingRef         = useRef(false);
   const autoAdvanceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const progress   = useMemo(() => getScorecardProgress(scorecard), [scorecard]);
@@ -169,38 +181,40 @@ export default function RoundScreen() {
     }
   }, [progress.completedHoles, setupExpanded]);
 
-  useEffect(() => {
-    if (setupExpanded || !courseHasAnyGpsData) return;
+  useFocusEffect(
+    useCallback(() => {
+      if (setupExpanded || !courseHasAnyGpsData) return;
 
-    let cancelled = false;
-    let subscription: Location.LocationSubscription | null = null;
+      let cancelled = false;
+      let subscription: Location.LocationSubscription | null = null;
 
-    (async () => {
-      try {
-        const { status } = await Location.requestForegroundPermissionsAsync();
-        if (cancelled) return;
-        setGpsPermission(status === 'granted' ? 'granted' : 'denied');
-        if (status !== 'granted') return;
+      (async () => {
+        try {
+          const { status } = await Location.requestForegroundPermissionsAsync();
+          if (cancelled) return;
+          setGpsPermission(status === 'granted' ? 'granted' : 'denied');
+          if (status !== 'granted') return;
 
-        const sub = await Location.watchPositionAsync(
-          { accuracy: Location.Accuracy.High, timeInterval: 2000, distanceInterval: 3 },
-          (location) => {
-            setLivePosition({ latitude: location.coords.latitude, longitude: location.coords.longitude });
-          },
-        );
+          const sub = await Location.watchPositionAsync(
+            { accuracy: Location.Accuracy.Balanced, timeInterval: 5000, distanceInterval: 10 },
+            (location) => {
+              setLivePosition({ latitude: location.coords.latitude, longitude: location.coords.longitude });
+            },
+          );
 
-        if (cancelled) { sub.remove(); return; }
-        subscription = sub;
-      } catch {
-        if (!cancelled) setGpsPermission('denied');
-      }
-    })();
+          if (cancelled) { sub.remove(); return; }
+          subscription = sub;
+        } catch {
+          if (!cancelled) setGpsPermission('denied');
+        }
+      })();
 
-    return () => {
-      cancelled = true;
-      subscription?.remove();
-    };
-  }, [setupExpanded, courseHasAnyGpsData]);
+      return () => {
+        cancelled = true;
+        subscription?.remove();
+      };
+    }, [setupExpanded, courseHasAnyGpsData]),
+  );
 
   useEffect(() => {
     let mounted = true;
@@ -219,6 +233,7 @@ export default function RoundScreen() {
       setCurrentHoleNumber(Math.max(1, Math.min(draft.currentHoleNumber, draft.scorecard.length || draft.holes)));
       setScorecard(draft.scorecard);
       setNotes(draft.notes);
+      if (draft.clientRequestId) setClientRequestId(draft.clientRequestId);
       setRestoredDraftAt(draft.savedAt);
       setDraftHydrated(true);
     }
@@ -243,12 +258,13 @@ export default function RoundScreen() {
         currentHoleNumber,
         notes,
         scorecard,
+        clientRequestId,
       });
     }, 350);
 
     return () => clearTimeout(timeout);
   }, [
-    courseName, currentHoleNumber, draftHydrated, hasMeaningfulDraft,
+    clientRequestId, courseName, currentHoleNumber, draftHydrated, hasMeaningfulDraft,
     holes, loading, notes, scorecard, selectedCourse, teeKey, user?.id,
   ]);
 
@@ -346,7 +362,24 @@ export default function RoundScreen() {
     setScorecard((curr) => resetDraftHole(curr, currentHoleNumber));
   };
 
+  const resetForm = () => {
+    cancelAutoAdvance();
+    setCourseName('');
+    setSelectedCourse(null);
+    setHoles(18);
+    setTeeKey(getDefaultTeeKey());
+    setCurrentHoleNumber(1);
+    setScorecard(createDefaultScorecard(18));
+    setNotes('');
+    setRestoredDraftAt(null);
+    setLivePosition(null);
+    setSetupExpanded(true);
+    setClientRequestId(createClientRequestId());
+  };
+
   const handleSave = async (scorecardOverride?: RoundDraftHole[]) => {
+    if (savingRef.current) return;
+
     if (!user || !profile) {
       Alert.alert('Erreur', 'Session introuvable. Reconnecte-toi puis réessaie.');
       return;
@@ -355,13 +388,20 @@ export default function RoundScreen() {
     const err = validateScorecard(effectiveScorecard);
     if (err) { Alert.alert('Erreur', err); return; }
 
+    savingRef.current = true;
     cancelAutoAdvance();
     setLoading(true);
+
+    const userId = user.id;
+    const previousRounds = rounds.slice(0, 5);
+    let round: Round;
+
     try {
       const isCatalog       = selectedCourse != null && !selectedCourse.id.startsWith('custom-');
       const selectedTeeOpt  = teeOptions.find((t) => t.key === teeKey) ?? null;
-      const roundPayload    = buildRoundInsertFromScorecard({
-        userId: user.id,
+
+      round = await saveRound(buildSaveRoundArgs({
+        clientRequestId,
         playedAt: new Date().toISOString(),
         courseId: isCatalog ? selectedCourse?.id ?? null : null,
         courseName: courseName.trim() || null,
@@ -373,40 +413,57 @@ export default function RoundScreen() {
         teeColor: selectedTeeOpt?.color ?? null,
         notes: notes.trim() || null,
         scorecard: effectiveScorecard,
-      });
+      }));
+    } catch (error) {
+      Alert.alert('Erreur', getRoundSaveErrorMessage(error));
+      savingRef.current = false;
+      setLoading(false);
+      return;
+    }
 
-      const round         = await addRound(roundPayload);
-      const holeInserts   = buildRoundHoleInserts(round.id, user.id, effectiveScorecard);
-      const { error: holesErr } = await supabase.from('round_holes').insert(holeInserts);
-      if (holesErr) {
-        await supabase.from('rounds').delete().eq('id', round.id);
-        removeRound(round.id);
-        throw holesErr;
+    upsertRound(round);
+    resetForm();
+    setAnalyzing(true);
+
+    try {
+      await clearRoundDraft(userId);
+    } catch (clearError) {
+      console.warn('[round-draft] clear failed', getErrorCode(clearError));
+    }
+
+    try {
+      let diagnosis: DiagnosticResult;
+      let isFallback = false;
+
+      try {
+        diagnosis = await analyzeRound(round, profile, previousRounds, effectiveScorecard);
+      } catch (analysisError) {
+        if (analysisError instanceof AiCoachLimitError) {
+          Alert.alert('Limite atteinte', analysisError.message);
+        }
+
+        diagnosis = buildFallbackDiagnostic(round, profile, previousRounds, effectiveScorecard);
+        isFallback = true;
       }
 
-      const diagnosis = await analyzeRound(round, profile, rounds.slice(0, 5), effectiveScorecard)
-        .catch((analysisError) => {
-          if (analysisError instanceof AiCoachLimitError) {
-            Alert.alert('Limite atteinte', analysisError.message);
-          }
-
-          return buildFallbackDiagnostic(round, profile, rounds.slice(0, 5), effectiveScorecard);
-        });
-
-      await saveDiagnostic({ userId: user.id, roundId: round.id, result: diagnosis }).catch((e: any) => {
-        console.warn('[diagnostic] save failed', e?.message ?? e);
-      });
-
-      await clearRoundDraft(user.id);
-      setRestoredDraftAt(null);
+      const outcome = await persistDiagnostic({ userId, roundId: round.id, result: diagnosis, isFallback });
+      if (outcome === 'failed') {
+        Alert.alert('Diagnostic non enregistré', DIAGNOSTIC_SAVE_FAILED_MESSAGE);
+      }
 
       router.push({
         pathname: '/diagnostic',
         params: { roundId: round.id, diagnosis: JSON.stringify(diagnosis) },
       });
-    } catch (error: any) {
-      Alert.alert('Erreur', error?.message ?? 'Une erreur est survenue.');
+    } catch (analysisFlowError) {
+      console.warn('[round] post-save analysis failed', getErrorCode(analysisFlowError));
+      Alert.alert(
+        'Round enregistré',
+        'Ton round est bien enregistré, mais le diagnostic n’a pas pu être généré. Tu peux le relancer depuis le détail du round.',
+      );
     } finally {
+      savingRef.current = false;
+      setAnalyzing(false);
       setLoading(false);
     }
   };
@@ -421,17 +478,8 @@ export default function RoundScreen() {
           text: 'Effacer',
           style: 'destructive',
           onPress: () => {
-            cancelAutoAdvance();
             if (user?.id) void clearRoundDraft(user.id);
-            setCourseName('');
-            setSelectedCourse(null);
-            setHoles(18);
-            setTeeKey(getDefaultTeeKey());
-            setCurrentHoleNumber(1);
-            setScorecard(createDefaultScorecard(18));
-            setNotes('');
-            setRestoredDraftAt(null);
-            setSetupExpanded(true);
+            resetForm();
           },
         },
       ],
@@ -478,6 +526,15 @@ export default function RoundScreen() {
             <Text style={styles.setupTitle}>
               {setupLocked ? courseName.trim() || 'Round en cours' : 'Prépare ta partie'}
             </Text>
+
+            {analyzing && (
+              <View style={styles.draftBanner}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.draftBannerTitle}>Round enregistré</Text>
+                  <Text style={styles.draftBannerText}>Analyse du round en cours…</Text>
+                </View>
+              </View>
+            )}
 
             {setupLocked && (
               <TouchableOpacity

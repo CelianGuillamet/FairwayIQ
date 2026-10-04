@@ -14,6 +14,7 @@ export type RoundDraftSnapshot = {
   currentHoleNumber: number;
   notes: string;
   scorecard: RoundDraftHole[];
+  clientRequestId?: string;
 };
 
 function getRoundDraftStorageKey(userId: string) {
@@ -52,6 +53,7 @@ function isRoundDraftSnapshot(value: unknown): value is RoundDraftSnapshot {
     && isTeeKey(snapshot.teeKey)
     && typeof snapshot.currentHoleNumber === 'number'
     && typeof snapshot.notes === 'string'
+    && (snapshot.clientRequestId === undefined || typeof snapshot.clientRequestId === 'string')
     && Array.isArray(snapshot.scorecard)
     && snapshot.scorecard.length === snapshot.holes
     && snapshot.currentHoleNumber >= 1
