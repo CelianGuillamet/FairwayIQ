@@ -1,15 +1,17 @@
 import { useEffect, useState } from 'react';
 import {
   Alert,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
-  TouchableOpacity,
   View,
 } from 'react-native';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Colors, PRIVACY_POLICY_URL, TERMS_OF_USE_URL } from '../constants';
+import { Fonts, Numerals, PRIVACY_POLICY_URL, Radius, Spacing, TERMS_OF_USE_URL, Typography } from '../constants';
+import type { ThemeColors } from '../constants';
+import { useThemedStyles } from '../lib/theme';
 import { openLegalUrl } from '../lib/legal';
 import {
   getIntroEligibility,
@@ -28,18 +30,19 @@ import {
 } from '../lib/subscription';
 import { useAuthStore } from '../stores/auth';
 import { useSubscriptionStore } from '../stores/subscription';
-import { DecorativeBackground } from '../components/ui/DecorativeBackground';
-import { AppCard } from '../components/ui/AppCard';
 import { AppButton } from '../components/ui/AppButton';
+import { Icon, type IconName } from '../components/ui/Icon';
 import { PageHeader } from '../components/ui/PageHeader';
+import { TextAction } from '../components/ui/TextAction';
 
-const FEATURES = [
-  { icon: '💬', title: 'Débrief conversationnel', desc: 'Pose tes questions après le round et clarifie les coups qui t’ont coûté des points.' },
-  { icon: '🤖', title: 'Coach IA étendu', desc: 'Jusqu’à 30 analyses et échanges avec le coach IA par jour, contre 3 en version gratuite.' },
-] as const;
+const FEATURES: readonly { icon: IconName; title: string; desc: string }[] = [
+  { icon: 'target', title: 'Débrief conversationnel', desc: 'Pose tes questions après le round et clarifie les coups qui t’ont coûté des points.' },
+  { icon: 'sparkles', title: 'Coach IA étendu', desc: 'Jusqu’à 30 analyses et échanges avec le coach IA par jour, contre 3 en version gratuite.' },
+];
 
 export default function PaywallScreen() {
   const insets = useSafeAreaInsets();
+  const styles = useThemedStyles(createStyles);
   const [selectedPlan, setSelectedPlan] = useState<PlanKey>('annual');
   const [loading, setLoading] = useState(false);
   const [offerings, setOfferings] = useState<Awaited<ReturnType<typeof getOfferings>>>(null);
@@ -157,41 +160,33 @@ export default function PaywallScreen() {
 
   return (
     <View style={styles.container}>
-      <DecorativeBackground />
-      <ScrollView contentContainerStyle={[styles.content, { paddingTop: insets.top + 8 }]}>
-        <TouchableOpacity style={styles.skipBtn} onPress={() => router.replace('/(tabs)')}>
-          <Text style={styles.skipText}>Passer</Text>
-        </TouchableOpacity>
+      <ScrollView
+        contentContainerStyle={[styles.content, { paddingTop: insets.top + Spacing.xs, paddingBottom: insets.bottom + Spacing.xl }]}
+      >
+        <View style={styles.skipRow}>
+          <TextAction label="Passer" tone="muted" onPress={() => router.replace('/(tabs)')} style={styles.alignEnd} />
+        </View>
 
         <PageHeader
-          eyebrow="Premium"
           title="Le mode coach complet"
           subtitle="Débloque une version nettement plus utile de l’app, pensée pour progresser sérieusement."
         />
 
-        <AppCard accent="highlight" style={styles.heroCard}>
-          <Text style={styles.badge}>Abonnement Premium</Text>
-          <Text style={styles.heroTitle}>Un cockpit golf plus intelligent, plus utile, plus complet.</Text>
-          <Text style={styles.heroSubtitle}>
-            Le but n’est pas d’ajouter du bruit. Le but est de transformer chaque round en apprentissage concret.
-          </Text>
-        </AppCard>
-
         <View style={styles.featureList}>
           {FEATURES.map((feature) => (
-            <AppCard key={feature.title} style={styles.featureCard}>
-              <View style={styles.featureRow}>
-                <Text style={styles.featureIcon}>{feature.icon}</Text>
-                <View style={styles.featureText}>
-                  <Text style={styles.featureTitle}>{feature.title}</Text>
-                  <Text style={styles.featureDesc}>{feature.desc}</Text>
-                </View>
+            <View key={feature.title} style={styles.feature}>
+              <View style={styles.featureIcon}>
+                <Icon name={feature.icon} size={22} />
               </View>
-            </AppCard>
+              <View style={styles.featureText}>
+                <Text style={styles.featureTitle}>{feature.title}</Text>
+                <Text style={styles.featureDesc}>{feature.desc}</Text>
+              </View>
+            </View>
           ))}
         </View>
 
-        <View style={styles.plansRow}>
+        <View style={styles.plansRow} accessibilityRole="radiogroup" accessibilityLabel="Choisir une formule">
           <PlanCard
             label="Mensuel"
             price={loadingOfferings ? '...' : monthlyPriceString ?? '—'}
@@ -217,7 +212,6 @@ export default function PaywallScreen() {
 
         <AppButton
           label={freeTrial ? `Commencer l’essai gratuit de ${freeTrial.duration}` : 'S’abonner'}
-          variant="accent"
           onPress={() => void handlePurchase()}
           loading={loading}
           disabled={loadingOfferings}
@@ -228,23 +222,30 @@ export default function PaywallScreen() {
           <View style={styles.disclosure}>
             <Text style={styles.disclosureSummary}>{disclosure.summary}</Text>
             <Text style={styles.disclosureTerms}>{disclosure.terms}</Text>
-            <Text
-              style={styles.manageLink}
-              accessibilityRole="link"
-              onPress={() => void openLegalUrl(MANAGE_SUBSCRIPTION_URL)}
-            >
-              Gérer mon abonnement
-            </Text>
           </View>
         )}
 
-        <AppButton
-          label="Restaurer mes achats"
-          variant="secondary"
-          onPress={() => void handleRestore()}
-          disabled={loading}
-          style={styles.secondaryAction}
-        />
+        <View style={styles.quietActions}>
+          {loadingOfferings ? null : (
+            <TextAction
+              label="Gérer mon abonnement"
+              role="link"
+              tone="muted"
+              underline
+              onPress={() => void openLegalUrl(MANAGE_SUBSCRIPTION_URL)}
+              accessibilityHint="Ouvre les réglages d’abonnement Apple"
+              style={styles.alignCenter}
+            />
+          )}
+          <TextAction
+            label="Restaurer mes achats"
+            tone="muted"
+            underline
+            onPress={() => void handleRestore()}
+            disabled={loading}
+            style={styles.alignCenter}
+          />
+        </View>
 
         <Text style={styles.legal}>
           En continuant, tu acceptes les{' '}
@@ -285,204 +286,164 @@ function PlanCard({
   selected: boolean;
   onPress: () => void;
 }) {
+  const styles = useThemedStyles(createStyles);
+
   return (
-    <TouchableOpacity
-      style={[styles.planCard, selected && styles.planCardSelected]}
+    <Pressable
+      style={({ pressed }) => [styles.planCard, selected && styles.planCardSelected, pressed && styles.pressed]}
       onPress={onPress}
+      accessibilityRole="radio"
+      accessibilityState={{ checked: selected }}
+      accessibilityLabel={`${label}, ${price}${period}${badge ? `, ${badge}` : ''}`}
     >
       {badge ? (
         <View style={styles.planBadge}>
           <Text style={styles.planBadgeText}>{badge}</Text>
         </View>
       ) : null}
-      <Text style={[styles.planLabel, selected && styles.planLabelSelected]}>{label}</Text>
-      <Text style={[styles.planPrice, selected && styles.planPriceSelected]}>{price}</Text>
-      <Text style={[styles.planPeriod, selected && styles.planPeriodSelected]}>{period}</Text>
-    </TouchableOpacity>
+      <Text style={styles.planLabel}>{label}</Text>
+      <Text style={styles.planPrice}>{price}</Text>
+      <Text style={styles.planPeriod}>{period}</Text>
+    </Pressable>
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.background,
-  },
-  content: {
-    paddingHorizontal: 20,
-    paddingBottom: 48,
-  },
-  skipBtn: {
-    alignSelf: 'flex-end',
-    padding: 4,
-    marginBottom: 18,
-  },
-  skipText: {
-    color: Colors.textDim,
-    fontSize: 15,
-  },
-  heroCard: {
-    marginBottom: 16,
-  },
-  badge: {
-    alignSelf: 'flex-start',
-    backgroundColor: 'rgba(244, 196, 83, 0.16)',
-    borderWidth: 1,
-    borderColor: Colors.warning,
-    borderRadius: 999,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    color: Colors.warning,
-    fontSize: 12,
-    fontWeight: '800',
-    marginBottom: 14,
-    overflow: 'hidden',
-  },
-  heroTitle: {
-    fontSize: 28,
-    fontWeight: '900',
-    color: Colors.text,
-    marginBottom: 10,
-    lineHeight: 34,
-  },
-  heroSubtitle: {
-    fontSize: 15,
-    color: Colors.textMuted,
-    lineHeight: 22,
-  },
-  featureList: {
-    gap: 12,
-    marginBottom: 20,
-  },
-  featureCard: {
-    paddingVertical: 16,
-  },
-  featureRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 14,
-  },
-  featureIcon: {
-    fontSize: 28,
-    width: 36,
-    textAlign: 'center',
-  },
-  featureText: {
-    flex: 1,
-  },
-  featureTitle: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: Colors.text,
-  },
-  featureDesc: {
-    fontSize: 13,
-    color: Colors.textMuted,
-    marginTop: 2,
-    lineHeight: 19,
-  },
-  plansRow: {
-    flexDirection: 'row',
-    gap: 12,
-    marginBottom: 12,
-  },
-  planCard: {
-    flex: 1,
-    backgroundColor: Colors.surface,
-    borderRadius: 18,
-    padding: 18,
-    borderWidth: 1.5,
-    borderColor: Colors.border,
-    alignItems: 'center',
-    position: 'relative',
-  },
-  planCardSelected: {
-    borderColor: Colors.text,
-    backgroundColor: Colors.surfaceAccent,
-  },
-  planBadge: {
-    position: 'absolute',
-    top: -10,
-    backgroundColor: Colors.text,
-    borderRadius: 10,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-  },
-  planBadgeText: {
-    color: Colors.background,
-    fontSize: 11,
-    fontWeight: '800',
-  },
-  planLabel: {
-    fontSize: 13,
-    color: Colors.textMuted,
-    fontWeight: '700',
-    marginBottom: 6,
-  },
-  planLabelSelected: {
-    color: Colors.text,
-  },
-  planPrice: {
-    fontSize: 24,
-    fontWeight: '900',
-    color: Colors.text,
-  },
-  planPriceSelected: {
-    color: Colors.text,
-  },
-  planPeriod: {
-    fontSize: 13,
-    color: Colors.textDim,
-    marginTop: 2,
-  },
-  planPeriodSelected: {
-    color: Colors.textMuted,
-  },
-  savingsText: {
-    textAlign: 'center',
-    fontSize: 13,
-    color: Colors.accentBlue,
-    marginBottom: 18,
-    fontWeight: '700',
-  },
-  primaryAction: {
-    marginTop: 4,
-  },
-  secondaryAction: {
-    marginTop: 10,
-    marginBottom: 18,
-  },
-  disclosure: {
-    marginTop: 14,
-    gap: 6,
-  },
-  disclosureSummary: {
-    textAlign: 'center',
-    fontSize: 13,
-    fontWeight: '700',
-    color: Colors.textMuted,
-    lineHeight: 19,
-  },
-  disclosureTerms: {
-    textAlign: 'center',
-    fontSize: 12,
-    color: Colors.textDim,
-    lineHeight: 18,
-  },
-  manageLink: {
-    textAlign: 'center',
-    fontSize: 13,
-    color: Colors.textMuted,
-    textDecorationLine: 'underline',
-    paddingVertical: 4,
-  },
-  legal: {
-    textAlign: 'center',
-    fontSize: 11,
-    color: Colors.textDim,
-    lineHeight: 16,
-  },
-  legalLink: {
-    color: Colors.textMuted,
-    textDecorationLine: 'underline',
-  },
-});
+const createStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: colors.bg,
+    },
+    content: {
+      paddingHorizontal: Spacing.lg,
+    },
+    skipRow: {
+      alignItems: 'flex-end',
+    },
+    alignEnd: {
+      alignSelf: 'flex-end',
+    },
+    alignCenter: {
+      alignSelf: 'center',
+    },
+    featureList: {
+      gap: Spacing.md,
+      marginBottom: Spacing.xl,
+    },
+    feature: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: Spacing.sm,
+    },
+    featureIcon: {
+      width: 44,
+      height: 44,
+      borderRadius: Radius.md,
+      backgroundColor: colors.sunk,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    featureText: {
+      flex: 1,
+    },
+    featureTitle: {
+      ...Typography.bodyStrong,
+      color: colors.ink,
+    },
+    featureDesc: {
+      ...Typography.body,
+      color: colors.ink2,
+    },
+    plansRow: {
+      flexDirection: 'row',
+      gap: Spacing.sm,
+      marginTop: Spacing.xxs,
+      marginBottom: Spacing.sm,
+    },
+    planCard: {
+      flex: 1,
+      minHeight: 112,
+      justifyContent: 'center',
+      alignItems: 'center',
+      backgroundColor: colors.surface,
+      borderRadius: Radius.lg,
+      padding: 17,
+      borderWidth: 1,
+      borderColor: colors.lineStrong,
+    },
+    planCardSelected: {
+      borderWidth: 2,
+      borderColor: colors.ink,
+      padding: 16,
+    },
+    pressed: {
+      opacity: 0.8,
+    },
+    planBadge: {
+      position: 'absolute',
+      top: -12,
+      backgroundColor: colors.ink,
+      borderRadius: Radius.full,
+      paddingHorizontal: 10,
+      paddingVertical: 3,
+    },
+    planBadgeText: {
+      ...Typography.caption,
+      fontFamily: Fonts.sansBold,
+      color: colors.onInk,
+    },
+    planLabel: {
+      ...Typography.label,
+      color: colors.ink2,
+      marginBottom: 4,
+    },
+    planPrice: {
+      ...Typography.titleMd,
+      ...Numerals,
+      color: colors.ink,
+    },
+    planPeriod: {
+      ...Typography.label,
+      color: colors.ink2,
+    },
+    savingsText: {
+      ...Typography.label,
+      color: colors.ink2,
+      textAlign: 'center',
+      marginBottom: Spacing.md,
+    },
+    primaryAction: {
+      marginTop: Spacing.xs,
+    },
+    disclosure: {
+      marginTop: Spacing.md,
+      gap: 6,
+    },
+    disclosureSummary: {
+      ...Typography.bodyStrong,
+      color: colors.ink,
+      textAlign: 'center',
+    },
+    disclosureTerms: {
+      ...Typography.label,
+      fontFamily: Typography.body.fontFamily,
+      lineHeight: 19,
+      color: colors.ink2,
+      textAlign: 'center',
+    },
+    quietActions: {
+      alignItems: 'center',
+      marginTop: Spacing.xs,
+    },
+    legal: {
+      ...Typography.caption,
+      lineHeight: 18,
+      color: colors.ink2,
+      textAlign: 'center',
+      marginTop: Spacing.sm,
+    },
+    legalLink: {
+      color: colors.ink,
+      textDecorationLine: 'underline',
+    },
+  });
