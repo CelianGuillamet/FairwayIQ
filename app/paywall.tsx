@@ -11,7 +11,22 @@ import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors, PRIVACY_POLICY_URL, TERMS_OF_USE_URL } from '../constants';
 import { openLegalUrl } from '../lib/legal';
-import { getOfferings, isPremium, purchasePackage, restorePurchases } from '../lib/purchases';
+import {
+  getIntroEligibility,
+  getOfferings,
+  isPremium,
+  PurchaseIdentityError,
+  purchasePackage,
+  restorePurchases,
+} from '../lib/purchases';
+import {
+  buildSubscriptionDisclosure,
+  describeFreeTrial,
+  findPlanPackage,
+  MANAGE_SUBSCRIPTION_URL,
+  type PlanKey,
+} from '../lib/subscription';
+import { useAuthStore } from '../stores/auth';
 import { useSubscriptionStore } from '../stores/subscription';
 import { DecorativeBackground } from '../components/ui/DecorativeBackground';
 import { AppCard } from '../components/ui/AppCard';
@@ -23,39 +38,50 @@ const FEATURES = [
   { icon: '🤖', title: 'Coach IA étendu', desc: 'Jusqu’à 30 analyses et échanges avec le coach IA par jour, contre 3 en version gratuite.' },
 ] as const;
 
-type PlanKey = 'monthly' | 'annual';
-
 export default function PaywallScreen() {
   const insets = useSafeAreaInsets();
   const [selectedPlan, setSelectedPlan] = useState<PlanKey>('annual');
   const [loading, setLoading] = useState(false);
   const [offerings, setOfferings] = useState<Awaited<ReturnType<typeof getOfferings>>>(null);
+  const [introEligibility, setIntroEligibility] = useState<Record<string, boolean>>({});
   const [loadingOfferings, setLoadingOfferings] = useState(true);
 
   useEffect(() => {
-    getOfferings()
-      .then((value) => {
-        setOfferings(value);
-      })
-      .finally(() => {
-        setLoadingOfferings(false);
-      });
+    let active = true;
+
+    const load = async () => {
+      const value = await getOfferings();
+      const productIds = (['monthly', 'annual'] as const)
+        .map((plan) => findPlanPackage(value, plan)?.product.identifier)
+        .filter((id): id is string => typeof id === 'string');
+      const eligibility = await getIntroEligibility(productIds);
+
+      if (!active) {
+        return;
+      }
+
+      setOfferings(value);
+      setIntroEligibility(eligibility);
+      setLoadingOfferings(false);
+    };
+
+    void load();
+
+    return () => {
+      active = false;
+    };
   }, []);
 
-  const monthlyPackage = offerings?.monthly ?? null;
-  const annualPackage = offerings?.annual ?? null;
+  const monthlyPackage = findPlanPackage(offerings, 'monthly');
+  const annualPackage = findPlanPackage(offerings, 'annual');
   const monthlyPriceString = monthlyPackage?.product.priceString ?? null;
   const annualPriceString = annualPackage?.product.priceString ?? null;
   const annualPricePerMonthString = annualPackage?.product.pricePerMonthString ?? null;
-  const selectedPriceLabel = loadingOfferings
-    ? '...'
-    : selectedPlan === 'annual'
-      ? annualPriceString
-        ? `${annualPriceString}/an`
-        : null
-      : monthlyPriceString
-        ? `${monthlyPriceString}/mois`
-        : null;
+  const selectedPackage = selectedPlan === 'annual' ? annualPackage : monthlyPackage;
+  const freeTrial = selectedPackage
+    ? describeFreeTrial(selectedPackage.product.introPrice, introEligibility[selectedPackage.product.identifier] === true)
+    : null;
+  const disclosure = buildSubscriptionDisclosure(selectedPlan, selectedPackage?.product.priceString ?? null, freeTrial);
 
   const handlePurchase = async () => {
     if (!offerings) {
@@ -71,25 +97,30 @@ export default function PaywallScreen() {
       return;
     }
 
-    const pkg =
-      selectedPlan === 'annual'
-        ? offerings.annual ?? offerings.availablePackages[0]
-        : offerings.monthly ?? offerings.availablePackages[0];
+    if (!selectedPackage) {
+      Alert.alert('Offre indisponible', 'Cette formule n’est pas disponible pour le moment. Choisis l’autre formule ou réessaie plus tard.');
+      return;
+    }
 
-    if (!pkg) {
+    const userId = useAuthStore.getState().user?.id;
+
+    if (!userId) {
+      Alert.alert('Erreur', 'Connecte-toi pour t’abonner.');
       return;
     }
 
     setLoading(true);
 
     try {
-      const info = await purchasePackage(pkg);
+      const info = await purchasePackage(selectedPackage, userId);
       if (isPremium(info)) {
         useSubscriptionStore.getState().markPremium();
         router.replace('/(tabs)');
       }
     } catch (error: any) {
-      if (!error?.userCancelled) {
+      if (error instanceof PurchaseIdentityError) {
+        Alert.alert('Erreur', error.message);
+      } else if (!error?.userCancelled) {
         Alert.alert('Erreur', error?.message ?? 'Achat impossible.');
       }
     } finally {
@@ -98,10 +129,17 @@ export default function PaywallScreen() {
   };
 
   const handleRestore = async () => {
+    const userId = useAuthStore.getState().user?.id;
+
+    if (!userId) {
+      Alert.alert('Erreur', 'Connecte-toi pour restaurer tes achats.');
+      return;
+    }
+
     setLoading(true);
 
     try {
-      const info = await restorePurchases();
+      const info = await restorePurchases(userId);
       if (isPremium(info)) {
         useSubscriptionStore.getState().markPremium();
         Alert.alert('Abonnement restauré', 'Ton accès Premium est de nouveau actif.', [
@@ -111,7 +149,7 @@ export default function PaywallScreen() {
         Alert.alert('Aucun achat trouvé', 'Aucun abonnement actif n’est associé à ce compte.');
       }
     } catch {
-      Alert.alert('Erreur', 'Impossible de restaurer les achats.');
+      Alert.alert('Erreur', 'Impossible de restaurer les achats. Vérifie ta connexion, puis réessaie.');
     } finally {
       setLoading(false);
     }
@@ -178,12 +216,27 @@ export default function PaywallScreen() {
         ) : null}
 
         <AppButton
-          label="Commencer l’essai gratuit 7 jours"
+          label={freeTrial ? `Commencer l’essai gratuit de ${freeTrial.duration}` : 'S’abonner'}
           variant="accent"
           onPress={() => void handlePurchase()}
           loading={loading}
+          disabled={loadingOfferings}
           style={styles.primaryAction}
         />
+
+        {loadingOfferings ? null : (
+          <View style={styles.disclosure}>
+            <Text style={styles.disclosureSummary}>{disclosure.summary}</Text>
+            <Text style={styles.disclosureTerms}>{disclosure.terms}</Text>
+            <Text
+              style={styles.manageLink}
+              accessibilityRole="link"
+              onPress={() => void openLegalUrl(MANAGE_SUBSCRIPTION_URL)}
+            >
+              Gérer mon abonnement
+            </Text>
+          </View>
+        )}
 
         <AppButton
           label="Restaurer mes achats"
@@ -192,10 +245,6 @@ export default function PaywallScreen() {
           disabled={loading}
           style={styles.secondaryAction}
         />
-
-        <Text style={styles.trialNote}>
-          7 jours gratuits, puis {selectedPriceLabel ?? 'prix indisponible'}. Annulable à tout moment.
-        </Text>
 
         <Text style={styles.legal}>
           En continuant, tu acceptes les{' '}
@@ -400,14 +449,31 @@ const styles = StyleSheet.create({
   },
   secondaryAction: {
     marginTop: 10,
+    marginBottom: 18,
   },
-  trialNote: {
+  disclosure: {
+    marginTop: 14,
+    gap: 6,
+  },
+  disclosureSummary: {
+    textAlign: 'center',
+    fontSize: 13,
+    fontWeight: '700',
+    color: Colors.textMuted,
+    lineHeight: 19,
+  },
+  disclosureTerms: {
     textAlign: 'center',
     fontSize: 12,
     color: Colors.textDim,
-    marginTop: 14,
-    marginBottom: 18,
     lineHeight: 18,
+  },
+  manageLink: {
+    textAlign: 'center',
+    fontSize: 13,
+    color: Colors.textMuted,
+    textDecorationLine: 'underline',
+    paddingVertical: 4,
   },
   legal: {
     textAlign: 'center',
