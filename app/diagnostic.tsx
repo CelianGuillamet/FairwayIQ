@@ -11,7 +11,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '../constants';
 import type { DiagnosticResult } from '../lib/claude';
 import { useDrillsStore } from '../stores/drills';
+import { useRoundsStore } from '../stores/rounds';
 import { fetchDiagnosticByRound } from '../lib/diagnostics';
+import { parseDiagnosisParam, parseDiagnosticResult } from '../lib/diagnostic-shape';
 import { DecorativeBackground } from '../components/ui/DecorativeBackground';
 import { AppCard } from '../components/ui/AppCard';
 import { AppButton } from '../components/ui/AppButton';
@@ -25,43 +27,68 @@ const CATEGORY_LABELS: Record<string, string> = {
   mental: 'Mental',
 };
 
-function parseDiagnosis(value?: string) {
-  if (!value) {
-    return null;
-  }
-
-  try {
-    return JSON.parse(value) as DiagnosticResult;
-  } catch {
-    return null;
-  }
-}
-
 export default function DiagnosticScreen() {
-  const { roundId, diagnosis } = useLocalSearchParams<{ roundId: string; diagnosis?: string }>();
+  const { roundId: roundIdParam, diagnosis } = useLocalSearchParams<{
+    roundId?: string | string[];
+    diagnosis?: string | string[];
+  }>();
+  const roundId = typeof roundIdParam === 'string' ? roundIdParam : undefined;
   const { setRecommendedCategories } = useDrillsStore();
   const insets = useSafeAreaInsets();
-  const paramDiagnosis = useMemo(() => parseDiagnosis(diagnosis), [diagnosis]);
+  const paramDiagnosis = useMemo(() => parseDiagnosisParam(diagnosis), [diagnosis]);
 
-  const [result, setResult] = useState<DiagnosticResult | null>(paramDiagnosis);
-  const [loading, setLoading] = useState(!paramDiagnosis);
+  const [result, setResult] = useState<DiagnosticResult | null>(null);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (paramDiagnosis) {
-      setResult(paramDiagnosis);
-      setLoading(false);
-      setError(null);
-      return;
-    }
+    let cancelled = false;
 
-    if (!roundId) {
-      setLoading(false);
-      setError('Diagnostic introuvable.');
-      return;
+    async function loadDiagnostic() {
+      if (!roundId) {
+        setLoading(false);
+        setError('Diagnostic introuvable.');
+        return;
+      }
+
+      setLoading(true);
+      setError(null);
+
+      // The saved diagnostic is authoritative. The URL param is only a fallback for when it
+      // could not be loaded, and only for one of this user's rounds, so a crafted link
+      // cannot inject content.
+      const fallback = useRoundsStore.getState().rounds.some((round) => round.id === roundId)
+        ? paramDiagnosis
+        : null;
+
+      try {
+        const diagnostic = await fetchDiagnosticByRound(roundId);
+        if (cancelled) return;
+
+        const shown = (diagnostic ? parseDiagnosticResult(diagnostic) : null) ?? fallback;
+        if (shown) {
+          setResult(shown);
+        } else {
+          setError(diagnostic ? 'Diagnostic illisible.' : 'Aucun diagnostic enregistré pour ce round.');
+        }
+      } catch (currentError: any) {
+        if (cancelled) return;
+
+        if (fallback) {
+          setResult(fallback);
+        } else {
+          setError(currentError?.message ?? 'Impossible de charger le diagnostic.');
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
     }
 
     void loadDiagnostic();
+
+    return () => {
+      cancelled = true;
+    };
   }, [paramDiagnosis, roundId]);
 
   useEffect(() => {
@@ -69,36 +96,6 @@ export default function DiagnosticScreen() {
       setRecommendedCategories(result.recommended_categories);
     }
   }, [result, setRecommendedCategories]);
-
-  async function loadDiagnostic() {
-    if (!roundId) {
-      return;
-    }
-
-    setLoading(true);
-    setError(null);
-
-    try {
-      const diagnostic = await fetchDiagnosticByRound(roundId);
-
-      if (!diagnostic) {
-        setError('Aucun diagnostic enregistré pour ce round.');
-        return;
-      }
-
-      setResult({
-        strengths: diagnostic.strengths,
-        weaknesses: diagnostic.weaknesses,
-        weekly_plan: diagnostic.weekly_plan,
-        raw_analysis: diagnostic.raw_analysis,
-        recommended_categories: diagnostic.recommended_categories ?? [],
-      });
-    } catch (currentError: any) {
-      setError(currentError?.message ?? 'Impossible de charger le diagnostic.');
-    } finally {
-      setLoading(false);
-    }
-  }
 
   if (loading) {
     return (

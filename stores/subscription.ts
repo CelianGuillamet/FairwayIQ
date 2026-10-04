@@ -64,3 +64,9 @@ export const useSubscriptionStore = create<SubscriptionState>((set, get) => ({
     set({ isPremium: false, loading: false, purchaseGraceUntil: 0 });
   },
 }));
+
+useAuthStore.subscribe((state, previous) => {
+  if (state.user?.id !== previous.user?.id) {
+    useSubscriptionStore.getState().reset();
+  }
+});

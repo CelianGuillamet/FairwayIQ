@@ -11,7 +11,6 @@ import {
 } from 'react-native';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { supabase } from '../../lib/supabase';
 import { useAuthStore } from '../../stores/auth';
 import { Colors, HANDICAP_LEVELS, PLAY_FREQUENCIES, GOALS } from '../../constants';
 import { requestNotificationPermissions, scheduleWeeklyNotifications } from '../../lib/notifications';
@@ -53,7 +52,7 @@ const STEP_CONTENT: Record<Step, { eyebrow: string; title: string; subtitle: str
 };
 
 export default function OnboardingScreen() {
-  const { user, fetchProfile, signOut } = useAuthStore();
+  const { user, completeOnboarding, signOut } = useAuthStore();
   const insets = useSafeAreaInsets();
   const [step, setStep] = useState<Step>('name');
   const [displayName, setDisplayName] = useState('');
@@ -86,23 +85,29 @@ export default function OnboardingScreen() {
       return;
     }
     if (!user || handicap === null || !playFrequency || !goal) return;
+    if (loading) return;
     setLoading(true);
-    const { error } = await supabase.from('profiles').upsert({
-      user_id: user.id,
-      display_name: displayName.trim(),
-      handicap,
-      play_frequency: playFrequency,
-      goal,
-      onboarding_complete: true,
-    }, { onConflict: 'user_id' });
-    setLoading(false);
-    if (error) {
-      Alert.alert('Erreur', error.message);
-    } else {
-      await fetchProfile();
+    try {
+      const outcome = await completeOnboarding({
+        display_name: displayName.trim(),
+        handicap,
+        play_frequency: playFrequency,
+        goal,
+      });
+
+      if (outcome === 'already_complete') {
+        Alert.alert('Profil déjà configuré', 'Ton profil existe déjà, il n’a pas été modifié.');
+        router.replace('/');
+        return;
+      }
+
       const granted = await requestNotificationPermissions();
       if (granted) await scheduleWeeklyNotifications();
       router.replace('/paywall' as any);
+    } catch (error: any) {
+      Alert.alert('Erreur', error?.message ?? 'Impossible d’enregistrer ton profil.');
+    } finally {
+      setLoading(false);
     }
   };
 

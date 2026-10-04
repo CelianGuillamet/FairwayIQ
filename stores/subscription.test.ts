@@ -9,10 +9,16 @@ jest.mock('../lib/supabase', () => ({
 }));
 
 jest.mock('./auth', () => ({
-  useAuthStore: { getState: () => mockAuthState },
+  useAuthStore: { getState: () => mockAuthState, subscribe: jest.fn() },
 }));
 
+import { useAuthStore } from './auth';
 import { useSubscriptionStore } from './subscription';
+
+const onAuthChange = (useAuthStore.subscribe as jest.Mock).mock.calls[0][0] as (
+  state: { user: { id: string } | null },
+  previous: { user: { id: string } | null }
+) => void;
 
 const NOW = new Date('2026-06-15T12:00:00.000Z');
 const FUTURE = '2026-07-15T12:00:00.000Z';
@@ -166,5 +172,32 @@ describe('reset', () => {
 
     expect(useSubscriptionStore.getState().isPremium).toBe(false);
     expect(useSubscriptionStore.getState().loading).toBe(false);
+  });
+});
+
+describe('auth user changes', () => {
+  it('resets the cached premium state when the user signs out', () => {
+    useSubscriptionStore.getState().markPremium();
+
+    onAuthChange({ user: null }, { user: { id: 'user-1' } });
+
+    expect(useSubscriptionStore.getState().isPremium).toBe(false);
+    expect(useSubscriptionStore.getState().purchaseGraceUntil).toBe(0);
+  });
+
+  it('resets when a different user signs in', () => {
+    useSubscriptionStore.getState().markPremium();
+
+    onAuthChange({ user: { id: 'user-2' } }, { user: { id: 'user-1' } });
+
+    expect(useSubscriptionStore.getState().isPremium).toBe(false);
+  });
+
+  it('keeps the state while the same user stays signed in', () => {
+    useSubscriptionStore.getState().markPremium();
+
+    onAuthChange({ user: { id: 'user-1' } }, { user: { id: 'user-1' } });
+
+    expect(useSubscriptionStore.getState().isPremium).toBe(true);
   });
 });
