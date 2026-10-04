@@ -4,17 +4,14 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
-  TouchableOpacity,
   View,
 } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { format } from 'date-fns';
-import { fr } from 'date-fns/locale';
 import { supabase } from '../lib/supabase';
 import {
   AiCoachLimitError,
@@ -26,17 +23,31 @@ import { DIAGNOSTIC_SAVE_FAILED_MESSAGE, persistDiagnostic } from '../lib/diagno
 import { buildUpdateRoundArgs, getRoundSaveErrorMessage, updateRound } from '../lib/round-save';
 import { useRoundsStore } from '../stores/rounds';
 import { useAuthStore } from '../stores/auth';
-import { Colors, Spacing, Typography } from '../constants';
+import { useSubscriptionStore } from '../stores/subscription';
+import { Spacing, Typography } from '../constants';
+import type { ThemeColors } from '../constants';
+import { useTheme, useThemedStyles } from '../lib/theme';
 import type { Round, RoundDraftHole, RoundHole } from '../types';
 import { HoleScorecard } from '../components/rounds/HoleScorecard';
-import { DecorativeBackground } from '../components/ui/DecorativeBackground';
 import { AppCard } from '../components/ui/AppCard';
 import { AppButton } from '../components/ui/AppButton';
 import { AppBadge } from '../components/ui/AppBadge';
+import { AppInput } from '../components/ui/AppInput';
+import { Icon } from '../components/ui/Icon';
 import { PageHeader } from '../components/ui/PageHeader';
+import { RoundDiagnosticCard } from '../components/rounds-detail/RoundDiagnosticCard';
+import { ScorecardGrid } from '../components/rounds-detail/ScorecardGrid';
+import { StatsRow } from '../components/rounds-detail/StatsRow';
+import { goBackOrHome } from '../components/rounds-detail/navigation';
+import {
+  buildRoundStats,
+  buildRoundSubtitle,
+  describeScoreToPar,
+  formatRoundDate,
+} from '../components/rounds-detail/round-summary';
+import { buildScorecardHalves } from '../components/rounds-detail/scorecard-model';
 import {
   aggregateScorecard,
-  getRoundPerformanceSummary,
   mapStoredHolesToDraft,
   sortRoundHoles,
   updateDraftHole,
@@ -47,6 +58,10 @@ export default function RoundDetailScreen() {
   const { roundId } = useLocalSearchParams<{ roundId: string }>();
   const { rounds, upsertRound, removeRound } = useRoundsStore();
   const { user, profile } = useAuthStore();
+  const isPremium = useSubscriptionStore((state) => state.isPremium);
+  const subscriptionLoading = useSubscriptionStore((state) => state.loading);
+  const { colors } = useTheme();
+  const styles = useThemedStyles(createStyles);
   const storedRound = rounds.find((round) => round.id === roundId) ?? null;
   const insets = useSafeAreaInsets();
 
@@ -77,7 +92,11 @@ export default function RoundDetailScreen() {
     [hasStoredHoles, scorecard]
   );
 
-  const roundSummary = round ? getRoundPerformanceSummary(round) : null;
+  const scorecardHalves = useMemo(
+    () => hasStoredHoles && round ? buildScorecardHalves(scorecard, round.holes) : [],
+    [hasStoredHoles, scorecard, round]
+  );
+
   const frontNine = scorecard.slice(0, 9);
   const backNine = scorecard.length === 18 ? scorecard.slice(9, 18) : [];
 
@@ -269,9 +288,8 @@ export default function RoundDetailScreen() {
 
   if (loading) {
     return (
-      <View style={styles.loadingState}>
-        <DecorativeBackground />
-        <ActivityIndicator size="large" color={Colors.text} />
+      <View style={styles.centered}>
+        <ActivityIndicator size="large" color={colors.ink} />
         <Text style={styles.loadingText}>Chargement du round...</Text>
       </View>
     );
@@ -279,340 +297,272 @@ export default function RoundDetailScreen() {
 
   if (!round || error) {
     return (
-      <View style={styles.loadingState}>
-        <DecorativeBackground />
+      <View style={styles.centered}>
         <Text style={styles.errorText}>{error ?? 'Round introuvable.'}</Text>
-        <AppButton label="Retour au dashboard" variant="secondary" onPress={() => router.replace('/(tabs)')} />
+        <AppButton label="Retour à l’accueil" variant="secondary" onPress={() => router.replace('/(tabs)')} />
       </View>
     );
   }
 
   const scoreDiff = aggregate?.score_to_par ?? round.total_score - round.par;
+  const heroScore = aggregate?.total_score ?? round.total_score;
+  const heroPar = aggregate?.par ?? round.par;
+  const heroSummary = describeScoreToPar(scoreDiff);
+  const stats = buildRoundStats(round, aggregate);
+  const debriefLocked = !isPremium && !subscriptionLoading;
 
   return (
     <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <DecorativeBackground />
-      <ScrollView contentContainerStyle={[styles.content, { paddingTop: insets.top + 12 }]} keyboardShouldPersistTaps="handled">
+      <ScrollView
+        contentContainerStyle={[styles.content, { paddingTop: insets.top + Spacing.xs, paddingBottom: Spacing.display + insets.bottom }]}
+        keyboardShouldPersistTaps="handled"
+      >
         <PageHeader
-          eyebrow="Round detail"
+          onBack={goBackOrHome}
+          eyebrow={formatRoundDate(round.played_at) || undefined}
           title={courseName.trim() || round.course_name || 'Parcours'}
-          subtitle={`${format(new Date(round.played_at), 'EEEE d MMMM yyyy', { locale: fr })} · ${round.holes} trous`}
-          trailing={<AppBadge label={editing ? 'Édition' : 'Lecture'} tone={editing ? 'primary' : 'neutral'} />}
+          subtitle={buildRoundSubtitle(round)}
+          trailing={
+            editing ? (
+              <AppBadge label="Modification" tone="neutral" />
+            ) : (
+              <Pressable
+                style={({ pressed }) => [styles.quietAction, pressed && styles.pressed]}
+                onPress={() => setEditing(true)}
+                accessibilityRole="button"
+                accessibilityLabel="Modifier le round"
+              >
+                <Text style={styles.quietActionLabel}>Modifier</Text>
+              </Pressable>
+            )
+          }
         />
 
-        <AppCard accent="highlight" style={styles.heroCard}>
-          <View style={styles.heroTop}>
-            <View>
-              <Text style={styles.heroScore}>{aggregate?.total_score ?? round.total_score}</Text>
-              <Text style={[styles.heroDiff, scoreDiff <= 0 ? styles.good : styles.bad]}>
-                {scoreDiff > 0 ? '+' : ''}
-                {scoreDiff}
-              </Text>
-            </View>
-            <View style={styles.heroStats}>
-              <AppBadge label={`${round.holes} trous`} tone="neutral" />
-              <AppBadge label={editing ? 'Modifiable' : 'Verrouillé'} tone={editing ? 'primary' : 'warning'} style={styles.heroBadgeSpacing} />
-            </View>
+        <View
+          style={styles.hero}
+          accessible
+          accessibilityLabel={`${heroScore} coups, ${heroSummary}`}
+        >
+          <Text style={styles.heroScore} maxFontSizeMultiplier={1.2}>{heroScore}</Text>
+          <View style={styles.heroCopy}>
+            <Text style={[styles.heroDiff, scoreDiff <= 0 && styles.heroDiffGood]}>{heroSummary}</Text>
+            <Text style={styles.heroCaption}>{`Par ${heroPar}`}</Text>
           </View>
-
-          <View style={styles.actionRow}>
-            <AppButton
-              label={saving ? 'Sauvegarde...' : editing ? 'Sauvegarder' : 'Modifier le round'}
-              onPress={() => editing ? void handleSave() : setEditing(true)}
-              loading={saving}
-              style={styles.actionButton}
-            />
-            <AppButton
-              label={reanalyzing ? 'Analyse...' : 'Relancer le diagnostic'}
-              variant="secondary"
-              onPress={() => void handleReanalyze()}
-              disabled={reanalyzing}
-              style={styles.actionButton}
-            />
-          </View>
-
-          {!editing ? (
-            <AppButton
-              label="Débrief IA"
-              variant="ghost"
-              onPress={() => router.push({ pathname: '/debrief', params: { roundId } })}
-              style={styles.debriefButton}
-            />
-          ) : null}
-        </AppCard>
-
-        <View style={styles.metricsGrid}>
-          <MetricCard
-            label="Putts"
-            value={aggregate ? aggregate.putts.toString() : round.putts?.toString() ?? '--'}
-            helper={aggregate ? `${aggregate.average_putts_per_hole}/trou` : roundSummary?.puttsPerHole != null ? `${roundSummary.puttsPerHole}/trou` : '—'}
-          />
-          <MetricCard
-            label="GIR"
-            value={aggregate ? `${aggregate.gir_percentage}%` : roundSummary?.girPercentage != null ? `${roundSummary.girPercentage}%` : '--'}
-            helper={aggregate ? `${aggregate.gir}/${aggregate.holes}` : round.gir != null ? `${round.gir}/${round.holes}` : '—'}
-          />
-          <MetricCard
-            label="Fairways"
-            value={aggregate?.fairway_percentage != null ? `${aggregate.fairway_percentage}%` : roundSummary?.fairwayPercentage != null ? `${roundSummary.fairwayPercentage}%` : '--'}
-            helper={aggregate ? `${aggregate.fairways_hit}/${aggregate.fairways_total}` : round.fairways_hit != null && round.fairways_total != null ? `${round.fairways_hit}/${round.fairways_total}` : '—'}
-          />
-          <MetricCard
-            label="Pénalités"
-            value={aggregate ? aggregate.penalties.toString() : (round.penalties ?? 0).toString()}
-            helper="coups donnés"
-          />
         </View>
 
-        {aggregate ? (
-          <AppCard style={styles.splitCard}>
-            <Text style={styles.sectionTitle}>Split de score</Text>
-            <SplitRow label="Aller" score={aggregate.front_nine_score} toPar={aggregate.front_nine_to_par} />
-            {aggregate.back_nine_score != null && aggregate.back_nine_to_par != null ? (
-              <SplitRow label="Retour" score={aggregate.back_nine_score} toPar={aggregate.back_nine_to_par} />
-            ) : null}
-          </AppCard>
-        ) : null}
-
-        <AppCard style={styles.infoCard}>
-          <Text style={styles.sectionTitle}>Infos round</Text>
-          <Text style={styles.inputLabel}>Parcours</Text>
-          {editing ? (
-            <TextInput
-              style={styles.input}
+        {editing ? (
+          <View style={styles.block}>
+            <Text style={styles.sectionTitle}>Infos du round</Text>
+            <AppInput
+              label="Parcours"
               value={courseName}
               onChangeText={setCourseName}
               placeholder="Nom du parcours"
-              placeholderTextColor={Colors.textDim}
             />
-          ) : (
-            <Text style={styles.readOnlyText}>{courseName.trim() || 'Parcours non précisé'}</Text>
-          )}
-
-          <Text style={[styles.inputLabel, styles.notesLabel]}>Notes</Text>
-          {editing ? (
-            <TextInput
-              style={[styles.input, styles.textarea]}
+            <AppInput
+              label="Notes"
               value={notes}
               onChangeText={setNotes}
               multiline
               placeholder="Conditions, stratégie, sensations..."
-              placeholderTextColor={Colors.textDim}
+              style={styles.notesInput}
             />
-          ) : (
-            <Text style={styles.readOnlyText}>{notes.trim() || 'Aucune note pour ce round.'}</Text>
-          )}
-        </AppCard>
+          </View>
+        ) : null}
 
         {hasStoredHoles ? (
-          <>
-            <HoleScorecard
-              title={round.holes === 18 ? 'Aller' : 'Carte de score'}
-              holes={frontNine}
-              editable={editing}
-              onChangeHole={handleChangeHole}
-            />
-
-            {round.holes === 18 ? (
+          editing ? (
+            <>
               <HoleScorecard
-                title="Retour"
-                holes={backNine}
+                title={round.holes === 18 ? 'Aller' : 'Carte de score'}
+                holes={frontNine}
                 editable={editing}
                 onChangeHole={handleChangeHole}
               />
-            ) : null}
-          </>
+
+              {round.holes === 18 ? (
+                <HoleScorecard
+                  title="Retour"
+                  holes={backNine}
+                  editable={editing}
+                  onChangeHole={handleChangeHole}
+                />
+              ) : null}
+            </>
+          ) : (
+            <View style={styles.block}>
+              <ScorecardGrid halves={scorecardHalves} />
+            </View>
+          )
         ) : (
-          <AppCard style={styles.infoCard}>
+          <AppCard accent="soft" style={styles.block}>
             <Text style={styles.sectionTitle}>Carte de score</Text>
-            <Text style={styles.readOnlyText}>
+            <Text style={styles.mutedText}>
               Le détail trou par trou n’est pas disponible pour ce round.
             </Text>
           </AppCard>
         )}
 
+        <View style={styles.block}>
+          <StatsRow stats={stats} />
+        </View>
+
+        <View style={styles.block}>
+          <RoundDiagnosticCard
+            reanalyzing={reanalyzing}
+            showDebrief={!editing}
+            debriefLocked={debriefLocked}
+            onOpenDiagnostic={() => router.push({ pathname: '/diagnostic', params: { roundId: round.id } })}
+            onReanalyze={() => void handleReanalyze()}
+            onOpenDebrief={() => router.push({ pathname: '/debrief', params: { roundId } })}
+          />
+        </View>
+
         {!editing ? (
-          <AppButton label="Supprimer ce round" variant="secondary" onPress={handleDelete} style={styles.deleteButton} />
+          <>
+            <View style={styles.block}>
+              <Text style={styles.sectionTitle}>Notes</Text>
+              {notes.trim() ? (
+                <Text style={styles.noteText}>{notes.trim()}</Text>
+              ) : (
+                <Text style={styles.mutedText}>Aucune note pour ce round.</Text>
+              )}
+            </View>
+
+            <Pressable
+              style={({ pressed }) => [styles.deleteAction, pressed && styles.deletePressed]}
+              onPress={handleDelete}
+              accessibilityRole="button"
+              accessibilityLabel="Supprimer ce round"
+            >
+              <Icon name="trash" size={18} color={colors.error} />
+              <Text style={styles.deleteLabel}>Supprimer ce round</Text>
+            </Pressable>
+          </>
         ) : null}
       </ScrollView>
+
+      {editing ? (
+        <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, Spacing.sm) }]}>
+          <AppButton
+            label={saving ? 'Sauvegarde...' : 'Sauvegarder'}
+            onPress={() => void handleSave()}
+            loading={saving}
+          />
+        </View>
+      ) : null}
     </KeyboardAvoidingView>
   );
 }
 
-function MetricCard({ label, value, helper }: { label: string; value: string; helper: string }) {
-  return (
-    <AppCard style={styles.metricCard}>
-      <Text style={styles.metricValue}>{value}</Text>
-      <Text style={styles.metricLabel}>{label}</Text>
-      <Text style={styles.metricHelper}>{helper}</Text>
-    </AppCard>
-  );
-}
-
-function SplitRow({ label, score, toPar }: { label: string; score: number; toPar: number }) {
-  return (
-    <View style={styles.splitRow}>
-      <Text style={styles.splitLabel}>{label}</Text>
-      <Text style={styles.splitScore}>{score}</Text>
-      <Text style={[styles.splitDiff, toPar <= 0 ? styles.good : styles.bad]}>
-        {toPar > 0 ? '+' : ''}
-        {toPar}
-      </Text>
-    </View>
-  );
-}
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.background,
-  },
-  content: {
-    paddingHorizontal: Spacing.md,
-    paddingBottom: 48,
-  },
-  loadingState: {
-    flex: 1,
-    backgroundColor: Colors.background,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: Spacing.xl,
-  },
-  loadingText: {
-    ...Typography.body,
-    color: Colors.textMuted,
-    marginTop: Spacing.sm,
-  },
-  errorText: {
-    ...Typography.bodyStrong,
-    color: Colors.error,
-    textAlign: 'center',
-    marginBottom: Spacing.md,
-  },
-  heroCard: {
-    marginBottom: Spacing.md,
-  },
-  heroTop: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    gap: Spacing.md,
-  },
-  heroScore: {
-    ...Typography.display,
-    fontSize: 72,
-    lineHeight: 78,
-    color: Colors.text,
-  },
-  heroDiff: {
-    ...Typography.titleMd,
-    marginTop: 2,
-  },
-  heroStats: {
-    alignItems: 'flex-end',
-  },
-  heroBadgeSpacing: {
-    marginTop: Spacing.xs,
-  },
-  actionRow: {
-    flexDirection: 'row',
-    gap: Spacing.sm,
-    marginTop: Spacing.md,
-  },
-  actionButton: {
-    flex: 1,
-  },
-  debriefButton: {
-    marginTop: Spacing.xs,
-    alignSelf: 'flex-start',
-  },
-  metricsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: Spacing.sm,
-    marginBottom: Spacing.md,
-  },
-  metricCard: {
-    flex: 1,
-    minWidth: '45%',
-  },
-  metricValue: {
-    ...Typography.display,
-    color: Colors.text,
-  },
-  metricLabel: {
-    ...Typography.label,
-    color: Colors.text,
-    marginTop: Spacing.xs,
-  },
-  metricHelper: {
-    ...Typography.caption,
-    color: Colors.textDim,
-    marginTop: 4,
-  },
-  splitCard: {
-    marginBottom: Spacing.md,
-  },
-  sectionTitle: {
-    ...Typography.heading,
-    color: Colors.text,
-    marginBottom: Spacing.sm,
-  },
-  splitRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: Spacing.sm,
-    borderTopWidth: 1,
-    borderTopColor: Colors.border,
-  },
-  splitLabel: {
-    ...Typography.body,
-    color: Colors.textMuted,
-  },
-  splitScore: {
-    ...Typography.bodyStrong,
-    color: Colors.text,
-  },
-  splitDiff: {
-    ...Typography.bodyStrong,
-  },
-  infoCard: {
-    marginBottom: Spacing.md,
-  },
-  inputLabel: {
-    ...Typography.label,
-    color: Colors.textDim,
-    marginBottom: 8,
-  },
-  notesLabel: {
-    marginTop: Spacing.md,
-  },
-  input: {
-    backgroundColor: Colors.backgroundSoft,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    borderRadius: 16,
-    padding: Spacing.md,
-    color: Colors.text,
-    fontSize: 16,
-  },
-  textarea: {
-    minHeight: 92,
-    textAlignVertical: 'top',
-  },
-  readOnlyText: {
-    ...Typography.body,
-    color: Colors.text,
-  },
-  deleteButton: {
-    marginTop: Spacing.xs,
-    marginBottom: Spacing.xs,
-  },
-  good: {
-    color: Colors.accentBlue,
-  },
-  bad: {
-    color: Colors.error,
-  },
-});
+const createStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: colors.bg,
+    },
+    content: {
+      paddingHorizontal: Spacing.lg,
+    },
+    centered: {
+      flex: 1,
+      backgroundColor: colors.bg,
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingHorizontal: Spacing.xl,
+    },
+    loadingText: {
+      ...Typography.body,
+      color: colors.ink2,
+      marginTop: Spacing.sm,
+    },
+    errorText: {
+      ...Typography.bodyStrong,
+      color: colors.error,
+      textAlign: 'center',
+      marginBottom: Spacing.md,
+    },
+    block: {
+      marginBottom: Spacing.lg,
+    },
+    quietAction: {
+      minHeight: 44,
+      justifyContent: 'center',
+      paddingHorizontal: Spacing.xs,
+    },
+    quietActionLabel: {
+      ...Typography.bodyStrong,
+      color: colors.ink,
+    },
+    pressed: {
+      opacity: 0.7,
+    },
+    hero: {
+      flexDirection: 'row',
+      alignItems: 'flex-end',
+      gap: 14,
+      marginBottom: Spacing.lg,
+    },
+    heroScore: {
+      ...Typography.numeralXL,
+      fontSize: 76,
+      lineHeight: 80,
+      color: colors.ink,
+    },
+    heroCopy: {
+      flex: 1,
+      paddingBottom: Spacing.xs,
+    },
+    heroDiff: {
+      ...Typography.heading,
+      color: colors.ink,
+    },
+    heroDiffGood: {
+      color: colors.green,
+    },
+    heroCaption: {
+      ...Typography.body,
+      fontSize: 13,
+      lineHeight: 18,
+      color: colors.ink2,
+    },
+    sectionTitle: {
+      ...Typography.heading,
+      color: colors.ink,
+      marginBottom: Spacing.xs,
+    },
+    mutedText: {
+      ...Typography.body,
+      color: colors.ink2,
+    },
+    noteText: {
+      ...Typography.body,
+      color: colors.ink,
+    },
+    notesInput: {
+      minHeight: 92,
+      textAlignVertical: 'top',
+    },
+    deleteAction: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: Spacing.xs,
+      minHeight: 48,
+      borderRadius: 14,
+    },
+    deletePressed: {
+      backgroundColor: colors.errorBg,
+    },
+    deleteLabel: {
+      ...Typography.bodyStrong,
+      color: colors.error,
+    },
+    footer: {
+      paddingHorizontal: Spacing.lg,
+      paddingTop: Spacing.sm,
+      borderTopWidth: 1,
+      borderTopColor: colors.line,
+      backgroundColor: colors.bg,
+    },
+  });
