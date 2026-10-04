@@ -20,7 +20,12 @@ type DrillsState = {
   getStreak: () => number;
   getTotalDone: () => number;
   setRecommendedCategories: (cats: string[]) => void;
+  reset: () => void;
 };
+
+// Bumped on reset(): a response that started before it belongs to a previous user and is dropped.
+let generation = 0;
+const pendingMarks = new Map<string, Promise<void>>();
 
 export const useDrillsStore = create<DrillsState>((set, get) => ({
   completions: [],
@@ -31,6 +36,7 @@ export const useDrillsStore = create<DrillsState>((set, get) => ({
     // there's no UI list to paginate against, so we page through everything here instead
     // of capping at a single batch. MAX_PAGES bounds the worst case (10,000 completions)
     // rather than fetching truly unbounded data for a runaway account.
+    const requestGeneration = generation;
     let allCompletions: Completion[] = [];
 
     for (let page = 0; page < MAX_PAGES; page++) {
@@ -40,6 +46,10 @@ export const useDrillsStore = create<DrillsState>((set, get) => ({
         .select('*')
         .order('completed_at', { ascending: false })
         .range(from, from + PAGE_SIZE - 1);
+
+      if (requestGeneration !== generation) {
+        return;
+      }
 
       if (error) {
         throw error;
@@ -59,18 +69,32 @@ export const useDrillsStore = create<DrillsState>((set, get) => ({
     set({ completions: allCompletions });
   },
 
-  markDone: async (drillId, userId) => {
-    const { data, error } = await supabase
-      .from('drill_completions')
-      .insert({ drill_id: drillId, user_id: userId })
-      .select()
-      .single();
-
-    if (error) {
-      throw error;
+  markDone: (drillId, userId) => {
+    const pendingKey = `${userId}:${drillId}`;
+    const pending = pendingMarks.get(pendingKey);
+    if (pending) {
+      return pending;
     }
 
-    if (data) set({ completions: [data, ...get().completions] });
+    const requestGeneration = generation;
+    const request = (async () => {
+      const { data, error } = await supabase
+        .from('drill_completions')
+        .insert({ drill_id: drillId, user_id: userId })
+        .select()
+        .single();
+
+      if (error) {
+        throw error;
+      }
+
+      if (data && requestGeneration === generation) {
+        set({ completions: [data, ...get().completions] });
+      }
+    })().finally(() => pendingMarks.delete(pendingKey));
+
+    pendingMarks.set(pendingKey, request);
+    return request;
   },
 
   isDoneToday: (drillId) => {
@@ -104,4 +128,9 @@ export const useDrillsStore = create<DrillsState>((set, get) => ({
   },
 
   setRecommendedCategories: (cats) => set({ recommendedCategories: cats }),
+
+  reset: () => {
+    generation++;
+    set({ completions: [], recommendedCategories: [] });
+  },
 }));
