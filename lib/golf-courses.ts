@@ -1,3 +1,4 @@
+import { invokeWithTimeout } from './invoke-timeout';
 import { supabase } from './supabase';
 
 export type GolfCourse = {
@@ -88,6 +89,15 @@ type CourseCatalogSearchResponse = {
 type CourseCatalogGetResponse = {
   course: GolfCourse | null;
 };
+
+export type CourseSearchOutcome = {
+  courses: CourseSearchResult[];
+  remoteUnavailable: boolean;
+};
+
+export const COURSE_CATALOG_TIMEOUT_MS = 12_000;
+
+export const COURSE_SEARCH_UNAVAILABLE_MESSAGE = 'La recherche en ligne est indisponible. Seule la liste de parcours intégrée à l’app est proposée.';
 
 export const DEFAULT_TEE_KEY = 'yellow';
 
@@ -497,9 +507,10 @@ function searchFallbackCourses(query: string, limit = 8): CourseSearchResult[] {
 }
 
 async function invokeCourseCatalog<TRequest extends { action: string }, TResponse>(payload: TRequest) {
-  const { data, error } = await supabase.functions.invoke('course-catalog', {
-    body: payload,
-  });
+  const { data, error } = await invokeWithTimeout(
+    (signal) => supabase.functions.invoke('course-catalog', { body: payload, signal }),
+    COURSE_CATALOG_TIMEOUT_MS
+  );
 
   if (error) {
     throw new Error(error.message || 'La synchronisation du catalogue parcours a échoué.');
@@ -536,11 +547,11 @@ export function isTeeKey(value: unknown): value is TeeKey {
   return typeof value === 'string' && value.trim().length > 0;
 }
 
-export async function searchCourses(query: string, limit = 8): Promise<CourseSearchResult[]> {
+export async function searchCoursesWithStatus(query: string, limit = 8): Promise<CourseSearchOutcome> {
   const trimmedQuery = query.trim();
 
   if (trimmedQuery.length < 2) {
-    return [];
+    return { courses: [], remoteUnavailable: false };
   }
 
   const fallbackCourses = searchFallbackCourses(trimmedQuery, limit);
@@ -558,13 +569,20 @@ export async function searchCourses(query: string, limit = 8): Promise<CourseSea
     const hasExactMatch = combinedCourses.some((course) => normalizeCourseValue(course.name) === normalizedQuery);
 
     if (hasExactMatch) {
-      return combinedCourses.slice(0, limit);
+      return { courses: combinedCourses.slice(0, limit), remoteUnavailable: false };
     }
 
-    return dedupeCourses([createCustomCourse(trimmedQuery), ...combinedCourses]).slice(0, limit);
+    return {
+      courses: dedupeCourses([createCustomCourse(trimmedQuery), ...combinedCourses]).slice(0, limit),
+      remoteUnavailable: false,
+    };
   } catch {
-    return fallbackCourses;
+    return { courses: fallbackCourses, remoteUnavailable: true };
   }
+}
+
+export async function searchCourses(query: string, limit = 8): Promise<CourseSearchResult[]> {
+  return (await searchCoursesWithStatus(query, limit)).courses;
 }
 
 export function getParForHoles(course: GolfCourse, holes: 9 | 18): number {

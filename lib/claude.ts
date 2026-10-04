@@ -7,6 +7,7 @@ import type {
   PostRoundDebriefResponse,
 } from './ai-contract';
 import { AI_COACH_PREMIUM_REQUIRED_CODE } from './ai-contract';
+import { InvokeTimeoutError, invokeWithTimeout } from './invoke-timeout';
 import { aggregateScorecard } from './rounds';
 import { supabase } from './supabase';
 
@@ -64,7 +65,12 @@ export class AiCoachLimitError extends Error {}
 
 export class AiCoachPremiumRequiredError extends Error {}
 
+export class AiCoachTimeoutError extends Error {}
+
+export const AI_COACH_TIMEOUT_MS = 30_000;
+
 const PREMIUM_REQUIRED_FALLBACK_MESSAGE = 'Le débrief conversationnel est réservé aux abonnés Premium.';
+const TIMEOUT_MESSAGE = 'Le coach IA met trop de temps à répondre. Réessaie plus tard.';
 
 type AiCoachErrorBody = { error?: unknown; code?: unknown };
 
@@ -87,9 +93,22 @@ function readErrorMessage(body: AiCoachErrorBody | null) {
 }
 
 async function invokeAiCoach<TRequest extends { action: string }, TResponse>(payload: TRequest) {
-  const { data, error } = await supabase.functions.invoke('ai-coach', {
-    body: payload,
-  });
+  let result;
+
+  try {
+    result = await invokeWithTimeout(
+      (signal) => supabase.functions.invoke('ai-coach', { body: payload, signal }),
+      AI_COACH_TIMEOUT_MS
+    );
+  } catch (invokeError) {
+    if (invokeError instanceof InvokeTimeoutError) {
+      throw new AiCoachTimeoutError(TIMEOUT_MESSAGE);
+    }
+
+    throw invokeError;
+  }
+
+  const { data, error } = result;
 
   if (error) {
     const limitMessage = readErrorMessage(await readErrorBody(error, 429));
