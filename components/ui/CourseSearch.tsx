@@ -3,7 +3,12 @@ import {
   View, Text, TextInput, Pressable,
   StyleSheet, Keyboard,
 } from 'react-native';
-import { searchCourses, type CourseSearchResult, type GolfCourse } from '../../lib/golf-courses';
+import {
+  COURSE_SEARCH_UNAVAILABLE_MESSAGE,
+  searchCoursesWithStatus,
+  type CourseSearchResult,
+  type GolfCourse,
+} from '../../lib/golf-courses';
 import { Radius, Shadows, Spacing, Typography } from '../../constants';
 import type { ThemeColors } from '../../constants';
 import { useTheme, useThemedStyles } from '../../lib/theme';
@@ -20,6 +25,7 @@ export function CourseSearch({ value, onSelect, onChangeText }: Props) {
   const [results, setResults] = useState<CourseSearchResult[]>([]);
   const [focused, setFocused] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [searchUnavailable, setSearchUnavailable] = useState(false);
   const latestRequestRef = useRef(0);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -39,6 +45,7 @@ export function CourseSearch({ value, onSelect, onChangeText }: Props) {
     if (text.trim().length < 2) {
       latestRequestRef.current += 1;
       setResults([]);
+      setSearchUnavailable(false);
       setLoading(false);
       return;
     }
@@ -46,16 +53,18 @@ export function CourseSearch({ value, onSelect, onChangeText }: Props) {
     const requestId = latestRequestRef.current + 1;
     latestRequestRef.current = requestId;
     setResults([]);
+    setSearchUnavailable(false);
     setLoading(true);
 
     timeoutRef.current = setTimeout(() => {
-      void searchCourses(text)
-        .then((nextResults) => {
+      void searchCoursesWithStatus(text)
+        .then((outcome) => {
           if (latestRequestRef.current !== requestId) {
             return;
           }
 
-          setResults(nextResults);
+          setResults(outcome.courses);
+          setSearchUnavailable(outcome.remoteUnavailable);
         })
         .catch(() => {
           if (latestRequestRef.current !== requestId) {
@@ -63,6 +72,7 @@ export function CourseSearch({ value, onSelect, onChangeText }: Props) {
           }
 
           setResults([]);
+          setSearchUnavailable(true);
         })
         .finally(() => {
           if (latestRequestRef.current === requestId) {
@@ -75,13 +85,14 @@ export function CourseSearch({ value, onSelect, onChangeText }: Props) {
   const handleSelect = (course: GolfCourse) => {
     onChangeText(course.name);
     setResults([]);
+    setSearchUnavailable(false);
     Keyboard.dismiss();
     setFocused(false);
     setLoading(false);
     onSelect(course);
   };
 
-  const showDropdown = focused && value.trim().length >= 2 && (loading || results.length > 0);
+  const showDropdown = focused && value.trim().length >= 2 && (loading || results.length > 0 || searchUnavailable);
 
   return (
     <View style={styles.wrapper}>
@@ -102,6 +113,11 @@ export function CourseSearch({ value, onSelect, onChangeText }: Props) {
           {loading ? (
             <View style={styles.loadingState}>
               <Text style={styles.loadingLabel}>Recherche des parcours...</Text>
+            </View>
+          ) : null}
+          {!loading && searchUnavailable ? (
+            <View style={styles.notice}>
+              <Text style={styles.noticeLabel}>{COURSE_SEARCH_UNAVAILABLE_MESSAGE}</Text>
             </View>
           ) : null}
           {results.map((course) => {
@@ -183,6 +199,16 @@ const createStyles = (colors: ThemeColors) =>
       borderBottomColor: colors.line,
     },
     loadingLabel: {
+      ...Typography.caption,
+      color: colors.ink2,
+    },
+    notice: {
+      paddingHorizontal: Spacing.md,
+      paddingVertical: Spacing.md,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.line,
+    },
+    noticeLabel: {
       ...Typography.caption,
       color: colors.ink2,
     },

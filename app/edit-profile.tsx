@@ -10,6 +10,8 @@ import {
 } from 'react-native';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { openLegalUrl } from '../lib/legal';
+import { MANAGE_SUBSCRIPTION_URL } from '../lib/subscription';
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../stores/auth';
 import { Colors, GOALS, HANDICAP_LEVELS, PLAY_FREQUENCIES } from '../constants';
@@ -19,6 +21,9 @@ import { AppInput } from '../components/ui/AppInput';
 import { AppButton } from '../components/ui/AppButton';
 import { ChoiceTile } from '../components/ui/ChoiceTile';
 import { PageHeader } from '../components/ui/PageHeader';
+
+const SAVE_ERROR_MESSAGE = 'Impossible d’enregistrer tes modifications pour le moment. Réessaie dans un instant.';
+const DELETE_ERROR_MESSAGE = 'La suppression du compte a échoué. Réessaie plus tard.';
 
 export default function EditProfileScreen() {
   const { profile, fetchProfile, signOut } = useAuthStore();
@@ -51,7 +56,8 @@ export default function EditProfileScreen() {
     setSaving(false);
 
     if (error) {
-      Alert.alert('Erreur', error.message);
+      console.warn('[edit-profile] Profile update failed', { message: error.message });
+      Alert.alert('Erreur', SAVE_ERROR_MESSAGE);
       return;
     }
 
@@ -65,8 +71,9 @@ export default function EditProfileScreen() {
     const { error } = await supabase.functions.invoke('delete-account');
 
     if (error) {
+      console.warn('[edit-profile] Account deletion failed', { message: error.message });
       setDeleting(false);
-      Alert.alert('Erreur', error.message);
+      Alert.alert('Erreur', DELETE_ERROR_MESSAGE);
       return;
     }
 
@@ -77,9 +84,10 @@ export default function EditProfileScreen() {
   const handleDeleteAccount = () => {
     Alert.alert(
       'Supprimer le compte',
-      'Cette action est irréversible. Toutes tes données (rounds, diagnostics, profil) seront définitivement supprimées.',
+      'Cette action est irréversible. Toutes tes données (rounds, diagnostics, profil) seront définitivement supprimées.\n\nSi tu as un abonnement Premium, supprimer ton compte ne l’annule pas : Apple continuera à te facturer. Pour l’annuler, ouvre Réglages > ton nom > Abonnements sur ton iPhone, ou touche « Gérer mon abonnement ».',
       [
         { text: 'Annuler', style: 'cancel' },
+        { text: 'Gérer mon abonnement', onPress: () => void openLegalUrl(MANAGE_SUBSCRIPTION_URL) },
         { text: 'Supprimer', style: 'destructive', onPress: () => void performDeleteAccount() },
       ]
     );
@@ -166,6 +174,16 @@ export default function EditProfileScreen() {
           <Text style={styles.dangerText}>
             La suppression de ton compte efface définitivement ton profil, tes rounds et tes diagnostics. Cette action est irréversible.
           </Text>
+          <Text style={styles.dangerText}>
+            Elle n’annule pas un abonnement Premium Apple : annule-le toi-même pour ne plus être facturé.{' '}
+            <Text
+              style={styles.dangerLink}
+              accessibilityRole="link"
+              onPress={() => void openLegalUrl(MANAGE_SUBSCRIPTION_URL)}
+            >
+              Gérer mon abonnement
+            </Text>
+          </Text>
           <AppButton
             label="Supprimer mon compte"
             variant="secondary"
@@ -217,6 +235,10 @@ const styles = StyleSheet.create({
     color: Colors.textMuted,
     lineHeight: 18,
     marginBottom: 16,
+  },
+  dangerLink: {
+    color: Colors.text,
+    textDecorationLine: 'underline',
   },
   dangerAction: {
     borderColor: Colors.error,

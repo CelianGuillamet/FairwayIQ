@@ -64,8 +64,8 @@ Secrets Supabase à définir (jamais dans le bundle Expo) :
 |---|---|---|
 | `ANTHROPIC_API_KEY` | Clé API Anthropic (obligatoire) | — |
 | `ANTHROPIC_MODEL_PRIMARY` | Modèle Claude utilisé | `claude-haiku-4-5-20251001` |
-| `AI_COACH_DAILY_LIMIT_FREE` | Appels IA par jour, utilisateur gratuit (<= 0 : illimité) | `3` |
-| `AI_COACH_DAILY_LIMIT_PREMIUM` | Appels IA par jour, utilisateur premium (<= 0 : illimité) | `30` |
+| `AI_COACH_DAILY_LIMIT_FREE` | Appels IA par jour, utilisateur gratuit (`-1` ou `unlimited` : illimité ; toute autre valeur <= 0 est ignorée avec un avertissement) | `3` |
+| `AI_COACH_DAILY_LIMIT_PREMIUM` | Appels IA par jour, utilisateur premium (`-1` ou `unlimited` : illimité ; toute autre valeur <= 0 est ignorée avec un avertissement) | `30` |
 
 ```bash
 supabase secrets set ANTHROPIC_API_KEY=your-anthropic-server-key
@@ -85,9 +85,47 @@ Le modèle doit accepter un `tool_choice` forcé : Sonnet 5.5, Opus 5.5 et Fable
 | Diagnostic IA de round | Oui, 3 appels IA par jour | Oui, 30 appels IA par jour |
 | Débrief conversationnel post-round | Non | Oui |
 
-- Le quota quotidien est commun à tous les appels `ai-coach` (diagnostic et messages de débrief) et se règle via `AI_COACH_DAILY_LIMIT_FREE` / `AI_COACH_DAILY_LIMIT_PREMIUM`.
+- Le quota quotidien est commun à tous les appels `ai-coach` (diagnostic et messages de débrief), se règle via `AI_COACH_DAILY_LIMIT_FREE` / `AI_COACH_DAILY_LIMIT_PREMIUM` et change à minuit, heure de Paris. Un appel n'est pas décompté si la requête est invalide, et il est rendu si le fournisseur IA échoue.
 - Le statut Premium fait foi côté serveur : la table `subscriptions` est synchronisée par la fonction `revenuecat-webhook`, et `ai-coach` répond `403` à `post_round_debrief` pour un utilisateur non Premium (le quota n'est alors pas consommé). L'app lit la même ligne `subscriptions` pour afficher ou masquer le débrief.
 - RevenueCat est identifié avec l'UUID Supabase de l'utilisateur (`Purchases.logIn` à la connexion, `Purchases.logOut` à la déconnexion). Sans cela, le webhook reçoit un identifiant anonyme et ne peut pas retrouver l'utilisateur.
+
+## Webhook RevenueCat (Edge Function `revenuecat-webhook`)
+
+La fonction `supabase/functions/revenuecat-webhook` met à jour la table `subscriptions` à partir des événements RevenueCat. Ordre de mise en place :
+
+1. Appliquer les migrations (`supabase db push`) **avant** de déployer la fonction : la migration `017_subscription_event_timestamp.sql` ajoute `subscriptions.last_event_at` et la fonction SQL `apply_subscription_event` utilisée par le webhook.
+2. Définir le secret (jamais dans `.env.local` ni dans le bundle Expo) :
+
+```bash
+supabase secrets set REVENUECAT_WEBHOOK_SECRET=your-long-random-secret
+```
+
+3. Déployer la fonction sans vérification JWT (RevenueCat n'envoie pas de JWT Supabase ; l'authentification repose uniquement sur le secret ci-dessus) :
+
+```bash
+supabase functions deploy revenuecat-webhook --no-verify-jwt
+```
+
+`supabase/config.toml` désactive déjà `verify_jwt` pour cette fonction ; le flag rend la commande explicite.
+
+4. Dans RevenueCat (Project settings > Integrations > Webhooks), créer le webhook :
+   - URL : `https://<project-ref>.supabase.co/functions/v1/revenuecat-webhook`
+   - Authorization header value : exactement la valeur de `REVENUECAT_WEBHOOK_SECRET`, sans préfixe `Bearer` (la fonction compare l'en-tête `Authorization` à cette valeur, en temps constant).
+   - Environnements : Production et Sandbox (App Review teste avec des achats sandbox).
+   - Le bouton « Send test event » doit répondre 200.
+
+Effet de chaque événement sur `subscriptions` :
+
+| Événement RevenueCat | Effet |
+|---|---|
+| `INITIAL_PURCHASE`, `RENEWAL`, `PRODUCT_CHANGE`, `UNCANCELLATION`, `SUBSCRIPTION_EXTENDED`, `REFUND_REVERSED` | Premium jusqu'à `expiration_at_ms` |
+| `CANCELLATION` (auto-renouvellement désactivé) | Premium conservé, `expires_at` = `expiration_at_ms` ; le retrait se fait à l'`EXPIRATION` |
+| `CANCELLATION` avec `cancel_reason = CUSTOMER_SUPPORT` (remboursement) | Premium retiré immédiatement |
+| `EXPIRATION` | Premium retiré |
+| `TRANSFER` | L'expiration connue du compte source est reprise par le compte cible, la source est retirée. Sans expiration connue (source anonyme ou inconnue), la cible attend le prochain `RENEWAL` |
+| `BILLING_ISSUE`, `SUBSCRIPTION_PAUSED`, `TEMPORARY_ENTITLEMENT_GRANT`, `TEST` et types inconnus | Ignorés (réponse 200) |
+
+Un `app_user_id` qui n'est pas un UUID (par exemple `$RCAnonymousID:...`) ou un compte supprimé est ignoré avec une réponse 200 : il n'y a rien à rattacher et RevenueCat ne doit pas réessayer. Un événement plus ancien que le dernier appliqué (`last_event_at`) est ignoré, de sorte qu'une `EXPIRATION` rejouée après un `RENEWAL` ne retire pas le Premium. Une erreur base de données renvoie 500 et RevenueCat réessaie.
 
 ## Lancer l'app
 
