@@ -1,167 +1,110 @@
-import { memo, useEffect, useRef } from 'react';
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { Colors, Radius, Spacing, Typography } from '../../constants';
+import { memo, useEffect, useRef, useState } from 'react';
+import { Pressable, ScrollView, StyleSheet, Text } from 'react-native';
+import { Fonts, Numerals, Radius, Spacing, Typography } from '../../constants';
+import type { ThemeColors } from '../../constants';
+import { useThemedStyles } from '../../lib/theme';
+import { describeStrokes } from '../../lib/score-labels';
 import type { RoundDraftHole } from '../../types';
-import { getScoreDescriptor } from '../../lib/hole-view';
+import { ScoreMark } from '../ui/ScoreMark';
 
 type Props = {
   currentHole: number;
   scorecard: RoundDraftHole[];
   onSelectHole: (holeNumber: number) => void;
-  onPreviousHole: () => void;
-  onNextHole: () => void;
 };
 
-const CHIP_W  = 44;
-const CHIP_G  = 5;
-const CHIP_STEP = CHIP_W + CHIP_G;
+const TILE_WIDTH = 44;
+const TILE_HEIGHT = 48;
+const TILE_GAP = 4;
+const TILE_STEP = TILE_WIDTH + TILE_GAP;
+const SIDE_PADDING = Spacing.md;
 
-function chipDotColor(hole: RoundDraftHole): string {
-  if (!hole.completed) return Colors.border;
-  const { tone } = getScoreDescriptor(hole.score, hole.par);
-  switch (tone) {
-    case 'elite':    return '#FFD055';
-    case 'positive': return Colors.accentBlue;
-    case 'warning':  return Colors.warning;
-    case 'danger':   return Colors.error;
-    default:         return Colors.textMuted;
-  }
-}
-
-export const HoleNavigation = memo(function HoleNavigation({
-  currentHole,
-  scorecard,
-  onSelectHole,
-  onPreviousHole,
-  onNextHole,
-}: Props) {
+export const HoleNavigation = memo(function HoleNavigation({ currentHole, scorecard, onSelectHole }: Props) {
+  const styles = useThemedStyles(createStyles);
   const scrollRef = useRef<ScrollView>(null);
+  const [width, setWidth] = useState(0);
 
   useEffect(() => {
-    // Keep the active chip roughly centered in the visible window (~4 chips wide)
-    const x = Math.max(0, (currentHole - 1) * CHIP_STEP - CHIP_STEP * 3);
-    scrollRef.current?.scrollTo({ x, animated: true });
-  }, [currentHole]);
-
-  const atStart = currentHole === 1;
-  const atEnd   = currentHole === scorecard.length;
+    if (width === 0) return;
+    const tileCenter = SIDE_PADDING + (currentHole - 1) * TILE_STEP + TILE_WIDTH / 2;
+    scrollRef.current?.scrollTo({ x: Math.max(0, tileCenter - width / 2), animated: true });
+  }, [currentHole, width]);
 
   return (
-    <View style={styles.strip}>
-      <TouchableOpacity
-        style={[styles.arrow, atStart && styles.arrowOff]}
-        onPress={onPreviousHole}
-        disabled={atStart}
-        activeOpacity={0.7}
-        hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
-        accessibilityRole="button"
-        accessibilityLabel="Trou précédent"
-      >
-        <Text style={[styles.arrowLabel, atStart && styles.arrowLabelOff]}>‹</Text>
-      </TouchableOpacity>
+    <ScrollView
+      ref={scrollRef}
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      bounces={false}
+      onLayout={(event) => setWidth(event.nativeEvent.layout.width)}
+      style={styles.strip}
+      contentContainerStyle={styles.tiles}
+      accessibilityLabel="Choisir un trou"
+    >
+      {scorecard.map((hole) => {
+        const active = hole.hole_number === currentHole;
+        const played = hole.completed && !active;
+        const label = active
+          ? `Trou ${hole.hole_number}, en cours`
+          : hole.completed
+            ? `Trou ${hole.hole_number}, ${describeStrokes(hole.score, hole.par)}`
+            : `Trou ${hole.hole_number}, à jouer`;
 
-      <ScrollView
-        ref={scrollRef}
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.chips}
-        bounces={false}
-      >
-        {scorecard.map((hole) => {
-          const active   = hole.hole_number === currentHole;
-          const dotColor = chipDotColor(hole);
-
-          return (
-            <TouchableOpacity
-              key={hole.hole_number}
-              style={[styles.chip, active && styles.chipActive]}
-              onPress={() => onSelectHole(hole.hole_number)}
-              activeOpacity={0.7}
-            >
-              <Text style={[styles.chipNum, active && styles.chipNumActive]}>
+        return (
+          <Pressable
+            key={hole.hole_number}
+            style={({ pressed }) => [styles.tile, active && styles.tileActive, pressed && styles.pressed]}
+            onPress={() => onSelectHole(hole.hole_number)}
+            accessibilityRole="button"
+            accessibilityLabel={label}
+            accessibilityState={{ selected: active }}
+          >
+            {played ? (
+              <ScoreMark strokes={hole.score} par={hole.par} size="sm" label={hole.hole_number} decorative />
+            ) : (
+              <Text style={[styles.number, active ? styles.numberActive : styles.numberFuture]}>
                 {hole.hole_number}
               </Text>
-              <View style={[styles.dot, { backgroundColor: dotColor }]} />
-            </TouchableOpacity>
-          );
-        })}
-      </ScrollView>
-
-      <TouchableOpacity
-        style={[styles.arrow, atEnd && styles.arrowOff]}
-        onPress={onNextHole}
-        disabled={atEnd}
-        activeOpacity={0.7}
-        hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
-        accessibilityRole="button"
-        accessibilityLabel="Trou suivant"
-      >
-        <Text style={[styles.arrowLabel, atEnd && styles.arrowLabelOff]}>›</Text>
-      </TouchableOpacity>
-    </View>
+            )}
+          </Pressable>
+        );
+      })}
+    </ScrollView>
   );
 });
 
-const styles = StyleSheet.create({
-  strip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: Colors.background,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
-    height: 54,
-    paddingHorizontal: Spacing.xs,
-  },
-  arrow: {
-    width: 36,
-    height: 54,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  arrowOff: {
-    opacity: 0.2,
-  },
-  arrowLabel: {
-    fontSize: 24,
-    lineHeight: 26,
-    fontWeight: '900' as const,
-    color: Colors.text,
-  },
-  arrowLabelOff: {
-    color: Colors.textDim,
-  },
-  chips: {
-    paddingHorizontal: Spacing.xxs,
-    gap: CHIP_G,
-    alignItems: 'center',
-  },
-  chip: {
-    width: CHIP_W,
-    height: CHIP_W,
-    borderRadius: Radius.md,
-    backgroundColor: Colors.surface,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 4,
-  },
-  chipActive: {
-    backgroundColor: Colors.surfaceAccent,
-    borderColor: Colors.text,
-  },
-  chipNum: {
-    fontSize: 13,
-    lineHeight: 15,
-    fontWeight: '700' as const,
-    color: Colors.textMuted,
-  },
-  chipNumActive: {
-    color: Colors.text,
-  },
-  dot: {
-    width: 5,
-    height: 5,
-    borderRadius: Radius.full,
-  },
-});
+const createStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+    strip: {
+      flexGrow: 0,
+    },
+    tiles: {
+      gap: TILE_GAP,
+      paddingHorizontal: SIDE_PADDING,
+      paddingVertical: Spacing.xxs,
+    },
+    tile: {
+      width: TILE_WIDTH,
+      height: TILE_HEIGHT,
+      borderRadius: Radius.md,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    tileActive: {
+      backgroundColor: colors.ink,
+    },
+    pressed: {
+      opacity: 0.7,
+    },
+    number: {
+      ...Typography.bodyStrong,
+      ...Numerals,
+    },
+    numberActive: {
+      color: colors.onInk,
+    },
+    numberFuture: {
+      color: colors.ink3,
+      fontFamily: Fonts.sansMedium,
+    },
+  });
