@@ -432,6 +432,14 @@ describe('formatting', () => {
     expect(describeLoss(1.4)).toEqual({ value: '≈ 1,4', unit: 'coup par 18 trous' });
   });
 
+  it('uses the singular below two strokes in the trend pill and the loss, whatever the decimal', () => {
+    expect(getLeakTrendPill({ direction: 'better', delta: 1.5 }).label).toBe('1,5 coup de moins');
+    expect(getLeakTrendPill({ direction: 'worse', delta: -1.9 }).label).toBe('1,9 coup de plus');
+    expect(getLeakTrendPill({ direction: 'worse', delta: -1.96 }).label).toBe('2 coups de plus');
+    expect(getLeakTrendPill({ direction: 'better', delta: 1.5 }).accessibilityLabel).toContain('environ 1,5 coup de moins perdu');
+    expect(describeLoss(1.5)).toEqual({ value: '≈ 1,5', unit: 'coup par 18 trous' });
+  });
+
   it('words the legacy exclusion note', () => {
     expect(describeLegacyExclusion(0)).toBeNull();
     expect(describeLegacyExclusion(1)).toBe('1 round saisi sans le détail des trous n’est pas pris en compte.');
