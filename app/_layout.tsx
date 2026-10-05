@@ -9,7 +9,8 @@ import { fontAssets } from '../lib/fonts';
 import { ThemeProvider, useTheme } from '../lib/theme';
 import { useAuthStore } from '../stores/auth';
 import { useSubscriptionStore } from '../stores/subscription';
-import { setupNotificationResponseListener } from '../lib/notifications';
+import { routeForNotificationType, setupNotificationResponseListener } from '../lib/notifications';
+import { useNotificationPlanner } from '../lib/use-notification-planner';
 import { identifyPurchasesUser, initPurchases, resetPurchasesUser } from '../lib/purchases';
 import { initSentry } from '../lib/sentry';
 import { ErrorBoundary } from '../components/ErrorBoundary';
@@ -45,6 +46,8 @@ function RootNavigator() {
   const { setSession, fetchProfile, session, loading } = useAuthStore();
   const userId = session?.user?.id ?? null;
   const onAuthCallback = useSegments()[0] === 'auth-callback';
+
+  useNotificationPlanner();
 
   useEffect(() => {
     if (!loading && !session && !onAuthCallback) {
@@ -108,10 +111,9 @@ function RootNavigator() {
     });
 
     const notifSub = setupNotificationResponseListener((data) => {
-      if (data.type === 'weekly_plan' || data.type === 'friday_checkin' || data.type === 'midweek_drill') {
-        router.push('/(tabs)');
-      } else if (data.type === 'pre_round') {
-        router.push('/(tabs)/round');
+      const route = routeForNotificationType(data.type);
+      if (route) {
+        router.push(route);
       }
     });
 
