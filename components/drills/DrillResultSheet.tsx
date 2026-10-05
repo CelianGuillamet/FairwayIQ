@@ -63,7 +63,12 @@ function SheetBody({ drill, saving, error, onSave, onSkip }: BodyProps) {
         accessibilityLabel={`${result.made} réussis sur ${result.attempts}`}
         accessibilityLiveRegion="polite"
       >
-        <Text style={[styles.scoreValue, reached && styles.scoreReached]} numberOfLines={1} adjustsFontSizeToFit>
+        <Text
+          style={[styles.scoreValue, reached && styles.scoreReached]}
+          numberOfLines={1}
+          adjustsFontSizeToFit
+          maxFontSizeMultiplier={1.2}
+        >
           {formatResult(result)}
         </Text>
         {reached ? (

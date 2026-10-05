@@ -31,7 +31,7 @@ export function WeeklyGoalCard({ sessions, goal, onPress }: Props) {
       </ProgressRing>
       <View style={styles.copy}>
         <Text style={styles.label}>Cette semaine</Text>
-        <Text style={styles.title}>
+        <Text style={styles.title} maxFontSizeMultiplier={1.3}>
           {sessions.total}
           <Text style={styles.goal}> / {goal} {goal > 1 ? 'séances' : 'séance'}</Text>
         </Text>
