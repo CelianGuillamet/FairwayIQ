@@ -433,7 +433,7 @@ export function analyzeLeaks(input: {
   };
 }
 
-export function hasEnoughLeakData(analysis: LeaksAnalysis) {
+export function hasEnoughLeakData(analysis: { lowConfidence: boolean; leaks: readonly unknown[] }) {
   return !analysis.lowConfidence && analysis.leaks.length > 0;
 }
 
