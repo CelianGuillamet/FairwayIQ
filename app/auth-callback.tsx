@@ -4,8 +4,8 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { Typography } from '../constants';
 import type { ThemeColors } from '../constants';
 import { useTheme, useThemedStyles } from '../lib/theme';
-import { supabase, hasPkceCodeVerifier } from '../lib/supabase';
-import { completeAuthCallback, type AuthCallbackOutcome } from '../lib/auth-link';
+import { supabase, hasPkceCodeVerifier, hasPendingPasswordRecovery } from '../lib/supabase';
+import { completeAuthCallback, readAuthCode, type AuthCallbackOutcome } from '../lib/auth-link';
 import { useAuthStore } from '../stores/auth';
 import { AppCard } from '../components/ui/AppCard';
 import { AppButton } from '../components/ui/AppButton';
@@ -33,17 +33,17 @@ function getMessage(outcome: AuthCallbackOutcome | null) {
 
 export default function AuthCallbackScreen() {
   const { code } = useLocalSearchParams<{ code?: string | string[] }>();
-  const { session, loading } = useAuthStore();
+  const { session, loading, passwordRecovery } = useAuthStore();
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
   const [outcome, setOutcome] = useState<AuthCallbackOutcome | null>(null);
   const handledCode = useRef<string | string[] | undefined | null>(null);
 
   useEffect(() => {
-    if (!loading && session) {
+    if (!loading && session && !passwordRecovery) {
       router.replace('/');
     }
-  }, [loading, session]);
+  }, [loading, session, passwordRecovery]);
 
   useEffect(() => {
     if (loading || handledCode.current === code) {
@@ -51,11 +51,21 @@ export default function AuthCallbackScreen() {
     }
     handledCode.current = code;
 
-    void completeAuthCallback(code, {
-      hasSession: () => !!useAuthStore.getState().session,
-      hasCodeVerifier: hasPkceCodeVerifier,
-      exchange: (authCode) => supabase.auth.exchangeCodeForSession(authCode),
-    }).then(setOutcome);
+    void (async () => {
+      const validCode = readAuthCode(code);
+      if (validCode && !useAuthStore.getState().session && (await hasPendingPasswordRecovery())) {
+        router.replace({ pathname: '/reset-password', params: { code: validCode } });
+        return;
+      }
+
+      setOutcome(
+        await completeAuthCallback(code, {
+          hasSession: () => !!useAuthStore.getState().session,
+          hasCodeVerifier: hasPkceCodeVerifier,
+          exchange: (authCode) => supabase.auth.exchangeCodeForSession(authCode),
+        })
+      );
+    })();
   }, [loading, code]);
 
   const { title, subtitle } = getMessage(outcome);
