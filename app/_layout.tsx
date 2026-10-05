@@ -7,6 +7,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import { supabase } from '../lib/supabase';
 import { fontAssets } from '../lib/fonts';
 import { ThemeProvider, useTheme } from '../lib/theme';
+import { shouldRedirectToLogin } from '../lib/recovery-session';
 import { useAuthStore } from '../stores/auth';
 import { useSubscriptionStore } from '../stores/subscription';
 import { setupNotificationResponseListener } from '../lib/notifications';
@@ -44,13 +45,14 @@ function RootNavigator() {
   const { colors, scheme } = useTheme();
   const { setSession, fetchProfile, session, loading } = useAuthStore();
   const userId = session?.user?.id ?? null;
-  const onAuthCallback = useSegments()[0] === 'auth-callback';
+  const segments = useSegments();
+  const needsLogin = shouldRedirectToLogin({ loading, hasSession: !!session, segments });
 
   useEffect(() => {
-    if (!loading && !session && !onAuthCallback) {
+    if (needsLogin) {
       router.replace('/(auth)/login');
     }
-  }, [session, loading, onAuthCallback]);
+  }, [needsLogin]);
 
   useEffect(() => {
     initPurchases();
@@ -98,11 +100,11 @@ function RootNavigator() {
         event,
         userId: session?.user?.id ?? null,
       });
-      setSession(session);
+      setSession(session, event);
       if (session) {
         void fetchProfile();
       }
-      if (event === 'SIGNED_IN') {
+      if (event === 'SIGNED_IN' && !useAuthStore.getState().passwordRecovery) {
         router.replace('/');
       }
     });
