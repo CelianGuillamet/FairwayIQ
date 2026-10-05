@@ -229,6 +229,12 @@ export default function ProfileScreen() {
           </AppCard>
         </Section>
 
+        <Section title="Données et confidentialité">
+          <AppCard style={styles.listCard}>
+            <LinkRow label="Exporter mes données" first onPress={() => router.push('/export-data' as any)} />
+          </AppCard>
+        </Section>
+
         <Pressable
           style={({ pressed }) => [styles.signOut, pressed && styles.pressed]}
           onPress={handleSignOut}
