@@ -2,6 +2,7 @@ import {
   RoundSaveError,
   buildSaveRoundArgs,
   buildUpdateRoundArgs,
+  classifyRoundSaveFailure,
   createClientRequestId,
   getErrorCode,
   getRoundSaveErrorMessage,
@@ -239,6 +240,71 @@ describe('getErrorCode', () => {
   });
 });
 
+describe('classifyRoundSaveFailure', () => {
+  it.each([
+    [{ code: '', message: 'TypeError: Network request failed' }, undefined],
+    [{ code: '', message: 'TypeError: Failed to fetch' }, undefined],
+    [{ code: '', message: 'AbortError: Aborted' }, undefined],
+    [{ message: 'Request timed out' }, undefined],
+    [new TypeError('Network request failed'), undefined],
+    [Object.assign(new Error('signal'), { name: 'TimeoutError' }), undefined],
+  ])('treats a failure without any answer as a network failure (%#)', (error, status) => {
+    expect(classifyRoundSaveFailure(error, status)).toBe('network');
+  });
+
+  it.each([
+    [{ code: '', message: '<html>Bad gateway</html>' }, 502],
+    [{ code: '', message: 'upstream' }, 503],
+    [{ code: '', message: 'upstream' }, 504],
+    [{ code: '', message: 'slow' }, 408],
+    [{ code: '', message: 'slow down' }, 429],
+    [{ code: 'PGRST002', message: 'schema cache' }, undefined],
+    [{ code: 'PGRST003', message: 'pool timeout' }, undefined],
+    [{ code: '57014', message: 'canceling statement due to statement timeout' }, undefined],
+    [{ code: '08006', message: 'connection failure' }, undefined],
+    [{ code: '40P01', message: 'deadlock detected' }, undefined],
+    [{ code: '53300', message: 'too many connections' }, undefined],
+  ])('treats a 5xx-like answer as a server failure (%#)', (error, status) => {
+    expect(classifyRoundSaveFailure(error, status)).toBe('server');
+  });
+
+  it.each([
+    [{ code: '28000' }, undefined],
+    [{ code: '42501' }, undefined],
+    [{ code: 'PGRST301' }, undefined],
+    [{ code: 'PGRST302' }, undefined],
+    [{ code: '' }, 401],
+    [{ code: '' }, 403],
+  ])('treats a refused session as an auth failure (%#)', (error, status) => {
+    expect(classifyRoundSaveFailure(error, status)).toBe('auth');
+  });
+
+  it.each(['22003', '22007', '22P02', '22001', '23502', '23503', '23505', '23514', 'P0002'])(
+    'treats SQLSTATE %s as a permanent rejection of the data',
+    (code) => {
+      expect(classifyRoundSaveFailure({ code, message: 'violates check constraint' })).toBe('permanent');
+    },
+  );
+
+  it('does not retry what it cannot recognise', () => {
+    expect(classifyRoundSaveFailure({ code: 'XX000', message: 'boom' })).toBe('permanent');
+    expect(classifyRoundSaveFailure({ code: 'PGRST202', message: 'function not found' }, 404)).toBe('permanent');
+    expect(classifyRoundSaveFailure({ message: 'boom' })).toBe('permanent');
+    expect(classifyRoundSaveFailure(null)).toBe('permanent');
+    expect(classifyRoundSaveFailure(undefined)).toBe('permanent');
+  });
+
+  it('does not mistake a network-sounding message that carries a SQLSTATE for a network failure', () => {
+    expect(classifyRoundSaveFailure({ code: '23514', message: 'connection check violated' })).toBe('permanent');
+  });
+
+  it('keeps the kind of an already classified RoundSaveError', () => {
+    expect(classifyRoundSaveFailure(new RoundSaveError('m', 'unknown', 'network'))).toBe('network');
+    expect(classifyRoundSaveFailure(new RoundSaveError('m', '23514', 'permanent'))).toBe('permanent');
+    expect(classifyRoundSaveFailure(new RoundSaveError('m', '28000'))).toBe('permanent');
+  });
+});
+
 describe('saveRound / updateRound', () => {
   beforeEach(() => {
     rpc.mockReset();
@@ -281,6 +347,26 @@ describe('saveRound / updateRound', () => {
     await expect(promise).rejects.toBeInstanceOf(RoundSaveError);
     await expect(promise).rejects.toMatchObject({ code: '23514' });
     await expect(promise).rejects.not.toThrow('rounds_par_range');
+  });
+
+  it.each([
+    [{ code: '', message: 'TypeError: Network request failed', details: '', hint: '' }, 0, 'network'],
+    [{ message: '<html>Bad gateway</html>' }, 502, 'server'],
+    [{ code: '23514', message: 'violates check constraint' }, 400, 'permanent'],
+    [{ code: 'PGRST301', message: 'JWT expired' }, 401, 'auth'],
+  ])('tags the thrown RoundSaveError with its failure kind (%#)', async (error, status, kind) => {
+    rpc.mockResolvedValue({ data: null, error, status });
+    const args = buildSaveRoundArgs({
+      clientRequestId: '11111111-1111-4111-8111-111111111111',
+      playedAt: '2026-05-01T10:00:00.000Z',
+      courseId: null,
+      courseName: null,
+      teeKey: null,
+      notes: null,
+      scorecard: completedScorecard(),
+    });
+
+    await expect(saveRound(args)).rejects.toMatchObject({ kind });
   });
 
   it('calls the update_round RPC with the metadata-only arguments', async () => {

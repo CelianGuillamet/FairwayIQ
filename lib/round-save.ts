@@ -77,6 +77,8 @@ export type UpdateRoundArgs = {
 
 export type RoundSaveAction = 'save' | 'update';
 
+export type RoundSaveFailureKind = 'network' | 'server' | 'auth' | 'permanent';
+
 const SESSION_MESSAGE = 'Ta session a expiré. Reconnecte-toi puis réessaie.';
 const NETWORK_MESSAGE = 'Connexion impossible. Vérifie ton réseau puis réessaie.';
 const INVALID_DATA_MESSAGE = 'Certaines valeurs du round sont invalides. Vérifie la saisie puis réessaie.';
@@ -88,14 +90,19 @@ const SESSION_CODES = new Set(['28000', '42501', 'PGRST301', 'PGRST302']);
 const INVALID_DATA_CODES = new Set(['22003', '22007', '22008', '22023', '22P02', '23502', '23505', '23514']);
 const NOT_FOUND_CODES = new Set(['P0002', '23503']);
 const NETWORK_MESSAGE_PATTERN = /network|fetch|timeout|timed out|abort|offline|connection/i;
+const NETWORK_ERROR_NAMES = new Set(['AbortError', 'TimeoutError']);
+const TRANSIENT_SQLSTATE_CLASSES = new Set(['08', '40', '53', '57', '58']);
+const TRANSIENT_POSTGREST_CODES = new Set(['PGRST000', 'PGRST001', 'PGRST002', 'PGRST003']);
 
 export class RoundSaveError extends Error {
   readonly code: string;
+  readonly kind: RoundSaveFailureKind;
 
-  constructor(message: string, code: string) {
+  constructor(message: string, code: string, kind: RoundSaveFailureKind = 'permanent') {
     super(message);
     this.name = 'RoundSaveError';
     this.code = code;
+    this.kind = kind;
   }
 }
 
@@ -124,6 +131,31 @@ export function mapRoundSaveError(error: unknown, action: RoundSaveAction = 'sav
   }
 
   return action === 'save' ? GENERIC_SAVE_MESSAGE : GENERIC_UPDATE_MESSAGE;
+}
+
+// Only network and server failures can be fixed by sending the same round again later.
+export function classifyRoundSaveFailure(error: unknown, status?: number): RoundSaveFailureKind {
+  if (error instanceof RoundSaveError) return error.kind;
+
+  const code = readString(error, 'code');
+  const sqlStateClass = code.slice(0, 2);
+
+  if (sqlStateClass === '22' || sqlStateClass === '23' || NOT_FOUND_CODES.has(code)) return 'permanent';
+  if (SESSION_CODES.has(code) || status === 401 || status === 403) return 'auth';
+
+  if (
+    TRANSIENT_POSTGREST_CODES.has(code)
+    || TRANSIENT_SQLSTATE_CLASSES.has(sqlStateClass)
+    || (status !== undefined && (status >= 500 || status === 408 || status === 429))
+  ) {
+    return 'server';
+  }
+
+  if (!code && (NETWORK_MESSAGE_PATTERN.test(readString(error, 'message')) || NETWORK_ERROR_NAMES.has(readString(error, 'name')))) {
+    return 'network';
+  }
+
+  return 'permanent';
 }
 
 export function getRoundSaveErrorMessage(error: unknown, action: RoundSaveAction = 'save') {
@@ -230,20 +262,20 @@ export function buildUpdateRoundArgs(input: {
 }
 
 export async function saveRound(args: SaveRoundArgs): Promise<Round> {
-  const { data, error } = await supabase.rpc('save_round', args);
+  const { data, error, status } = await supabase.rpc('save_round', args);
 
   if (error) {
-    throw new RoundSaveError(mapRoundSaveError(error, 'save'), getErrorCode(error));
+    throw new RoundSaveError(mapRoundSaveError(error, 'save'), getErrorCode(error), classifyRoundSaveFailure(error, status));
   }
 
   return data as Round;
 }
 
 export async function updateRound(args: UpdateRoundArgs): Promise<Round> {
-  const { data, error } = await supabase.rpc('update_round', args);
+  const { data, error, status } = await supabase.rpc('update_round', args);
 
   if (error) {
-    throw new RoundSaveError(mapRoundSaveError(error, 'update'), getErrorCode(error));
+    throw new RoundSaveError(mapRoundSaveError(error, 'update'), getErrorCode(error), classifyRoundSaveFailure(error, status));
   }
 
   return data as Round;
