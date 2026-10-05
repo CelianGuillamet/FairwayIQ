@@ -24,12 +24,15 @@ jest.mock('@react-native-async-storage/async-storage', () =>
   require('@react-native-async-storage/async-storage/jest/async-storage-mock')
 );
 
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getCachedHoles, loadHolesForRounds, resetHolesData } from '../lib/holes-data';
+import { getRoundQueueStorageKey } from '../lib/round-save-queue';
 import { useAuthStore } from './auth';
 import { useBagStore } from './bag';
 import { useBadgesStore } from './badges';
 import { useMonthlyChallengeStore } from './monthly-challenge';
 import { useDrillsStore } from './drills';
+import { useRoundQueueStore } from './round-queue';
 import { useRoundsStore } from './rounds';
 
 type Result = { data: unknown; error: { message: string } | null };
@@ -40,6 +43,15 @@ async function primeHolesCache() {
   mockFrom.mockReturnValueOnce({ select: () => ({ in: () => Promise.resolve({ data: [], error: null }) }) });
   await loadHolesForRounds([CACHED_ROUND]);
   expect(getCachedHoles([CACHED_ROUND])).not.toBeNull();
+}
+
+async function primeRoundQueue(userId: string) {
+  const round = { client_request_id: 'req-1', played_at: '2026-10-05T10:00:00.000Z', holes: 9, total_score: 40, par: 36 };
+  const holes = Array.from({ length: 9 }, (_, index) => ({ hole_number: index + 1, par: 4, score: 4 }));
+
+  await useRoundQueueStore.getState().load(userId);
+  await expect(useRoundQueueStore.getState().enqueue(userId, { p_round: round, p_holes: holes } as any)).resolves.toBe('added');
+  expect(useRoundQueueStore.getState().entries).toHaveLength(1);
 }
 
 function deferred<T>() {
@@ -85,7 +97,8 @@ const ONBOARDING_VALUES = {
   goal: 'enjoy',
 };
 
-beforeEach(() => {
+beforeEach(async () => {
+  await AsyncStorage.clear();
   jest.spyOn(console, 'warn').mockImplementation(() => {});
   jest.spyOn(console, 'info').mockImplementation(() => {});
   mockFrom.mockReset();
@@ -101,6 +114,7 @@ beforeEach(() => {
   useBagStore.getState().reset();
   useBadgesStore.getState().reset();
   useMonthlyChallengeStore.getState().reset();
+  useRoundQueueStore.getState().reset();
   resetHolesData();
   useAuthStore.setState({
     session: null,
@@ -264,6 +278,16 @@ describe('setSession', () => {
     expect(useMonthlyChallengeStore.getState()).toMatchObject({ userId: null, month: null, challengeId: null, changeUsed: false, loaded: false, doneSeen: null });
   });
 
+  it('clears the queued rounds in memory when another user signs in, but keeps them stored for their owner', async () => {
+    useAuthStore.getState().setSession(session('user-1'));
+    await primeRoundQueue('user-1');
+
+    useAuthStore.getState().setSession(session('user-2'));
+
+    expect(useRoundQueueStore.getState()).toMatchObject({ userId: null, entries: [], loaded: false, flushing: false });
+    await expect(AsyncStorage.getItem(getRoundQueueStorageKey('user-1'))).resolves.not.toBeNull();
+  });
+
   it('clears the cached hole rows when another user signs in', async () => {
     useAuthStore.getState().setSession(session('user-1'));
     await primeHolesCache();
@@ -396,6 +420,18 @@ describe('signOut', () => {
     await useAuthStore.getState().signOut();
 
     expect(useMonthlyChallengeStore.getState()).toMatchObject({ userId: null, month: null, challengeId: null, changeUsed: false, loaded: false, doneSeen: null });
+  });
+
+  it('clears the queued rounds in memory, but keeps them stored for when the user comes back', async () => {
+    await primeRoundQueue('user-1');
+
+    await useAuthStore.getState().signOut();
+
+    expect(useRoundQueueStore.getState()).toMatchObject({ userId: null, entries: [], loaded: false, flushing: false });
+    await expect(AsyncStorage.getItem(getRoundQueueStorageKey('user-1'))).resolves.not.toBeNull();
+
+    await useRoundQueueStore.getState().load('user-1');
+    expect(useRoundQueueStore.getState().entries).toHaveLength(1);
   });
 
   it('clears the cached hole rows', async () => {
