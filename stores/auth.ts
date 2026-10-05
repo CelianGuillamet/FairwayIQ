@@ -3,6 +3,7 @@ import type { AuthChangeEvent, Session, User } from '@supabase/supabase-js';
 import { supabase, clearStoredAuthSession } from '../lib/supabase';
 import { nextPasswordRecovery } from '../lib/recovery-session';
 import { resetPurchasesUser } from '../lib/purchases';
+import { resetHolesData } from '../lib/holes-data';
 import { clearRoundDraft } from '../lib/round-draft';
 import type { Profile } from '../types';
 import { useRoundsStore } from './rounds';
@@ -33,6 +34,7 @@ let profileSequence = 0;
 function resetUserCaches() {
   useRoundsStore.getState().reset();
   useDrillsStore.getState().reset();
+  resetHolesData();
 }
 
 async function endAuthSession() {

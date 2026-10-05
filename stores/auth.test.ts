@@ -20,11 +20,20 @@ jest.mock('../lib/round-draft', () => ({
   clearRoundDraft: (userId: string) => mockClearRoundDraft(userId),
 }));
 
+import { getCachedHoles, loadHolesForRounds, resetHolesData } from '../lib/holes-data';
 import { useAuthStore } from './auth';
 import { useDrillsStore } from './drills';
 import { useRoundsStore } from './rounds';
 
 type Result = { data: unknown; error: { message: string } | null };
+
+const CACHED_ROUND = { id: 'r1', holes: 18, par: 72, total_score: 90, putts: 34, gir: 4, fairways_hit: 6, penalties: 1 } as const;
+
+async function primeHolesCache() {
+  mockFrom.mockReturnValueOnce({ select: () => ({ in: () => Promise.resolve({ data: [], error: null }) }) });
+  await loadHolesForRounds([CACHED_ROUND]);
+  expect(getCachedHoles([CACHED_ROUND])).not.toBeNull();
+}
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
@@ -82,6 +91,7 @@ beforeEach(() => {
   mockResetPurchasesUser.mockReset();
   useRoundsStore.getState().reset();
   useDrillsStore.getState().reset();
+  resetHolesData();
   useAuthStore.setState({
     session: null,
     user: null,
@@ -223,6 +233,15 @@ describe('setSession', () => {
     expect(useAuthStore.getState().profile).toBeNull();
     expect(useAuthStore.getState().profileLoading).toBe(true);
   });
+
+  it('clears the cached hole rows when another user signs in', async () => {
+    useAuthStore.getState().setSession(session('user-1'));
+    await primeHolesCache();
+
+    useAuthStore.getState().setSession(session('user-2'));
+
+    expect(getCachedHoles([CACHED_ROUND])).toBeNull();
+  });
 });
 
 describe('completeOnboarding', () => {
@@ -329,6 +348,14 @@ describe('signOut', () => {
     expect(useRoundsStore.getState().initialized).toBe(false);
     expect(useDrillsStore.getState().completions).toEqual([]);
     expect(useDrillsStore.getState().recommendedCategories).toEqual([]);
+  });
+
+  it('clears the cached hole rows', async () => {
+    await primeHolesCache();
+
+    await useAuthStore.getState().signOut();
+
+    expect(getCachedHoles([CACHED_ROUND])).toBeNull();
   });
 
   it('falls back to a local sign-out when the global one fails', async () => {

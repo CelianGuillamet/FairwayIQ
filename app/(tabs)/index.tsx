@@ -17,13 +17,20 @@ import { EmptyHome } from '../../components/home/EmptyHome';
 import { EvolutionCard, type EvolutionSeries } from '../../components/home/EvolutionCard';
 import { FocusBlock } from '../../components/home/FocusBlock';
 import { IndexCard } from '../../components/home/IndexCard';
+import { LeaksCard } from '../../components/home/LeaksCard';
 import { PINNED_CTA_CLEARANCE, PinnedCta } from '../../components/home/PinnedCta';
 import { PracticeCard } from '../../components/home/PracticeCard';
 import { RoundRow } from '../../components/home/RoundRow';
 import { StatsStrip, type StatItem } from '../../components/home/StatsStrip';
+import { useWeeklyGoal } from '../../components/home/useWeeklyGoal';
+import { WeeklyGoalCard } from '../../components/home/WeeklyGoalCard';
+import { WeeklyGoalSheet } from '../../components/home/WeeklyGoalSheet';
+import { useLeaks } from '../../components/leaks/useLeaks';
 import type { Diagnostic } from '../../types';
 import { fetchLatestDiagnostic } from '../../lib/diagnostics';
 import { getDailyFocusDrill, isDrillDoneToday } from '../../lib/drill-library';
+import { hasEnoughLeakData } from '../../lib/leaks';
+import { countWeeklySessions, getWeekStart } from '../../lib/weekly-goal';
 import {
   formatDecimalFr,
   formatHandicapValue,
@@ -63,6 +70,14 @@ export default function DashboardScreen() {
   const [markingFocusDone, setMarkingFocusDone] = useState(false);
   const [focusCompletionError, setFocusCompletionError] = useState<string | null>(null);
   const [visibleRoundsCount, setVisibleRoundsCount] = useState(6);
+  const [goalSheetOpen, setGoalSheetOpen] = useState(false);
+  const leaks = useLeaks();
+  const weeklyGoal = useWeeklyGoal(user?.id, profile?.play_frequency);
+  const weekStart = getWeekStart().getTime();
+  const weeklySessions = useMemo(
+    () => countWeeklySessions({ rounds, completions }),
+    [rounds, completions, weekStart],
+  );
 
   useEffect(() => {
     if (!initialized) {
@@ -254,6 +269,7 @@ export default function DashboardScreen() {
   }
 
   const hasRounds = rounds.length > 0;
+  const topLeak = leaks.status === 'ready' && hasEnoughLeakData(leaks.analysis) ? leaks.analysis.leaks[0] : null;
   const displayName = profile?.display_name?.trim();
 
   return (
@@ -292,6 +308,10 @@ export default function DashboardScreen() {
               trend={trendPill}
             />
 
+            {weeklyGoal.loaded ? (
+              <WeeklyGoalCard sessions={weeklySessions} goal={weeklyGoal.goal} onPress={() => setGoalSheetOpen(true)} />
+            ) : null}
+
             <FocusBlock insight={focusInsight} onAction={() => router.push(focusInsight.actionRoute)} />
 
             <PracticeCard
@@ -313,6 +333,8 @@ export default function DashboardScreen() {
                 }
               }}
             />
+
+            {topLeak ? <LeaksCard leak={topLeak} onOpen={() => router.push('/leaks')} /> : null}
 
             <View>
               <Text style={styles.sectionTitle} accessibilityRole="header">
@@ -360,6 +382,22 @@ export default function DashboardScreen() {
         icon="plus"
         accessibilityHint="Ouvre l’onglet Score pour saisir un round"
         onPress={() => router.push('/(tabs)/round')}
+      />
+
+      <WeeklyGoalSheet
+        visible={goalSheetOpen}
+        goal={weeklyGoal.goal}
+        recommended={weeklyGoal.recommended}
+        isCustom={weeklyGoal.isCustom}
+        onSelect={(goal) => {
+          weeklyGoal.setGoal(goal);
+          setGoalSheetOpen(false);
+        }}
+        onReset={() => {
+          weeklyGoal.resetGoal();
+          setGoalSheetOpen(false);
+        }}
+        onClose={() => setGoalSheetOpen(false)}
       />
     </View>
   );
