@@ -24,6 +24,36 @@ export function isRecoveryCodeVerifier(stored: string | null) {
   return stored !== null && decodeStoredValue(stored).split('/')[1] === PASSWORD_RECOVERY;
 }
 
+type VerifierStore = {
+  read: () => Promise<string | null>;
+  write: (value: string) => Promise<void>;
+};
+
+// resetPasswordForEmail deletes the stored PKCE verifier when a request fails, which would orphan
+// the link of an earlier, still valid email (a rate-limited resend, for instance).
+export async function keepVerifierOnFailure<T extends { error: unknown }>(
+  store: VerifierStore,
+  request: () => Promise<T>
+): Promise<T> {
+  const previous = await store.read();
+  const restore = async () => {
+    if (previous !== null) {
+      await store.write(previous);
+    }
+  };
+
+  try {
+    const result = await request();
+    if (result.error) {
+      await restore();
+    }
+    return result;
+  } catch (error) {
+    await restore();
+    throw error;
+  }
+}
+
 export function shouldRedirectToLogin({
   loading,
   hasSession,

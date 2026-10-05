@@ -1,5 +1,10 @@
 import { createClient } from '@supabase/supabase-js';
-import { isRecoveryCodeVerifier, nextPasswordRecovery, shouldRedirectToLogin } from './recovery-session';
+import {
+  isRecoveryCodeVerifier,
+  keepVerifierOnFailure,
+  nextPasswordRecovery,
+  shouldRedirectToLogin,
+} from './recovery-session';
 
 describe('nextPasswordRecovery', () => {
   it('turns on when the recovery event arrives with a session', () => {
@@ -62,6 +67,106 @@ describe('isRecoveryCodeVerifier', () => {
       expect(isRecoveryCodeVerifier(reset.store.get('sb-test-auth-token-code-verifier') ?? null)).toBe(true);
       expect(isRecoveryCodeVerifier(otp.store.get('sb-test-auth-token-code-verifier') ?? null)).toBe(false);
     });
+  });
+});
+
+describe('keepVerifierOnFailure', () => {
+  function createStore(initial: string | null) {
+    let value = initial;
+    return {
+      store: {
+        read: async () => value,
+        write: async (next: string) => {
+          value = next;
+        },
+      },
+      get: () => value,
+      remove: () => {
+        value = null;
+      },
+    };
+  }
+
+  it('puts the previous verifier back when the request returns an error', async () => {
+    const { store, get, remove } = createStore('"old/PASSWORD_RECOVERY"');
+
+    const result = await keepVerifierOnFailure(store, async () => {
+      remove();
+      return { error: { message: 'rate limited' } };
+    });
+
+    expect(result.error).toEqual({ message: 'rate limited' });
+    expect(get()).toBe('"old/PASSWORD_RECOVERY"');
+  });
+
+  it('puts the previous verifier back when the request throws, and rethrows', async () => {
+    const { store, get, remove } = createStore('"old/PASSWORD_RECOVERY"');
+
+    await expect(
+      keepVerifierOnFailure(store, async () => {
+        remove();
+        throw new Error('boom');
+      })
+    ).rejects.toThrow('boom');
+
+    expect(get()).toBe('"old/PASSWORD_RECOVERY"');
+  });
+
+  it('keeps the new verifier when the request succeeds', async () => {
+    const { store, get } = createStore('"old/PASSWORD_RECOVERY"');
+
+    await keepVerifierOnFailure(store, async () => {
+      await store.write('"new/PASSWORD_RECOVERY"');
+      return { error: null };
+    });
+
+    expect(get()).toBe('"new/PASSWORD_RECOVERY"');
+  });
+
+  it('does not invent a verifier when there was none', async () => {
+    const { store, get } = createStore(null);
+
+    await keepVerifierOnFailure(store, async () => ({ error: { message: 'nope' } }));
+
+    expect(get()).toBeNull();
+  });
+
+  it('keeps the first link usable after a rate-limited resend, against the installed supabase-js', async () => {
+    const key = 'sb-test-auth-token-code-verifier';
+    const memory = new Map<string, string>();
+    const responses: Response[] = [
+      new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } }),
+      new Response(JSON.stringify({ code: 429, error_code: 'over_email_send_rate_limit', msg: 'email rate limit exceeded' }), {
+        status: 429,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    ];
+    const client = createClient('https://test.supabase.co', 'anon-key', {
+      auth: {
+        storage: {
+          getItem: async (k: string) => memory.get(k) ?? null,
+          setItem: async (k: string, v: string) => void memory.set(k, v),
+          removeItem: async (k: string) => void memory.delete(k),
+        },
+        storageKey: 'sb-test-auth-token',
+        flowType: 'pkce',
+        autoRefreshToken: false,
+      },
+      global: { fetch: (async () => responses.shift()!) as unknown as typeof fetch },
+    });
+    const store = {
+      read: async () => memory.get(key) ?? null,
+      write: async (value: string) => void memory.set(key, value),
+    };
+    const send = () => keepVerifierOnFailure(store, () => client.auth.resetPasswordForEmail('toi@email.com'));
+
+    expect((await send()).error).toBeNull();
+    const firstVerifier = memory.get(key);
+    const resend = await send();
+
+    expect(resend.error?.status).toBe(429);
+    expect(memory.get(key)).toBe(firstVerifier);
+    expect(isRecoveryCodeVerifier(memory.get(key) ?? null)).toBe(true);
   });
 });
 

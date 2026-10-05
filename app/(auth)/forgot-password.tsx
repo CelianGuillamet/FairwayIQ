@@ -3,7 +3,7 @@ import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text
 import { router, useLocalSearchParams } from 'expo-router';
 import * as Linking from 'expo-linking';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { supabase } from '../../lib/supabase';
+import { requestPasswordReset } from '../../lib/supabase';
 import { Fonts, Radius, Spacing, Typography } from '../../constants';
 import type { ThemeColors } from '../../constants';
 import {
@@ -79,9 +79,7 @@ export default function ForgotPasswordScreen() {
     setSending(true);
 
     try {
-      const { error } = await supabase.auth.resetPasswordForEmail(normalizeEmail(email), {
-        redirectTo: Linking.createURL('reset-password'),
-      });
+      const { error } = await requestPasswordReset(normalizeEmail(email), Linking.createURL('reset-password'));
       if (error) {
         console.warn('[auth] Password reset request failed', { status: error.status, code: error.code });
       }
