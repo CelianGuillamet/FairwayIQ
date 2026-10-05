@@ -81,7 +81,7 @@ export const CHALLENGES: readonly Challenge[] = [
     id: 'round_no_three_putt',
     title: '18 trous sans 3 putts',
     description: 'Joue un 18 trous sans aucun trou en 3 putts ou plus.',
-    rule: `Un round de 18 trous saisi trou par trou, avec 2 putts au plus sur chaque trou. ${NO_HOLE_DETAIL}`,
+    rule: `Un round de 18 trous saisi trou par trou, avec 2 putts au plus sur chaque trou et au moins un détail renseigné (putts, green ou fairway). ${NO_HOLE_DETAIL}`,
     target: 1,
     holeBased: true,
   },

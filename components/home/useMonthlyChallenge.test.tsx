@@ -396,6 +396,30 @@ describe('the Défi du mois relevé badge', () => {
     expect(awardedIds()).toEqual(['monthly_challenge']);
   });
 
+  it('is awarded again at the next load when the first insert failed, instead of being lost', async () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const rounds = [roundRow('r1', 3), roundRow('r2', 5), roundRow('r3', 9)];
+    upsert.mockResolvedValueOnce({ data: null, error: { code: '42501', message: 'denied' } });
+    seed({ rounds });
+    await mount(leaksResult('ready'));
+
+    expect(awardedIds()).toEqual(['monthly_challenge']);
+    expect(useBadgesStore.getState().unsynced).toHaveProperty('monthly_challenge');
+
+    act(() => renderer?.unmount());
+    renderer = null;
+    useBadgesStore.getState().reset();
+    useMonthlyChallengeStore.getState().reset();
+    upsert.mockClear();
+    seed({ rounds, earned: {} });
+    await mount(leaksResult('ready'));
+
+    expect(awardedIds()).toEqual(['monthly_challenge']);
+    expect(useBadgesStore.getState().queue).toEqual([]);
+    expect(useBadgesStore.getState().unsynced).toEqual({});
+    warn.mockRestore();
+  });
+
   it('does not award it again when it was already earned', async () => {
     seed({ rounds: [roundRow('r1', 3), roundRow('r2', 5)], earned: { monthly_challenge: '2026-09-20T10:00:00Z' } });
     await mount(leaksResult('ready'));

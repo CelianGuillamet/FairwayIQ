@@ -1,6 +1,7 @@
 import type { Round, RoundHole } from '../types';
 import type { DrillCategory } from './drill-library';
 import { formatDecimalFr, type TrendPill } from './home';
+import { hasRecordedHoleDetails } from './rounds';
 
 export type HoleRow = Pick<RoundHole, 'hole_number' | 'par' | 'score' | 'putts' | 'gir' | 'fairway_hit' | 'penalty'>;
 export type LeakRound = Pick<Round, 'id' | 'played_at'>;
@@ -53,9 +54,11 @@ export type LeaksAnalysis = {
   windowSize: number;
   roundsConsidered: number;
   roundsAnalyzed: number;
+  roundsWithDetails: number;
   legacyRoundsExcluded: number;
   holesAnalyzed: number;
   lowConfidence: boolean;
+  detailsLowConfidence: boolean;
   leaks: Leak[];
   metrics: LeakMetrics;
 };
@@ -64,6 +67,7 @@ type Ratio = { sum: number; count: number };
 
 type Summary = {
   rounds: number;
+  detailRounds: number;
   holes: number;
   puttingScope: number;
   teeScope: number;
@@ -128,6 +132,7 @@ function emptySummary(): Summary {
 
   return {
     rounds: 0,
+    detailRounds: 0,
     holes: 0,
     puttingScope: 0,
     teeScope: 0,
@@ -159,15 +164,20 @@ function unexplainedStrokes(overPar: number, putts: number, penalty: number) {
 }
 
 function addRound(summary: Summary, rows: readonly HoleRow[]) {
+  const detailed = hasRecordedHoleDetails(rows);
   const hasPutts = rows.some((hole) => hole.putts != null);
   const hasFairways = rows.some((hole) => hole.fairway_hit != null);
   const hasGreens = rows.some((hole) => hole.gir != null);
 
   summary.rounds += 1;
   summary.holes += rows.length;
-  if (hasPutts) summary.puttingScope += rows.length;
-  if (hasPutts && hasFairways) summary.teeScope += rows.length;
-  if (hasPutts && hasGreens) summary.greenScope += rows.length;
+
+  if (detailed) {
+    summary.detailRounds += 1;
+    if (hasPutts) summary.puttingScope += rows.length;
+    if (hasPutts && hasFairways) summary.teeScope += rows.length;
+    if (hasPutts && hasGreens) summary.greenScope += rows.length;
+  }
 
   for (const hole of rows) {
     const overPar = hole.score - hole.par;
@@ -184,6 +194,8 @@ function addRound(summary: Summary, rows: readonly HoleRow[]) {
       summary.toPar[hole.par].sum += overPar;
       summary.toPar[hole.par].count += 1;
     }
+
+    if (!detailed) continue;
 
     if (hole.fairway_hit != null) {
       summary.fairwayChances += 1;
@@ -282,6 +294,7 @@ type LeakDefinition = {
   id: LeakId;
   title: string;
   drill: DrillCategory;
+  needsDetails: boolean;
   loss: (summary: Summary) => number | null;
   explain: (summary: Summary, metrics: LeakMetrics, loss: number) => string;
 };
@@ -292,6 +305,7 @@ const LEAK_DEFINITIONS: readonly LeakDefinition[] = [
     id: 'putting',
     title: 'Putting',
     drill: 'putting',
+    needsDetails: true,
     loss: (summary) => per18(summary.puttingLoss, summary.puttingScope),
     explain: (summary, metrics) => {
       const threePutts = count(per18(summary.threePutts, summary.puttingScope) ?? 0, 'trou', 'trous');
@@ -306,6 +320,7 @@ const LEAK_DEFINITIONS: readonly LeakDefinition[] = [
     id: 'penalties',
     title: 'Pénalités',
     drill: 'driving',
+    needsDetails: false,
     loss: (summary) => per18(summary.penaltyStrokes, summary.holes),
     explain: (_summary, _metrics, loss) => `Sur 18 trous, tu écopes en moyenne de ${count(loss, 'coup')} de pénalité.`,
   },
@@ -313,6 +328,7 @@ const LEAK_DEFINITIONS: readonly LeakDefinition[] = [
     id: 'blowups',
     title: 'Trous catastrophe',
     drill: 'mental',
+    needsDetails: false,
     loss: (summary) => per18(summary.doubleLoss, summary.holes),
     explain: (summary, _metrics, loss) => {
       const holes = count(per18(summary.doubleHoles, summary.holes) ?? 0, 'trou', 'trous');
@@ -323,6 +339,7 @@ const LEAK_DEFINITIONS: readonly LeakDefinition[] = [
     id: 'tee',
     title: 'Départs',
     drill: 'driving',
+    needsDetails: true,
     loss: (summary) => per18(summary.teeLoss, summary.teeScope),
     explain: (_summary, metrics, loss) => {
       const accuracy = metrics.fairwayPct != null ? ` ; tu touches ${pct(metrics.fairwayPct)} des fairways` : '';
@@ -333,6 +350,7 @@ const LEAK_DEFINITIONS: readonly LeakDefinition[] = [
     id: 'approach',
     title: 'Approches',
     drill: 'approach',
+    needsDetails: true,
     loss: (summary) => per18(summary.approachLoss, summary.greenScope),
     explain: (_summary, metrics, loss) => {
       const accuracy = metrics.girPct != null ? ` ; tu touches ${pct(metrics.girPct)} des greens` : '';
@@ -343,6 +361,7 @@ const LEAK_DEFINITIONS: readonly LeakDefinition[] = [
     id: 'short_game',
     title: 'Petit jeu',
     drill: 'short_game',
+    needsDetails: true,
     loss: (summary) => per18(summary.shortGameLoss, summary.greenScope),
     explain: (_summary, metrics, loss) => {
       const recovery = metrics.scramblingPct != null ? ` ; tu sauves le par dans ${pct(metrics.scramblingPct)} des cas` : '';
@@ -402,10 +421,17 @@ export function analyzeLeaks(input: {
   const previous = summarize(previousRows);
   const metrics = toMetrics(current);
   const lowConfidence = current.rounds < LEAKS_MIN_ROUNDS;
-  const hasPrevious = !lowConfidence && previous.rounds >= LEAKS_MIN_ROUNDS;
+  const detailsLowConfidence = current.detailRounds < LEAKS_MIN_ROUNDS;
+  // A low-confidence analysis is flagged as a whole; otherwise, detail-based leaks resting on too
+  // few detailed rounds are left out, since the screens trust every leak of a confident analysis.
+  const withheld = (definition: LeakDefinition) => definition.needsDetails && detailsLowConfidence && !lowConfidence;
+  const trendable = (needsDetails: boolean) =>
+    !lowConfidence && (needsDetails ? previous.detailRounds : previous.rounds) >= LEAKS_MIN_ROUNDS;
 
   const leaks = LEAK_DEFINITIONS
     .flatMap((definition, order) => {
+      if (withheld(definition)) return [];
+
       const loss = definition.loss(current);
       return loss != null && loss >= LEAKS_MIN_LOSS ? [{ definition, order, loss }] : [];
     })
@@ -416,7 +442,7 @@ export function analyzeLeaks(input: {
       title: definition.title,
       lossPer18: round1(loss),
       explanation: definition.explain(current, metrics, loss),
-      trend: hasPrevious ? getTrend(loss, definition.loss(previous)) : null,
+      trend: trendable(definition.needsDetails) ? getTrend(loss, definition.loss(previous)) : null,
       drill: definition.drill,
       lowConfidence,
     }));
@@ -425,9 +451,11 @@ export function analyzeLeaks(input: {
     windowSize,
     roundsConsidered: recent.length,
     roundsAnalyzed: current.rounds,
+    roundsWithDetails: current.detailRounds,
     legacyRoundsExcluded: recent.length - current.rounds,
     holesAnalyzed: current.holes,
     lowConfidence,
+    detailsLowConfidence,
     leaks,
     metrics,
   };
@@ -444,6 +472,14 @@ export function describeLoss(lossPer18: number) {
     value: `≈ ${formatDecimalFr(rounded, 1)}`,
     unit: `${rounded >= 2 ? 'coups' : 'coup'} par 18 trous`,
   };
+}
+
+export function describeMissingDetails(analysis: Pick<LeaksAnalysis, 'roundsWithDetails' | 'detailsLowConfidence'>) {
+  if (!analysis.detailsLowConfidence) return null;
+
+  const have = analysis.roundsWithDetails === 0 ? 'Tu n’en as pas encore.' : `Tu en as\u00a0${analysis.roundsWithDetails}.`;
+
+  return `Putts, greens et fairways ne sont pas analysés : il faut au moins ${LEAKS_MIN_ROUNDS} rounds où tu les as saisis. ${have}`;
 }
 
 export function describeLegacyExclusion(count: number) {

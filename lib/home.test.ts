@@ -12,6 +12,7 @@ import {
   getSparklineTone,
   getSparklineValues,
   getTrendPill,
+  pluralizeStrokes,
 } from './home';
 import type { Round } from '../types';
 
@@ -154,6 +155,32 @@ describe('getTrendPill', () => {
     expect(getTrendPill({ holes: 18, delta: -1.4 }).tone).toBe('neutral');
   });
 
+  it('uses the singular below two strokes, as the leaks screen does (1,5 coup, not 1,5 coups)', () => {
+    expect(getTrendPill({ holes: 18, delta: 1.5 })).toMatchObject({ tone: 'good', label: '1,5 coup de mieux' });
+    expect(getTrendPill({ holes: 18, delta: 1.9 }).label).toBe('1,9 coup de mieux');
+    expect(getTrendPill({ holes: 18, delta: -1.5 })).toMatchObject({ tone: 'warn', label: '1,5 coup de plus' });
+    expect(getTrendPill({ holes: 18, delta: -1.9 }).label).toBe('1,9 coup de plus');
+  });
+
+  it('switches to the plural at two strokes once rounded to one decimal', () => {
+    expect(getTrendPill({ holes: 18, delta: 2 }).label).toBe('2 coups de mieux');
+    expect(getTrendPill({ holes: 18, delta: 1.96 }).label).toBe('2 coups de mieux');
+    expect(getTrendPill({ holes: 18, delta: -1.96 }).label).toBe('2 coups de plus');
+    expect(getTrendPill({ holes: 18, delta: 1.94 }).label).toBe('1,9 coup de mieux');
+  });
+
+  it('words the accessibility label with the same plural', () => {
+    expect(getTrendPill({ holes: 18, delta: 1.5 }).accessibilityLabel).toBe(
+      'Tendance : environ 1,5 coup de mieux par rapport au par sur les derniers rounds.',
+    );
+    expect(getTrendPill({ holes: 9, delta: -1.6 }).accessibilityLabel).toBe(
+      'Tendance : environ 1,6 coup de plus par rapport au par sur les derniers rounds (9 trous).',
+    );
+    expect(getTrendPill({ holes: 18, delta: 3 }).accessibilityLabel).toBe(
+      'Tendance : environ 3 coups de mieux par rapport au par sur les derniers rounds.',
+    );
+  });
+
   it('notes 9-hole trends', () => {
     expect(getTrendPill({ holes: 9, delta: 2 }).label).toBe('2 coups de mieux (9 trous)');
   });
@@ -243,5 +270,23 @@ describe('getFocusInsight', () => {
     const rounds = [makeRound({ id: 'new', putts: 30, gir: 8 }), makeRound({ id: 'old', penalties: 5 })];
 
     expect(getFocusInsight(rounds).title).toBe('Profil équilibré, cap sur la répétabilité');
+  });
+});
+
+describe('pluralizeStrokes', () => {
+  it('is singular below two once rounded, plural from two', () => {
+    expect(pluralizeStrokes(0)).toBe('coup');
+    expect(pluralizeStrokes(0.4)).toBe('coup');
+    expect(pluralizeStrokes(1)).toBe('coup');
+    expect(pluralizeStrokes(1.5)).toBe('coup');
+    expect(pluralizeStrokes(1.94)).toBe('coup');
+    expect(pluralizeStrokes(1.96)).toBe('coups');
+    expect(pluralizeStrokes(2)).toBe('coups');
+    expect(pluralizeStrokes(12.3)).toBe('coups');
+  });
+
+  it('ignores the sign', () => {
+    expect(pluralizeStrokes(-1.5)).toBe('coup');
+    expect(pluralizeStrokes(-3)).toBe('coups');
   });
 });

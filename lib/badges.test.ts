@@ -32,7 +32,18 @@ function round(overrides: Partial<BadgeRound> = {}): BadgeRound {
 }
 
 function card(holes: Partial<BadgeHole>[] = [], length = 18): BadgeHole[] {
-  return Array.from({ length }, (_, index) => ({ par: 4, score: 5, putts: 2, ...holes[index] }));
+  return Array.from({ length }, (_, index) => ({ par: 4, score: 5, putts: 2, gir: true, ...holes[index] }));
+}
+
+function untouchedCard(holes: Partial<BadgeHole>[] = [], length = 18): BadgeHole[] {
+  return Array.from({ length }, (_, index) => ({
+    par: 4,
+    score: 5,
+    putts: 2,
+    gir: false,
+    fairway_hit: false,
+    ...holes[index],
+  }));
 }
 
 function completion(month: number, day: number, overrides: Partial<BadgeCompletion> = {}): BadgeCompletion {
@@ -202,6 +213,20 @@ describe('evaluateRoundBadges: hole data', () => {
 
   it('a bogey is not a double bogey', () => {
     expect(evaluate(card([{ score: 5 }]))).toContain('no_double');
+  });
+
+  it('does not award no_three_putt when only the scores were entered (putts 2, no green, no fairway are the defaults)', () => {
+    expect(evaluate(untouchedCard())).toEqual(['no_double']);
+  });
+
+  it('awards no_three_putt once a green or a fairway was marked, or a putt count departs from the default', () => {
+    expect(evaluate(untouchedCard([{ gir: true }]))).toEqual(['no_three_putt', 'no_double']);
+    expect(evaluate(untouchedCard([{ fairway_hit: true }]))).toEqual(['no_three_putt', 'no_double']);
+    expect(evaluate(untouchedCard([{ putts: 1 }]))).toEqual(['no_three_putt', 'no_double']);
+  });
+
+  it('keeps a hole without putts, gir or fairway data out of no_three_putt', () => {
+    expect(evaluate([...Array(18)].map(() => ({ par: 4, score: 5 })))).toEqual(['no_double']);
   });
 
   it('treats a hole without putts as unknown for no_three_putt', () => {
@@ -464,6 +489,14 @@ describe('backfillBadges', () => {
       { id: 'no_three_putt', earnedAt: iso(2, 8) },
       { id: 'no_double', earnedAt: iso(2, 8) },
     ]);
+  });
+
+  it('does not backfill no_three_putt from a round whose putts, greens and fairways were never entered', () => {
+    const rounds = [round({ id: 'scores-only', played_at: iso(2, 1), total_score: 110 })];
+
+    expect(
+      backfillBadges({ rounds, holesByRound: { 'scores-only': untouchedCard() }, completions: [] }).map((entry) => entry.id),
+    ).toEqual(['first_round', 'no_double']);
   });
 
   it('keeps the earliest date when several rounds qualify', () => {

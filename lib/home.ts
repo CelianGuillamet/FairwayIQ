@@ -23,6 +23,10 @@ export function formatSignedFr(value: number, maxDecimals = 1) {
   return '0';
 }
 
+export function pluralizeStrokes(value: number, maxDecimals = 1) {
+  return Number(Math.abs(value).toFixed(maxDecimals)) >= 2 ? 'coups' : 'coup';
+}
+
 export function formatHandicapValue(value: string) {
   return value.replace('.', ',');
 }
@@ -74,22 +78,22 @@ export function getTrendPill(trend: ReturnType<typeof getScoreToParTrend>): Tren
   const holesNote = holes === 9 ? ' (9 trous)' : '';
 
   if (delta >= NOTABLE_TREND_DELTA) {
-    const amount = formatDecimalFr(delta);
+    const amount = `${formatDecimalFr(delta)} ${pluralizeStrokes(delta)}`;
     return {
       tone: 'good',
       icon: 'arrow-down',
-      label: `${amount} coups de mieux${holesNote}`,
-      accessibilityLabel: `Tendance : environ ${amount} coups de mieux par rapport au par sur les derniers rounds${holesNote}.`,
+      label: `${amount} de mieux${holesNote}`,
+      accessibilityLabel: `Tendance : environ ${amount} de mieux par rapport au par sur les derniers rounds${holesNote}.`,
     };
   }
 
   if (delta <= -NOTABLE_TREND_DELTA) {
-    const amount = formatDecimalFr(Math.abs(delta));
+    const amount = `${formatDecimalFr(Math.abs(delta))} ${pluralizeStrokes(delta)}`;
     return {
       tone: 'warn',
       icon: 'arrow-up',
-      label: `${amount} coups de plus${holesNote}`,
-      accessibilityLabel: `Tendance : environ ${amount} coups de plus par rapport au par sur les derniers rounds${holesNote}.`,
+      label: `${amount} de plus${holesNote}`,
+      accessibilityLabel: `Tendance : environ ${amount} de plus par rapport au par sur les derniers rounds${holesNote}.`,
     };
   }
 

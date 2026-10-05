@@ -10,8 +10,10 @@ import {
   isWeeklyGoalReached,
   type BadgeHole,
   type BadgeId,
+  type BadgeRound,
   type HolesByRoundId,
 } from './badges';
+import { fetchRoundsForBadges } from './badge-rounds';
 import { getCompletionResult } from './drill-results';
 import { loadHolesForRounds } from './holes-data';
 import { getErrorCode } from './round-save';
@@ -20,6 +22,15 @@ import { loadStoredWeeklyGoal } from './weekly-goal-storage';
 
 const HOLES_CHUNK = 20;
 const HOLE_BADGES: readonly BadgeId[] = ['first_birdie', 'no_three_putt', 'no_double'];
+const ROUND_SCORE_BADGES: readonly BadgeId[] = [
+  'first_round',
+  'rounds_5',
+  'rounds_10',
+  'rounds_25',
+  'break_100',
+  'break_90',
+  'break_80',
+];
 
 async function getWeeklyGoal(userId: string) {
   return (await loadStoredWeeklyGoal(userId)) ?? getGoalFromFrequency(useAuthStore.getState().profile?.play_frequency);
@@ -50,10 +61,36 @@ async function loadBackfillHoles(rounds: readonly Round[], earned: ReadonlySet<s
   return holesByRound;
 }
 
+let sessionRounds: { userId: string; promise: ReturnType<typeof fetchRoundsForBadges> } | null = null;
+
+// The rounds store holds one page of rounds: for the badges that only need a round's date and
+// score, every round is read once per session, and the rounds already loaded win over the read.
+async function loadBackfillRounds(userId: string, earned: ReadonlySet<string>): Promise<readonly BadgeRound[]> {
+  const { rounds, hasMore } = useRoundsStore.getState();
+
+  if (!hasMore || ROUND_SCORE_BADGES.every((id) => earned.has(id))) {
+    return rounds;
+  }
+
+  if (sessionRounds?.userId !== userId) {
+    sessionRounds = { userId, promise: fetchRoundsForBadges() };
+  }
+
+  const fetched = await sessionRounds.promise;
+
+  if (!fetched) {
+    sessionRounds = null;
+    return rounds;
+  }
+
+  return [...new Map<string, BadgeRound>([...fetched, ...rounds].map((round) => [round.id, round])).values()];
+}
+
 async function runSync() {
   try {
     const userId = useAuthStore.getState().user?.id;
     if (!userId || !(await useBadgesStore.getState().load(userId))) return;
+    await useBadgesStore.getState().retryUnsynced();
     if (useBadgesStore.getState().backfilled) return;
 
     const roundsState = useRoundsStore.getState();
@@ -61,12 +98,13 @@ async function runSync() {
     if (!roundsState.initialized || roundsState.error || !drillsState.initialized) return;
 
     const earned = new Set(earnedIds());
-    const [weeklyGoal, holesByRound] = await Promise.all([
+    const [weeklyGoal, holesByRound, rounds] = await Promise.all([
       getWeeklyGoal(userId),
       loadBackfillHoles(roundsState.rounds, earned),
+      loadBackfillRounds(userId, earned),
     ]);
     const entries = backfillBadges({
-      rounds: roundsState.rounds,
+      rounds,
       holesByRound,
       completions: drillsState.completions,
       weeklyGoal,
@@ -78,6 +116,7 @@ async function runSync() {
       { celebrate: false, earnedAt: Object.fromEntries(entries.map((entry) => [entry.id, entry.earnedAt])) },
     );
     useBadgesStore.getState().markBackfilled(userId);
+    sessionRounds = null;
   } catch (error) {
     console.warn('[badges] backfill failed', getErrorCode(error));
   }

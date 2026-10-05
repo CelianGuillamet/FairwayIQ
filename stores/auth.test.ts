@@ -498,6 +498,28 @@ describe('password recovery flag', () => {
     expect(useAuthStore.getState().passwordRecovery).toBe(true);
   });
 
+  it('survives a late initial-session event without a session between raising it and the sign-in', () => {
+    useAuthStore.getState().setPasswordRecovery(true);
+
+    useAuthStore.getState().setSession(null, 'INITIAL_SESSION');
+    useAuthStore.getState().setSession(null);
+
+    expect(useAuthStore.getState().passwordRecovery).toBe(true);
+
+    useAuthStore.getState().setSession(session('user-1'), 'SIGNED_IN');
+
+    expect(useAuthStore.getState().passwordRecovery).toBe(true);
+    expect(useAuthStore.getState().session).not.toBeNull();
+  });
+
+  it('is cleared when another user takes over the session', () => {
+    useAuthStore.getState().setSession(session('user-1'), 'PASSWORD_RECOVERY');
+
+    useAuthStore.getState().setSession(session('user-2'), 'SIGNED_IN');
+
+    expect(useAuthStore.getState().passwordRecovery).toBe(false);
+  });
+
   it('is not raised by an ordinary sign-in', () => {
     useAuthStore.getState().setSession(session('user-1'), 'SIGNED_IN');
 
@@ -513,7 +535,7 @@ describe('password recovery flag', () => {
     expect(useAuthStore.getState().session).not.toBeNull();
   });
 
-  it('is cleared when the session disappears', () => {
+  it('is cleared when the session disappears with an explicit sign-out', () => {
     useAuthStore.getState().setSession(session('user-1'), 'PASSWORD_RECOVERY');
 
     useAuthStore.getState().setSession(null, 'SIGNED_OUT');

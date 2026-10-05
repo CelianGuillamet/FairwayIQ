@@ -8,6 +8,7 @@ import type {
 } from '../types';
 
 const DEFAULT_PAR_SEQUENCE_18 = [4, 4, 3, 4, 5, 4, 3, 4, 5, 4, 4, 3, 5, 4, 4, 3, 4, 5] as const;
+const DEFAULT_PUTTS = 2;
 
 export type ScorecardProgress = {
   completedHoles: number;
@@ -32,12 +33,29 @@ function getDefaultHoleDraft(holeNumber: number, par: number): RoundDraftHole {
     hole_number: holeNumber,
     par,
     score: par,
-    putts: 2,
+    putts: DEFAULT_PUTTS,
     gir: false,
     fairway_hit: par === 3 ? null : false,
     penalty: 0,
     completed: false,
   };
+}
+
+export type HoleDetails = {
+  putts?: number | null;
+  gir?: boolean | null;
+  fairway_hit?: boolean | null;
+};
+
+// Defaults (2 putts, no green, no fairway) are stored like real entries, so a card only counts as
+// detailed when something departs from them.
+export function hasRecordedHoleDetails(holes: readonly HoleDetails[] | null | undefined) {
+  return (
+    !!holes &&
+    holes.some(
+      (hole) => (hole.putts != null && hole.putts !== DEFAULT_PUTTS) || hole.gir === true || hole.fairway_hit === true,
+    )
+  );
 }
 
 export function createDefaultScorecard(holes: 9 | 18): RoundDraftHole[] {

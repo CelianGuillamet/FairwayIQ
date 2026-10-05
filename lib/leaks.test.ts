@@ -2,6 +2,7 @@ import {
   LEAKS_MIN_ROUNDS,
   analyzeLeaks,
   describeLegacyExclusion,
+  describeMissingDetails,
   describeLoss,
   getLeakTrendPill,
   getMetricRows,
@@ -24,6 +25,15 @@ function card(overrides: Record<number, Partial<HoleRow>> = {}, holes = 18): Hol
     fairway_hit: par === 3 ? null : true,
     penalty: 0,
     ...overrides[index + 1],
+  }));
+}
+
+function scoresOnlyCard(overrides: Record<number, Partial<HoleRow>> = {}, holes = 18): HoleRow[] {
+  return card(overrides, holes).map((hole) => ({
+    ...hole,
+    putts: 2,
+    gir: false,
+    fairway_hit: hole.par === 3 ? null : false,
   }));
 }
 
@@ -422,6 +432,14 @@ describe('formatting', () => {
     expect(describeLoss(1.4)).toEqual({ value: '≈ 1,4', unit: 'coup par 18 trous' });
   });
 
+  it('uses the singular below two strokes in the trend pill and the loss, whatever the decimal', () => {
+    expect(getLeakTrendPill({ direction: 'better', delta: 1.5 }).label).toBe('1,5 coup de moins');
+    expect(getLeakTrendPill({ direction: 'worse', delta: -1.9 }).label).toBe('1,9 coup de plus');
+    expect(getLeakTrendPill({ direction: 'worse', delta: -1.96 }).label).toBe('2 coups de plus');
+    expect(getLeakTrendPill({ direction: 'better', delta: 1.5 }).accessibilityLabel).toContain('environ 1,5 coup de moins perdu');
+    expect(describeLoss(1.5)).toEqual({ value: '≈ 1,5', unit: 'coup par 18 trous' });
+  });
+
   it('words the legacy exclusion note', () => {
     expect(describeLegacyExclusion(0)).toBeNull();
     expect(describeLegacyExclusion(1)).toBe('1 round saisi sans le détail des trous n’est pas pris en compte.');
@@ -461,5 +479,116 @@ describe('formatting', () => {
 
     const empty = getMetricRows(analyzeLeaks({ rounds: [], holesByRound: {} }).metrics);
     expect(empty.every((row) => row.value === '--' && row.unit === undefined)).toBe(true);
+  });
+});
+
+describe('rounds whose putts, greens and fairways were never entered (defaults: 2 putts, no green, no fairway)', () => {
+  const overPar = { 1: { score: 6 }, 2: { score: 5 }, 4: { score: 5 }, 5: { score: 7 }, 6: { score: 5 }, 8: { score: 5 } };
+
+  it('do not blame the tee, the approach, the short game or the putting for strokes over par', () => {
+    const analysis = analyzeOne(scoresOnlyCard(overPar));
+
+    expect(analysis.leaks.map((leak) => leak.id)).toEqual(['blowups']);
+    expect(analysis.metrics.puttingLossPer18).toBeNull();
+    expect(analysis.metrics.threePuttHolesPer18).toBeNull();
+    expect(analysis.metrics.fairwayPct).toBeNull();
+    expect(analysis.metrics.girPct).toBeNull();
+    expect(analysis.metrics.scramblingPct).toBeNull();
+    expect(analysis.metrics.puttsPerGirHole).toBeNull();
+    expect(analysis.metrics.puttsPerNonGirHole).toBeNull();
+  });
+
+  it('still count penalties, blow-ups and the result to par from the explicit scores', () => {
+    const analysis = analyzeOne(scoresOnlyCard({ 1: { score: 7, penalty: 1 }, 2: { score: 3 }, 3: { score: 3 } }));
+
+    expect(analysis.metrics.penaltyStrokesPer18).toBe(1);
+    expect(analysis.metrics.doubleOrWorseHolesPer18).toBe(1);
+    expect(analysis.metrics.doubleOrWorseLossPer18).toBe(2);
+    expect(analysis.metrics.toParPar4).toBe(0.2);
+    expect(analysis.holesAnalyzed).toBe(18);
+  });
+
+  it('attribute strokes as before once the same card has a green or a fairway marked', () => {
+    const rows = scoresOnlyCard(overPar);
+    rows[11] = { ...rows[11], gir: true };
+
+    const analysis = analyzeOne(rows);
+
+    expect(analysis.leaks.map((leak) => leak.id)).toEqual(expect.arrayContaining(['tee']));
+    expect(analysis.metrics.girPct).toBe(6);
+  });
+
+  it('count for the confidence of penalties and blow-ups, not for the detail-based leaks', () => {
+    const rounds = makeRounds(4);
+    const analysis = analyzeLeaks({ rounds, holesByRound: holesFor(rounds, () => scoresOnlyCard(overPar)) });
+
+    expect(analysis.roundsAnalyzed).toBe(4);
+    expect(analysis.roundsWithDetails).toBe(0);
+    expect(analysis.lowConfidence).toBe(false);
+    expect(analysis.detailsLowConfidence).toBe(true);
+    expect(analysis.leaks.map((leak) => leak.id)).toEqual(['blowups']);
+    expect(hasEnoughLeakData(analysis)).toBe(true);
+  });
+
+  it('do not complete a window of detailed rounds: two detailed rounds among five are still too few for the detail-based leaks', () => {
+    const rounds = makeRounds(5);
+    const analysis = analyzeLeaks({
+      rounds,
+      holesByRound: holesFor(rounds, (index) => (index < 2 ? card(threePuttHoles(4)) : scoresOnlyCard(overPar))),
+    });
+
+    expect(analysis.roundsAnalyzed).toBe(5);
+    expect(analysis.roundsWithDetails).toBe(2);
+    expect(analysis.detailsLowConfidence).toBe(true);
+    expect(analysis.leaks.find((leak) => leak.id === 'putting')).toBeUndefined();
+    expect(analysis.leaks.find((leak) => leak.id === 'blowups')).toBeDefined();
+  });
+
+  it('do not dilute the detail-based figures of the detailed rounds they sit next to', () => {
+    const rounds = makeRounds(5);
+    const analysis = analyzeLeaks({
+      rounds,
+      holesByRound: holesFor(rounds, (index) => (index < 3 ? card(threePuttHoles(2)) : scoresOnlyCard({}))),
+    });
+
+    expect(analysis.roundsWithDetails).toBe(3);
+    expect(analysis.detailsLowConfidence).toBe(false);
+    expect(analysis.metrics.puttingLossPer18).toBe(2);
+    expect(analysis.leaks[0]).toMatchObject({ id: 'putting', lossPer18: 2 });
+  });
+
+  it('have no trend for a detail-based leak when the previous window has too few detailed rounds', () => {
+    const rounds = makeRounds(6);
+    const analysis = analyzeLeaks({
+      rounds,
+      windowSize: 3,
+      holesByRound: holesFor(rounds, (index) =>
+        index < 3 ? card({ ...threePuttHoles(2), 12: { score: 7 } }) : index === 3 ? card(threePuttHoles(5)) : scoresOnlyCard({ 12: { score: 6 } })),
+    });
+
+    expect(analysis.leaks.find((leak) => leak.id === 'putting')?.trend).toBeNull();
+    expect(analysis.leaks.find((leak) => leak.id === 'blowups')?.trend).not.toBeNull();
+  });
+
+  it('are listed in the legacy exclusion only when they have no hole rows at all', () => {
+    const rounds = makeRounds(3);
+    const analysis = analyzeLeaks({ rounds, holesByRound: holesFor(rounds, (index) => (index === 0 ? undefined : scoresOnlyCard())) });
+
+    expect(analysis.legacyRoundsExcluded).toBe(1);
+  });
+});
+
+describe('describeMissingDetails', () => {
+  it('is empty when enough rounds carry putts, greens or fairways', () => {
+    expect(describeMissingDetails({ roundsWithDetails: 3, detailsLowConfidence: false })).toBeNull();
+  });
+
+  it('says how many detailed rounds there are', () => {
+    expect(describeMissingDetails({ roundsWithDetails: 0, detailsLowConfidence: true })).toBe(
+      'Putts, greens et fairways ne sont pas analysés : il faut au moins 3 rounds où tu les as saisis. Tu n’en as pas encore.',
+    );
+    expect(describeMissingDetails({ roundsWithDetails: 2, detailsLowConfidence: true })).toBe(
+      'Putts, greens et fairways ne sont pas analysés : il faut au moins 3 rounds où tu les as saisis. Tu en as\u00a02.',
+    );
   });
 });
