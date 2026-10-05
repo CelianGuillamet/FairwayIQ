@@ -2,11 +2,22 @@ const PASSWORD_RECOVERY = 'PASSWORD_RECOVERY';
 const AUTH_LINK_ROUTES = ['auth-callback', 'reset-password'];
 const SIGNED_OUT_AUTH_SCREENS = ['login', 'register', 'forgot-password'];
 
-export function nextPasswordRecovery(current: boolean, event: string | undefined, hasSession: boolean) {
-  if (!hasSession) {
+// An update without a session is not a sign-out: the initial-session event can land after the reset
+// screen raised the flag and before the exchange signs the user in, and it must not drop it.
+// Besides the explicit signOut() and the screen's own calls, only SIGNED_OUT or another user clear it.
+export function nextPasswordRecovery(
+  current: boolean,
+  event: string | undefined,
+  hasSession: boolean,
+  userChanged = false
+) {
+  if (event === 'SIGNED_OUT' || userChanged) {
     return false;
   }
-  return event === PASSWORD_RECOVERY ? true : current;
+  if (event === PASSWORD_RECOVERY) {
+    return hasSession;
+  }
+  return current;
 }
 
 function decodeStoredValue(stored: string) {

@@ -19,11 +19,28 @@ describe('nextPasswordRecovery', () => {
     }
   );
 
-  it('turns off as soon as there is no session', () => {
+  it('turns off on an explicit SIGNED_OUT, with or without a session in the payload', () => {
     expect(nextPasswordRecovery(true, 'SIGNED_OUT', false)).toBe(false);
-    expect(nextPasswordRecovery(true, undefined, false)).toBe(false);
-    expect(nextPasswordRecovery(true, 'PASSWORD_RECOVERY', false)).toBe(false);
+    expect(nextPasswordRecovery(true, 'SIGNED_OUT', true)).toBe(false);
   });
+
+  it('turns off when another user takes over', () => {
+    expect(nextPasswordRecovery(true, 'SIGNED_IN', true, true)).toBe(false);
+    expect(nextPasswordRecovery(true, undefined, false, true)).toBe(false);
+  });
+
+  it('drops a recovery event that carries no session', () => {
+    expect(nextPasswordRecovery(true, 'PASSWORD_RECOVERY', false)).toBe(false);
+    expect(nextPasswordRecovery(false, 'PASSWORD_RECOVERY', false)).toBe(false);
+  });
+
+  it.each(['INITIAL_SESSION', undefined])(
+    'keeps the flag on a late %p without a session, which is not a sign-out',
+    (event) => {
+      expect(nextPasswordRecovery(true, event, false)).toBe(true);
+      expect(nextPasswordRecovery(false, event, false)).toBe(false);
+    }
+  );
 });
 
 describe('isRecoveryCodeVerifier', () => {

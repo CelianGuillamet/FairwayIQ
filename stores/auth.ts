@@ -93,7 +93,12 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       loading: false,
       profileLoading: !!session && shouldResetProfile,
       profileError: shouldResetProfile ? null : get().profileError,
-      passwordRecovery: nextPasswordRecovery(get().passwordRecovery, event, !!session),
+      passwordRecovery: nextPasswordRecovery(
+        get().passwordRecovery,
+        event,
+        !!session,
+        !!prevUserId && prevUserId !== nextUserId
+      ),
     });
   },
 
