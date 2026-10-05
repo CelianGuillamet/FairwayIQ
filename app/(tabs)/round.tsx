@@ -49,6 +49,7 @@ import {
 } from '../../lib/golf-courses';
 import { buildHoleViewData } from '../../lib/hole-view';
 import { getGreenDistances } from '../../lib/gps';
+import { useClubAdvice } from '../../lib/use-club-advice';
 import { clearRoundDraft, loadRoundDraft, saveRoundDraft } from '../../lib/round-draft';
 import { describeToPar, formatHolesPlayed, formatScoreToPar } from '../../lib/score-labels';
 import {
@@ -133,6 +134,7 @@ export default function RoundScreen() {
     () => getGreenDistances(currentHoleView?.gpsPoints, livePosition),
     [currentHoleView, livePosition],
   );
+  const clubAdvice = useClubAdvice(liveGreenDistances?.center);
   const gpsHintLabel = useMemo(() => {
     if (!currentHoleView?.gpsAvailable) return null;
     if (gpsPermission === 'denied') return 'Active la localisation pour les distances réelles.';
@@ -719,6 +721,7 @@ export default function RoundScreen() {
                 onSelectTee={(next) => { cancelAutoAdvance(); setTeeKey(next); }}
                 liveGreenDistances={liveGreenDistances}
                 gpsHintLabel={gpsHintLabel}
+                clubAdvice={clubAdvice}
               />
               <HoleScoringPanel
                 hole={currentHole}
