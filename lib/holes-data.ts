@@ -14,7 +14,7 @@ type Cached = { fingerprint: string; rows: HoleRow[] };
 const cache = new Map<string, Cached>();
 const pending = new Map<string, Promise<void>>();
 
-// Bumped on reset(): a response that started before it belongs to a previous user and is dropped.
+// Bumped on resetHolesData(): a response that started before it belongs to a previous user and is dropped.
 let generation = 0;
 
 // round_holes rows only change through update_round, which rewrites the round's aggregates in the
