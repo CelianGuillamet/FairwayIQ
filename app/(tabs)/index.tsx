@@ -23,6 +23,7 @@ import { MonthlyChallengeCard } from '../../components/home/MonthlyChallengeCard
 import { MonthlyChallengeSheet } from '../../components/home/MonthlyChallengeSheet';
 import { PINNED_CTA_CLEARANCE, PinnedCta } from '../../components/home/PinnedCta';
 import { PracticeCard } from '../../components/home/PracticeCard';
+import { RemindersHint } from '../../components/home/RemindersHint';
 import { RoundRow } from '../../components/home/RoundRow';
 import { StatsStrip, type StatItem } from '../../components/home/StatsStrip';
 import { useMonthlyChallenge } from '../../components/home/useMonthlyChallenge';
@@ -328,6 +329,8 @@ export default function DashboardScreen() {
               sparkValues={sparkValues}
               trend={trendPill}
             />
+
+            <RemindersHint />
 
             {weeklyGoal.loaded ? (
               <WeeklyGoalCard sessions={weeklySessions} goal={weeklyGoal.goal} onPress={() => setGoalSheetOpen(true)} />
