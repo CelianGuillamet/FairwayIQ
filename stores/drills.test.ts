@@ -8,7 +8,13 @@ jest.mock('../lib/supabase', () => ({
 
 import { useDrillsStore } from './drills';
 
-type Completion = { id: string; drill_id: string; completed_at: string };
+type Completion = {
+  id: string;
+  drill_id: string;
+  completed_at: string;
+  result_made?: number | null;
+  result_attempts?: number | null;
+};
 
 const NOW = new Date('2026-01-10T12:00:00.000Z');
 
@@ -16,11 +22,12 @@ function setCompletions(completions: Completion[]) {
   useDrillsStore.setState({ completions });
 }
 
-function completionAt(daysAgo: number, drillId = 'drill-1'): Completion {
+function completionAt(daysAgo: number, drillId = 'drill-1', result?: { made: number; attempts: number }): Completion {
   return {
     id: `completion-${daysAgo}-${drillId}`,
     drill_id: drillId,
     completed_at: subDays(NOW, daysAgo).toISOString(),
+    ...(result ? { result_made: result.made, result_attempts: result.attempts } : {}),
   };
 }
 
@@ -203,6 +210,80 @@ describe('markDone', () => {
 
     expect(useDrillsStore.getState().completions).toEqual([]);
   });
+
+  it('keeps the original insert payload when no result is given', async () => {
+    const insert = mockInsertReturning({ data: completionAt(0, 'putting'), error: null });
+
+    await useDrillsStore.getState().markDone('putting', 'user-1');
+
+    expect(insert).toHaveBeenCalledWith({ drill_id: 'putting', user_id: 'user-1' });
+  });
+
+  it('keeps the original insert payload when the result is skipped', async () => {
+    const insert = mockInsertReturning({ data: completionAt(0, 'putting'), error: null });
+
+    await useDrillsStore.getState().markDone('putting', 'user-1', null);
+
+    expect(insert).toHaveBeenCalledWith({ drill_id: 'putting', user_id: 'user-1' });
+  });
+
+  it('stores the result with the completion', async () => {
+    const result = { made: 7, attempts: 10 };
+    const insert = mockInsertReturning({ data: completionAt(0, 'putting', result), error: null });
+
+    await useDrillsStore.getState().markDone('putting', 'user-1', result);
+
+    expect(insert).toHaveBeenCalledWith({
+      drill_id: 'putting',
+      user_id: 'user-1',
+      result_made: 7,
+      result_attempts: 10,
+    });
+    expect(useDrillsStore.getState().completions[0]).toMatchObject({ result_made: 7, result_attempts: 10 });
+    expect(useDrillsStore.getState().getLastResult('putting')).toEqual(result);
+  });
+
+  it('rejects an invalid result without calling the database, and can be retried', async () => {
+    const insert = mockInsertReturning({ data: completionAt(0, 'putting'), error: null });
+
+    await expect(useDrillsStore.getState().markDone('putting', 'user-1', { made: 11, attempts: 10 })).rejects.toThrow(
+      'Résultat invalide.'
+    );
+    await expect(useDrillsStore.getState().markDone('putting', 'user-1', { made: 1, attempts: 0 })).rejects.toThrow();
+    expect(insert).not.toHaveBeenCalled();
+
+    await useDrillsStore.getState().markDone('putting', 'user-1');
+
+    expect(insert).toHaveBeenCalledTimes(1);
+  });
+
+  it('inserts only once when the result is saved twice while the request is pending', async () => {
+    const pending = deferred<Result>();
+    const insert = mockInsertReturning(pending.promise);
+    const result = { made: 7, attempts: 10 };
+
+    const first = useDrillsStore.getState().markDone('putting', 'user-1', result);
+    const second = useDrillsStore.getState().markDone('putting', 'user-1', result);
+    pending.resolve({ data: completionAt(0, 'putting', result), error: null });
+    await Promise.all([first, second]);
+
+    expect(insert).toHaveBeenCalledTimes(1);
+    expect(useDrillsStore.getState().completions).toHaveLength(1);
+  });
+
+  it('does not add a result to the store of the next user after a reset', async () => {
+    const pending = deferred<Result>();
+    mockInsertReturning(pending.promise);
+    const result = { made: 7, attempts: 10 };
+
+    const marking = useDrillsStore.getState().markDone('putting', 'user-1', result);
+    useDrillsStore.getState().reset();
+    pending.resolve({ data: completionAt(0, 'putting', result), error: null });
+    await marking;
+
+    expect(useDrillsStore.getState().completions).toEqual([]);
+    expect(useDrillsStore.getState().getLastResult('putting')).toBeNull();
+  });
 });
 
 describe('fetchCompletions', () => {
@@ -238,6 +319,61 @@ describe('fetchCompletions', () => {
     await fetching;
 
     expect(useDrillsStore.getState().completions).toEqual([]);
+  });
+});
+
+describe('results', () => {
+  beforeEach(() => {
+    mockFrom.mockReset();
+    useDrillsStore.getState().reset();
+  });
+
+  it('loads the results stored with the completions', async () => {
+    const range = jest.fn().mockResolvedValueOnce({
+      data: [completionAt(0, 'putting', { made: 7, attempts: 10 }), completionAt(2, 'putting')],
+      error: null,
+    });
+    mockFrom.mockReturnValue({ select: () => ({ order: () => ({ range }) }) });
+
+    await useDrillsStore.getState().fetchCompletions();
+
+    expect(useDrillsStore.getState().getLastResult('putting')).toEqual({ made: 7, attempts: 10 });
+  });
+
+  it('exposes the last result, the best result and the success rate of a drill', () => {
+    setCompletions([
+      completionAt(0, 'putting', { made: 7, attempts: 10 }),
+      completionAt(1, 'putting'),
+      completionAt(3, 'putting', { made: 9, attempts: 10 }),
+      completionAt(5, 'putting', { made: 4, attempts: 10 }),
+      completionAt(0, 'chipping', { made: 1, attempts: 2 }),
+    ]);
+    const { getLastResult, getBestResult, getSuccessRate } = useDrillsStore.getState();
+
+    expect(getLastResult('putting')).toEqual({ made: 7, attempts: 10 });
+    expect(getBestResult('putting')).toEqual({ made: 9, attempts: 10 });
+    expect(getSuccessRate('putting')).toBeCloseTo(20 / 30);
+  });
+
+  it('has nothing to show for a drill without result', () => {
+    setCompletions([completionAt(0, 'putting')]);
+    const { getLastResult, getBestResult, getSuccessRate } = useDrillsStore.getState();
+
+    expect(getLastResult('putting')).toBeNull();
+    expect(getBestResult('putting')).toBeNull();
+    expect(getSuccessRate('putting')).toBeNull();
+    expect(getLastResult('unknown')).toBeNull();
+  });
+
+  it('keeps the streak and the total unaffected by results', () => {
+    setCompletions([
+      completionAt(0, 'putting', { made: 7, attempts: 10 }),
+      completionAt(1, 'putting'),
+      completionAt(2, 'chipping', { made: 3, attempts: 10 }),
+    ]);
+
+    expect(useDrillsStore.getState().getStreak()).toBe(3);
+    expect(useDrillsStore.getState().getTotalDone()).toBe(2);
   });
 });
 
