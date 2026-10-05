@@ -5,6 +5,8 @@ export default function AuthLayout() {
   const { colors } = useTheme();
 
   return (
-    <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.bg } }} />
+    <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.bg } }}>
+      <Stack.Screen name="forgot-password" />
+    </Stack>
   );
 }

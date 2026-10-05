@@ -96,33 +96,35 @@ function isNetworkFailure(error: AuthErrorLike) {
   return error.name === 'AuthRetryableFetchError';
 }
 
-export type ResetRequestResult =
-  | { status: 'sent' }
-  | { status: 'failed'; kind: 'rate_limited' | 'network' | 'invalid_email' | 'unexpected'; message: string };
+export type ResetRequestFailure = {
+  kind: 'rate_limited' | 'network' | 'invalid_email' | 'unexpected';
+  message: string;
+};
+
+export function describeResetRequestError(error: AuthErrorLike): ResetRequestFailure {
+  if (isRateLimited(error)) {
+    return {
+      kind: 'rate_limited',
+      message: 'Trop de demandes pour le moment. Patiente quelques minutes avant de redemander un lien.',
+    };
+  }
+  if (isNetworkFailure(error)) {
+    return { kind: 'network', message: NETWORK_MESSAGE };
+  }
+  if (error.code === 'validation_failed' || error.code === 'email_address_invalid') {
+    return { kind: 'invalid_email', message: 'Cette adresse email ne semble pas valide.' };
+  }
+  return { kind: 'unexpected', message: 'L’email n’a pas pu être envoyé. Réessaie dans quelques minutes.' };
+}
+
+export type ResetRequestResult = { status: 'sent' } | ({ status: 'failed' } & ResetRequestFailure);
 
 // Unknown addresses succeed server-side, so every non-failure ends in the same confirmation.
 export function resolveResetRequest(error: AuthErrorLike | null | undefined): ResetRequestResult {
   if (!error || error.code === 'user_not_found') {
     return { status: 'sent' };
   }
-  if (isRateLimited(error)) {
-    return {
-      status: 'failed',
-      kind: 'rate_limited',
-      message: 'Trop de demandes pour le moment. Patiente quelques minutes avant de redemander un lien.',
-    };
-  }
-  if (isNetworkFailure(error)) {
-    return { status: 'failed', kind: 'network', message: NETWORK_MESSAGE };
-  }
-  if (error.code === 'validation_failed' || error.code === 'email_address_invalid') {
-    return { status: 'failed', kind: 'invalid_email', message: 'Cette adresse email ne semble pas valide.' };
-  }
-  return {
-    status: 'failed',
-    kind: 'unexpected',
-    message: 'L’email n’a pas pu être envoyé. Réessaie dans quelques minutes.',
-  };
+  return { status: 'failed', ...describeResetRequestError(error) };
 }
 
 export type PasswordUpdateFailure = {
