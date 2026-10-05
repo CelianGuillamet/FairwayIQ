@@ -22,6 +22,7 @@ import { useTheme, useThemedStyles } from '../../lib/theme';
 import { capitalizeFirst, formatHandicapValue, formatSignedFr } from '../../lib/home';
 import { countClubs, formatClubCount } from '../../lib/bag';
 import { BADGES } from '../../lib/badges';
+import { hapticWarning } from '../../lib/haptics';
 import { openLegalUrl } from '../../lib/legal';
 import { ensureCompletionsLoaded, ensureRoundsLoaded } from '../../lib/ensure-loaded';
 import { MANAGE_SUBSCRIPTION_URL } from '../../lib/subscription';
@@ -103,7 +104,14 @@ export default function ProfileScreen() {
   const handleSignOut = () => {
     Alert.alert('Déconnexion', 'Es-tu sûr de vouloir te déconnecter ?', [
       { text: 'Annuler', style: 'cancel' },
-      { text: 'Déconnecter', style: 'destructive', onPress: () => void signOut() },
+      {
+        text: 'Déconnecter',
+        style: 'destructive',
+        onPress: () => {
+          hapticWarning();
+          void signOut();
+        },
+      },
     ]);
   };
 

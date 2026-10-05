@@ -10,6 +10,7 @@ import type { Drill } from '../../types';
 import { DRILL_CATEGORY_LABELS, DRILLS } from '../../lib/drill-library';
 import { buildWeeklyPlan, isDrillDoneThisWeek } from '../../lib/drill-plan';
 import { getResultThisWeek, type DrillResult } from '../../lib/drill-results';
+import { hapticSuccess } from '../../lib/haptics';
 import { useTheme, useThemedStyles } from '../../lib/theme';
 import { AppCard } from '../../components/ui/AppCard';
 import { Icon } from '../../components/ui/Icon';
@@ -126,6 +127,7 @@ export default function DrillsScreen() {
 
     try {
       await markDone(resultDrill.id, user.id, result);
+      hapticSuccess();
       setResultDrill(null);
     } catch (error: any) {
       setResultError(error?.message ?? 'Impossible de marquer ce drill comme terminé.');

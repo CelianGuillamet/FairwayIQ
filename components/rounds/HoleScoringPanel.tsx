@@ -1,6 +1,7 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Fonts, Numerals, Radius, Spacing, Typography } from '../../constants';
 import type { ThemeColors } from '../../constants';
+import { hapticLight } from '../../lib/haptics';
 import { describeStrokes, formatRemainingHoles, getNotationWord, getRelativeLabel } from '../../lib/score-labels';
 import { useTheme, useThemedStyles } from '../../lib/theme';
 import type { RoundDraftHole } from '../../types';
@@ -38,7 +39,14 @@ export function HoleScoringPanel({ hole, onApplyScore, onChangeHole, onResetHole
   const fairwayAvailable = hole.par > 3;
   const fairwayOn = hole.fairway_hit === true;
 
-  const applyScore = (score: number) => onApplyScore(score, { autoAdvance: false });
+  const applyScore = (score: number) => {
+    hapticLight();
+    onApplyScore(score, { autoAdvance: false });
+  };
+  const selectPutts = (putts: number) => {
+    hapticLight();
+    onChangeHole({ putts });
+  };
 
   return (
     <View style={styles.panel}>
@@ -131,7 +139,7 @@ export function HoleScoringPanel({ hole, onApplyScore, onChangeHole, onResetHole
                   disabled && styles.puttCellOff,
                   pressed && styles.pressed,
                 ]}
-                onPress={() => onChangeHole({ putts })}
+                onPress={() => selectPutts(putts)}
                 disabled={disabled}
                 accessibilityRole="button"
                 accessibilityLabel={`${putts} putt${putts > 1 ? 's' : ''}`}

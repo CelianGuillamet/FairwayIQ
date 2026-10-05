@@ -18,6 +18,7 @@ import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../stores/auth';
 import { GOALS, HANDICAP_LEVELS, PLAY_FREQUENCIES, Radius, Spacing, Typography } from '../constants';
 import type { ThemeColors } from '../constants';
+import { hapticWarning } from '../lib/haptics';
 import { useTheme, useThemedStyles } from '../lib/theme';
 import { AppInput } from '../components/ui/AppInput';
 import { AppButton } from '../components/ui/AppButton';
@@ -92,7 +93,14 @@ export default function EditProfileScreen() {
       [
         { text: 'Annuler', style: 'cancel' },
         { text: 'Gérer mon abonnement', onPress: () => void openLegalUrl(MANAGE_SUBSCRIPTION_URL) },
-        { text: 'Supprimer', style: 'destructive', onPress: () => void performDeleteAccount() },
+        {
+          text: 'Supprimer',
+          style: 'destructive',
+          onPress: () => {
+            hapticWarning();
+            void performDeleteAccount();
+          },
+        },
       ]
     );
   };

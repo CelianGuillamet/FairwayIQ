@@ -53,6 +53,7 @@ import { getGreenDistances } from '../../lib/gps';
 import { useClubAdvice } from '../../lib/use-club-advice';
 import { clearRoundDraft, loadRoundDraft, saveRoundDraft } from '../../lib/round-draft';
 import { describeToPar, formatHolesPlayed, formatScoreToPar } from '../../lib/score-labels';
+import { hapticSuccess, hapticWarning } from '../../lib/haptics';
 import { formatTeeName } from '../../lib/tee-names';
 import {
   buildSaveRoundArgs,
@@ -434,6 +435,7 @@ export default function RoundScreen() {
     }
 
     upsertRound(round);
+    hapticSuccess();
     void awardAfterRound(round, effectiveScorecard);
     resetForm();
     setAnalyzing(true);
@@ -491,6 +493,7 @@ export default function RoundScreen() {
           text: 'Effacer',
           style: 'destructive',
           onPress: () => {
+            hapticWarning();
             if (user?.id) void clearRoundDraft(user.id);
             resetForm();
           },

@@ -33,6 +33,7 @@ import { useLeaks } from '../../components/leaks/useLeaks';
 import type { Diagnostic, Drill } from '../../types';
 import { fetchLatestDiagnostic } from '../../lib/diagnostics';
 import { ensureRoundsLoaded } from '../../lib/ensure-loaded';
+import { hapticSuccess } from '../../lib/haptics';
 import { getDailyFocusDrill, isDrillDoneToday } from '../../lib/drill-library';
 import type { DrillResult } from '../../lib/drill-results';
 import { hasEnoughLeakData } from '../../lib/leaks';
@@ -200,6 +201,7 @@ export default function DashboardScreen() {
 
     try {
       await markDone(resultDrill.id, user.id, result);
+      hapticSuccess();
       setResultDrill(null);
     } catch (currentError: any) {
       setFocusCompletionError(currentError?.message ?? 'Impossible de valider ce drill.');
