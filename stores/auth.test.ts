@@ -22,6 +22,7 @@ jest.mock('../lib/round-draft', () => ({
 
 import { getCachedHoles, loadHolesForRounds, resetHolesData } from '../lib/holes-data';
 import { useAuthStore } from './auth';
+import { useBadgesStore } from './badges';
 import { useDrillsStore } from './drills';
 import { useRoundsStore } from './rounds';
 
@@ -91,6 +92,7 @@ beforeEach(() => {
   mockResetPurchasesUser.mockReset();
   useRoundsStore.getState().reset();
   useDrillsStore.getState().reset();
+  useBadgesStore.getState().reset();
   resetHolesData();
   useAuthStore.setState({
     session: null,
@@ -234,6 +236,15 @@ describe('setSession', () => {
     expect(useAuthStore.getState().profileLoading).toBe(true);
   });
 
+  it('clears the earned badges and the celebration queue when another user signs in', () => {
+    useAuthStore.getState().setSession(session('user-1'));
+    useBadgesStore.setState({ userId: 'user-1', earned: { first_round: '2026-01-01T00:00:00Z' }, loaded: true, queue: ['first_round'] });
+
+    useAuthStore.getState().setSession(session('user-2'));
+
+    expect(useBadgesStore.getState()).toMatchObject({ userId: null, earned: {}, loaded: false, queue: [] });
+  });
+
   it('clears the cached hole rows when another user signs in', async () => {
     useAuthStore.getState().setSession(session('user-1'));
     await primeHolesCache();
@@ -348,6 +359,14 @@ describe('signOut', () => {
     expect(useRoundsStore.getState().initialized).toBe(false);
     expect(useDrillsStore.getState().completions).toEqual([]);
     expect(useDrillsStore.getState().recommendedCategories).toEqual([]);
+  });
+
+  it('clears the earned badges and the celebration queue', async () => {
+    useBadgesStore.setState({ userId: 'user-1', earned: { first_round: '2026-01-01T00:00:00Z' }, loaded: true, queue: ['first_round'] });
+
+    await useAuthStore.getState().signOut();
+
+    expect(useBadgesStore.getState()).toMatchObject({ userId: null, earned: {}, loaded: false, queue: [] });
   });
 
   it('clears the cached hole rows', async () => {
