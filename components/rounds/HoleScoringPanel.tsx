@@ -1,6 +1,7 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Fonts, Numerals, Radius, Spacing, Typography } from '../../constants';
 import type { ThemeColors } from '../../constants';
+import { hapticLight } from '../../lib/haptics';
 import { describeStrokes, formatRemainingHoles, getNotationWord, getRelativeLabel } from '../../lib/score-labels';
 import { useTheme, useThemedStyles } from '../../lib/theme';
 import type { RoundDraftHole } from '../../types';
@@ -38,7 +39,14 @@ export function HoleScoringPanel({ hole, onApplyScore, onChangeHole, onResetHole
   const fairwayAvailable = hole.par > 3;
   const fairwayOn = hole.fairway_hit === true;
 
-  const applyScore = (score: number) => onApplyScore(score, { autoAdvance: false });
+  const applyScore = (score: number) => {
+    hapticLight();
+    onApplyScore(score, { autoAdvance: false });
+  };
+  const selectPutts = (putts: number) => {
+    hapticLight();
+    onChangeHole({ putts });
+  };
 
   return (
     <View style={styles.panel}>
@@ -58,8 +66,10 @@ export function HoleScoringPanel({ hole, onApplyScore, onChangeHole, onResetHole
                 accessibilityLabel={describeStrokes(strokes, hole.par)}
                 accessibilityState={{ selected }}
               >
-                <Text style={[styles.strokeNumber, selected && styles.cellSelectedText]}>{strokes}</Text>
-                <Text style={[styles.strokeRelative, selected && styles.cellSelectedSubtle]}>
+                <Text style={[styles.strokeNumber, selected && styles.cellSelectedText]} maxFontSizeMultiplier={1.3}>
+                  {strokes}
+                </Text>
+                <Text style={[styles.strokeRelative, selected && styles.cellSelectedSubtle]} maxFontSizeMultiplier={1.3}>
                   {relative || ' '}
                 </Text>
               </Pressable>
@@ -72,8 +82,10 @@ export function HoleScoringPanel({ hole, onApplyScore, onChangeHole, onResetHole
             accessibilityLabel="7 coups ou plus"
             accessibilityState={{ selected: overflowSelected }}
           >
-            <Text style={[styles.strokeNumber, overflowSelected && styles.cellSelectedText]}>7+</Text>
-            <Text style={styles.strokeRelative}> </Text>
+            <Text style={[styles.strokeNumber, overflowSelected && styles.cellSelectedText]} maxFontSizeMultiplier={1.3}>
+              7+
+            </Text>
+            <Text style={styles.strokeRelative} maxFontSizeMultiplier={1.3}> </Text>
           </Pressable>
         </View>
 
@@ -94,7 +106,7 @@ export function HoleScoringPanel({ hole, onApplyScore, onChangeHole, onResetHole
               <Icon name="minus" size={24} color={colors.ink} />
             </Pressable>
             <View style={styles.stepperValue} accessible accessibilityLabel={describeStrokes(hole.score, hole.par)}>
-              <Text style={styles.stepperNumber}>{hole.score}</Text>
+              <Text style={styles.stepperNumber} maxFontSizeMultiplier={1.3}>{hole.score}</Text>
               <Text style={styles.stepperWord}>{getNotationWord(hole.score, hole.par)}</Text>
             </View>
             <Pressable
@@ -131,13 +143,16 @@ export function HoleScoringPanel({ hole, onApplyScore, onChangeHole, onResetHole
                   disabled && styles.puttCellOff,
                   pressed && styles.pressed,
                 ]}
-                onPress={() => onChangeHole({ putts })}
+                onPress={() => selectPutts(putts)}
                 disabled={disabled}
                 accessibilityRole="button"
                 accessibilityLabel={`${putts} putt${putts > 1 ? 's' : ''}`}
                 accessibilityState={{ selected, disabled }}
               >
-                <Text style={[styles.puttNumber, selected && styles.cellSelectedText, disabled && styles.puttNumberOff]}>
+                <Text
+                  style={[styles.puttNumber, selected && styles.cellSelectedText, disabled && styles.puttNumberOff]}
+                  maxFontSizeMultiplier={1.3}
+                >
                   {putts}
                 </Text>
               </Pressable>
@@ -150,7 +165,7 @@ export function HoleScoringPanel({ hole, onApplyScore, onChangeHole, onResetHole
               accessibilityLabel={`${hole.putts} putts`}
               accessibilityState={{ selected: true }}
             >
-              <Text style={[styles.puttNumber, styles.cellSelectedText]}>{hole.putts}</Text>
+              <Text style={[styles.puttNumber, styles.cellSelectedText]} maxFontSizeMultiplier={1.3}>{hole.putts}</Text>
             </View>
           ) : null}
         </View>

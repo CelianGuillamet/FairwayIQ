@@ -1,7 +1,11 @@
 import 'react-native-url-polyfill/auto';
 import { createClient } from '@supabase/supabase-js';
 import { authStorage } from './secure-session-storage';
+import { assertClientEnv } from './env-check';
 import { isRecoveryCodeVerifier, keepVerifierOnFailure } from './recovery-session';
+
+// Must run before new URL() below, which would otherwise fail with an opaque "Invalid URL".
+assertClientEnv();
 
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL!;
 const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY!;

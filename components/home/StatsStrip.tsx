@@ -38,7 +38,7 @@ export function StatsStrip({ items, columns = 3 }: Props) {
                 accessible
                 accessibilityLabel={`${item.label} : ${item.value}${item.unit ? ` ${item.unit}` : ''}`}
               >
-                <Text style={styles.value}>
+                <Text style={styles.value} maxFontSizeMultiplier={1.3}>
                   {item.value}
                   {item.unit ? <Text style={styles.unit}> {item.unit}</Text> : null}
                 </Text>

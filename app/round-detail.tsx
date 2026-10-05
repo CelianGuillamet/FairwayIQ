@@ -40,6 +40,7 @@ import { RoundDiagnosticCard } from '../components/rounds-detail/RoundDiagnostic
 import { ScorecardGrid } from '../components/rounds-detail/ScorecardGrid';
 import { StatsRow } from '../components/rounds-detail/StatsRow';
 import { useShareRound } from '../components/share/useShareRound';
+import { hapticSuccess, hapticWarning } from '../lib/haptics';
 import { goBackOrHome } from '../components/rounds-detail/navigation';
 import {
   buildRoundStats,
@@ -187,6 +188,7 @@ export default function RoundDetailScreen() {
       upsertRound(updatedRound);
       setHolesDirty(false);
       setEditing(false);
+      hapticSuccess();
     } catch (currentError) {
       Alert.alert('Erreur', getRoundSaveErrorMessage(currentError, 'update'));
     } finally {
@@ -272,6 +274,7 @@ export default function RoundDetailScreen() {
           text: 'Supprimer',
           style: 'destructive',
           onPress: async () => {
+            hapticWarning();
             const { error: deleteError } = await supabase
               .from('rounds')
               .delete()

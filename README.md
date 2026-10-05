@@ -46,13 +46,7 @@ Variables client dans `.env.local` (publiques : elles sont embarquées dans l'ap
 
 > Les secrets serveur (Anthropic, webhook RevenueCat, etc.) se définissent uniquement avec `supabase secrets set`, jamais dans `.env.local` ni dans le bundle Expo. `SUPABASE_URL`, `SUPABASE_ANON_KEY` et `SUPABASE_SERVICE_ROLE_KEY` sont injectées automatiquement par Supabase dans les Edge Functions.
 
-`lib/env-check.ts` exporte `assertClientEnv()`, qui lève en développement une erreur explicite listant les variables client manquantes (en production, elle journalise seulement l'erreur). Pour l'activer, appelle-la dans `lib/supabase.ts` juste avant `createClient(...)` :
-
-```ts
-import { assertClientEnv } from './env-check';
-
-assertClientEnv();
-```
+`lib/env-check.ts` exporte `assertClientEnv()`, appelée au chargement de `lib/supabase.ts` avant `createClient(...)` : en développement, elle lève une erreur explicite listant les variables client manquantes ; en production, elle journalise seulement l'erreur. Les tests Jest définissent des valeurs factices dans `jest.setup.js`.
 
 ## Coach IA (Edge Function `ai-coach`)
 

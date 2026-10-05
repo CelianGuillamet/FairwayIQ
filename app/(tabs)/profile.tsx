@@ -22,7 +22,9 @@ import { useTheme, useThemedStyles } from '../../lib/theme';
 import { capitalizeFirst, formatHandicapValue, formatSignedFr } from '../../lib/home';
 import { countClubs, formatClubCount } from '../../lib/bag';
 import { BADGES } from '../../lib/badges';
+import { hapticWarning } from '../../lib/haptics';
 import { openLegalUrl } from '../../lib/legal';
+import { ensureCompletionsLoaded, ensureRoundsLoaded } from '../../lib/ensure-loaded';
 import { MANAGE_SUBSCRIPTION_URL } from '../../lib/subscription';
 import {
   describeSubscriptionPeriod,
@@ -48,8 +50,8 @@ const PLACEHOLDER = '--';
 
 export default function ProfileScreen() {
   const { profile, user, signOut } = useAuthStore();
-  const { rounds } = useRoundsStore();
-  const { getTotalDone, getStreak } = useDrillsStore();
+  const { rounds, initialized: roundsReady } = useRoundsStore();
+  const { getTotalDone, getStreak, initialized: drillsReady } = useDrillsStore();
   const bagCount = useBagStore((state) => (state.loaded ? countClubs(state.distances) : null));
   const loadBag = useBagStore((state) => state.load);
   const trophyCount = useBadgesStore((state) => (state.loaded ? Object.keys(state.earned).length : null));
@@ -81,6 +83,14 @@ export default function ProfileScreen() {
     if (userId) void loadBag(userId);
   }, [userId, loadBag]);
 
+  useEffect(() => {
+    if (userId && !roundsReady) void ensureRoundsLoaded();
+  }, [userId, roundsReady]);
+
+  useEffect(() => {
+    if (userId && !drillsReady) void ensureCompletionsLoaded();
+  }, [userId, drillsReady]);
+
   const goalLabel = GOALS.find((goal) => goal.value === profile?.goal)?.label ?? profile?.goal ?? PLACEHOLDER;
   const frequencyLabel = PLAY_FREQUENCIES.find((frequency) => frequency.value === profile?.play_frequency)?.label ?? PLACEHOLDER;
   const handicapIndexCard = getHandicapIndexCard(rounds);
@@ -94,7 +104,14 @@ export default function ProfileScreen() {
   const handleSignOut = () => {
     Alert.alert('Déconnexion', 'Es-tu sûr de vouloir te déconnecter ?', [
       { text: 'Annuler', style: 'cancel' },
-      { text: 'Déconnecter', style: 'destructive', onPress: () => void signOut() },
+      {
+        text: 'Déconnecter',
+        style: 'destructive',
+        onPress: () => {
+          hapticWarning();
+          void signOut();
+        },
+      },
     ]);
   };
 
@@ -226,6 +243,12 @@ export default function ProfileScreen() {
               role="link"
               onPress={() => void openLegalUrl(PRIVACY_POLICY_URL)}
             />
+          </AppCard>
+        </Section>
+
+        <Section title="Données et confidentialité">
+          <AppCard style={styles.listCard}>
+            <LinkRow label="Exporter mes données" first onPress={() => router.push('/export-data' as any)} />
           </AppCard>
         </Section>
 

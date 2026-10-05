@@ -23,7 +23,9 @@ export function IndexCard({ value, helper, hasIndex, sparkValues, trend }: Props
       <View style={styles.top}>
         <View style={styles.indexColumn}>
           <Text style={styles.label}>Index estimé</Text>
-          <Text style={[styles.value, !hasIndex && styles.valueEmpty]}>{value}</Text>
+          <Text style={[styles.value, !hasIndex && styles.valueEmpty]} maxFontSizeMultiplier={1.2}>
+            {value}
+          </Text>
         </View>
         {sparkValues.length >= 2 ? (
           <View style={styles.spark}>

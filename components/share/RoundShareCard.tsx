@@ -106,7 +106,7 @@ function StatCell({ stat, divided }: { stat: ShareStat; divided: boolean }) {
     <View style={[styles.statCell, divided && styles.statDivided]}>
       <Text style={styles.statValue} allowFontScaling={false}>
         {stat.value}
-        {stat.suffix ? <Text style={styles.statSuffix}>{stat.suffix}</Text> : null}
+        {stat.suffix ? <Text style={styles.statSuffix} allowFontScaling={false}>{stat.suffix}</Text> : null}
       </Text>
       <Text
         style={styles.statLabel}
