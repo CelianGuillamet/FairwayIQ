@@ -1,6 +1,7 @@
 import {
   LEAKS_MIN_ROUNDS,
   analyzeLeaks,
+  describeLegacyExclusion,
   describeLoss,
   getLeakTrendPill,
   getMetricRows,
@@ -419,6 +420,12 @@ describe('formatting', () => {
     expect(describeLoss(2.44)).toEqual({ value: '≈ 2,4', unit: 'coups par 18 trous' });
     expect(describeLoss(1.96)).toEqual({ value: '≈ 2', unit: 'coups par 18 trous' });
     expect(describeLoss(1.4)).toEqual({ value: '≈ 1,4', unit: 'coup par 18 trous' });
+  });
+
+  it('words the legacy exclusion note', () => {
+    expect(describeLegacyExclusion(0)).toBeNull();
+    expect(describeLegacyExclusion(1)).toBe('1 round saisi sans le détail des trous n’est pas pris en compte.');
+    expect(describeLegacyExclusion(3)).toBe('3 rounds saisis sans le détail des trous ne sont pas pris en compte.');
   });
 
   it('builds the trend pill', () => {

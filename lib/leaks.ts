@@ -446,6 +446,14 @@ export function describeLoss(lossPer18: number) {
   };
 }
 
+export function describeLegacyExclusion(count: number) {
+  if (count <= 0) return null;
+
+  return count === 1
+    ? '1 round saisi sans le détail des trous n’est pas pris en compte.'
+    : `${count} rounds saisis sans le détail des trous ne sont pas pris en compte.`;
+}
+
 export function getLeakTrendPill(trend: LeakTrend | null): TrendPill {
   if (trend == null) {
     return {

@@ -17,13 +17,16 @@ import { EmptyHome } from '../../components/home/EmptyHome';
 import { EvolutionCard, type EvolutionSeries } from '../../components/home/EvolutionCard';
 import { FocusBlock } from '../../components/home/FocusBlock';
 import { IndexCard } from '../../components/home/IndexCard';
+import { LeaksCard } from '../../components/home/LeaksCard';
 import { PINNED_CTA_CLEARANCE, PinnedCta } from '../../components/home/PinnedCta';
 import { PracticeCard } from '../../components/home/PracticeCard';
 import { RoundRow } from '../../components/home/RoundRow';
 import { StatsStrip, type StatItem } from '../../components/home/StatsStrip';
+import { useLeaks } from '../../components/leaks/useLeaks';
 import type { Diagnostic } from '../../types';
 import { fetchLatestDiagnostic } from '../../lib/diagnostics';
 import { getDailyFocusDrill, isDrillDoneToday } from '../../lib/drill-library';
+import { hasEnoughLeakData } from '../../lib/leaks';
 import {
   formatDecimalFr,
   formatHandicapValue,
@@ -63,6 +66,7 @@ export default function DashboardScreen() {
   const [markingFocusDone, setMarkingFocusDone] = useState(false);
   const [focusCompletionError, setFocusCompletionError] = useState<string | null>(null);
   const [visibleRoundsCount, setVisibleRoundsCount] = useState(6);
+  const leaks = useLeaks();
 
   useEffect(() => {
     if (!initialized) {
@@ -254,6 +258,7 @@ export default function DashboardScreen() {
   }
 
   const hasRounds = rounds.length > 0;
+  const topLeak = leaks.status === 'ready' && hasEnoughLeakData(leaks.analysis) ? leaks.analysis.leaks[0] : null;
   const displayName = profile?.display_name?.trim();
 
   return (
@@ -313,6 +318,8 @@ export default function DashboardScreen() {
                 }
               }}
             />
+
+            {topLeak ? <LeaksCard leak={topLeak} onOpen={() => router.push('/leaks')} /> : null}
 
             <View>
               <Text style={styles.sectionTitle} accessibilityRole="header">

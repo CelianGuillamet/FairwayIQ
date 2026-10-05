@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Spacing, Typography } from '../../constants';
 import type { ThemeColors } from '../../constants';
@@ -40,6 +41,24 @@ export default function DrillsScreen() {
   const scrollRef = useRef<ScrollView>(null);
   const planOffset = useRef(0);
   const cardOffsets = useRef<Record<string, number>>({});
+  const libraryOffset = useRef<number | null>(null);
+  const scrollToLibrary = useRef(false);
+  const { category, focus } = useLocalSearchParams<{ category?: string; focus?: string }>();
+
+  useEffect(() => {
+    if (typeof category !== 'string' || !(category in DRILL_CATEGORY_LABELS)) {
+      return;
+    }
+
+    setActiveCategory(category);
+
+    if (showLibrary && libraryOffset.current != null) {
+      scrollRef.current?.scrollTo({ y: Math.max(0, libraryOffset.current - Spacing.md), animated: true });
+    } else {
+      scrollToLibrary.current = true;
+      setShowLibrary(true);
+    }
+  }, [category, focus]);
 
   useEffect(() => {
     void fetchCompletions().catch((error: any) => {
@@ -154,7 +173,17 @@ export default function DrillsScreen() {
         />
 
         {showLibrary ? (
-          <View style={styles.library}>
+          <View
+            style={styles.library}
+            onLayout={(event) => {
+              libraryOffset.current = event.nativeEvent.layout.y;
+
+              if (scrollToLibrary.current) {
+                scrollToLibrary.current = false;
+                scrollRef.current?.scrollTo({ y: Math.max(0, event.nativeEvent.layout.y - Spacing.md), animated: true });
+              }
+            }}
+          >
             <Text style={styles.sectionTitle} accessibilityRole="header">
               Tous les exercices
             </Text>
