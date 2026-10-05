@@ -13,22 +13,27 @@ import { AppButton } from '../../components/ui/AppButton';
 import { Icon } from '../../components/ui/Icon';
 import { PageHeader } from '../../components/ui/PageHeader';
 import { TextAction } from '../../components/ui/TextAction';
+import { DrillResultSheet } from '../../components/drills/DrillResultSheet';
 import { EmptyHome } from '../../components/home/EmptyHome';
 import { EvolutionCard, type EvolutionSeries } from '../../components/home/EvolutionCard';
 import { FocusBlock } from '../../components/home/FocusBlock';
 import { IndexCard } from '../../components/home/IndexCard';
 import { LeaksCard } from '../../components/home/LeaksCard';
+import { MonthlyChallengeCard } from '../../components/home/MonthlyChallengeCard';
+import { MonthlyChallengeSheet } from '../../components/home/MonthlyChallengeSheet';
 import { PINNED_CTA_CLEARANCE, PinnedCta } from '../../components/home/PinnedCta';
 import { PracticeCard } from '../../components/home/PracticeCard';
 import { RoundRow } from '../../components/home/RoundRow';
 import { StatsStrip, type StatItem } from '../../components/home/StatsStrip';
+import { useMonthlyChallenge } from '../../components/home/useMonthlyChallenge';
 import { useWeeklyGoal } from '../../components/home/useWeeklyGoal';
 import { WeeklyGoalCard } from '../../components/home/WeeklyGoalCard';
 import { WeeklyGoalSheet } from '../../components/home/WeeklyGoalSheet';
 import { useLeaks } from '../../components/leaks/useLeaks';
-import type { Diagnostic } from '../../types';
+import type { Diagnostic, Drill } from '../../types';
 import { fetchLatestDiagnostic } from '../../lib/diagnostics';
 import { getDailyFocusDrill, isDrillDoneToday } from '../../lib/drill-library';
+import type { DrillResult } from '../../lib/drill-results';
 import { hasEnoughLeakData } from '../../lib/leaks';
 import { countWeeklySessions, getWeekStart } from '../../lib/weekly-goal';
 import {
@@ -67,11 +72,14 @@ export default function DashboardScreen() {
   const [latestDiagnostic, setLatestDiagnostic] = useState<Diagnostic | null>(null);
   const [diagnosticLoading, setDiagnosticLoading] = useState(false);
   const [diagnosticError, setDiagnosticError] = useState<string | null>(null);
+  const [resultDrill, setResultDrill] = useState<Drill | null>(null);
   const [markingFocusDone, setMarkingFocusDone] = useState(false);
   const [focusCompletionError, setFocusCompletionError] = useState<string | null>(null);
   const [visibleRoundsCount, setVisibleRoundsCount] = useState(6);
   const [goalSheetOpen, setGoalSheetOpen] = useState(false);
+  const [challengeSheetOpen, setChallengeSheetOpen] = useState(false);
   const leaks = useLeaks();
+  const monthlyChallenge = useMonthlyChallenge(leaks);
   const weeklyGoal = useWeeklyGoal(user?.id, profile?.play_frequency);
   const weekStart = getWeekStart().getTime();
   const weeklySessions = useMemo(
@@ -172,8 +180,17 @@ export default function DashboardScreen() {
   ), [completions, latestDiagnostic]);
   const focusDrillDoneToday = focusDrill ? isDrillDoneToday(focusDrill.id, completions) : false;
 
-  const handleMarkFocusDrillDone = async () => {
+  const handleMarkFocusDrillDone = () => {
     if (!user || !focusDrill || focusDrillDoneToday || markingFocusDone) {
+      return;
+    }
+
+    setFocusCompletionError(null);
+    setResultDrill(focusDrill);
+  };
+
+  const recordFocusCompletion = async (result: DrillResult | null) => {
+    if (!user || !resultDrill || markingFocusDone) {
       return;
     }
 
@@ -181,7 +198,8 @@ export default function DashboardScreen() {
     setFocusCompletionError(null);
 
     try {
-      await markDone(focusDrill.id, user.id);
+      await markDone(resultDrill.id, user.id, result);
+      setResultDrill(null);
     } catch (currentError: any) {
       setFocusCompletionError(currentError?.message ?? 'Impossible de valider ce drill.');
     } finally {
@@ -312,6 +330,14 @@ export default function DashboardScreen() {
               <WeeklyGoalCard sessions={weeklySessions} goal={weeklyGoal.goal} onPress={() => setGoalSheetOpen(true)} />
             ) : null}
 
+            {monthlyChallenge.status === 'ready' ? (
+              <MonthlyChallengeCard
+                challenge={monthlyChallenge.challenge}
+                progress={monthlyChallenge.progress}
+                onPress={() => setChallengeSheetOpen(true)}
+              />
+            ) : null}
+
             <FocusBlock insight={focusInsight} onAction={() => router.push(focusInsight.actionRoute)} />
 
             <PracticeCard
@@ -321,9 +347,9 @@ export default function DashboardScreen() {
               drill={focusDrill}
               doneToday={focusDrillDoneToday}
               markingDone={markingFocusDone}
-              completionError={focusCompletionError}
+              completionError={resultDrill ? null : focusCompletionError}
               onRetry={() => void loadLatestDiagnostic()}
-              onMarkDone={() => void handleMarkFocusDrillDone()}
+              onMarkDone={handleMarkFocusDrillDone}
               onOpenDrills={() => router.push('/(tabs)/drills')}
               onOpenDiagnostic={() => {
                 if (latestDiagnostic?.round_id) {
@@ -399,6 +425,30 @@ export default function DashboardScreen() {
         }}
         onClose={() => setGoalSheetOpen(false)}
       />
+
+      <DrillResultSheet
+        drill={resultDrill}
+        saving={markingFocusDone}
+        error={focusCompletionError}
+        onSave={(result) => void recordFocusCompletion(result)}
+        onSkip={() => void recordFocusCompletion(null)}
+        onClose={() => setResultDrill(null)}
+      />
+
+      {monthlyChallenge.status === 'ready' ? (
+        <MonthlyChallengeSheet
+          visible={challengeSheetOpen}
+          challenge={monthlyChallenge.challenge}
+          progress={monthlyChallenge.progress}
+          canChange={monthlyChallenge.canChange}
+          changeUsed={monthlyChallenge.changeUsed}
+          onChange={() => {
+            monthlyChallenge.change();
+            setChallengeSheetOpen(false);
+          }}
+          onClose={() => setChallengeSheetOpen(false)}
+        />
+      ) : null}
     </View>
   );
 }

@@ -12,6 +12,9 @@ jest.mock('./purchases', () => ({
 jest.mock('./round-draft', () => ({
   clearRoundDraft: jest.fn(),
 }));
+jest.mock('@react-native-async-storage/async-storage', () =>
+  require('@react-native-async-storage/async-storage/jest/async-storage-mock')
+);
 jest.mock('./weekly-goal-storage', () => ({
   loadStoredWeeklyGoal: (userId: string) => mockLoadStoredWeeklyGoal(userId),
 }));
