@@ -57,7 +57,11 @@ function completion(id: string, day: number, overrides: Record<string, unknown> 
 }
 
 function card(overrides: Array<Record<string, unknown>> = []) {
-  return Array.from({ length: 18 }, (_, index) => ({ par: 4, score: 5, putts: 2, ...overrides[index] }));
+  return Array.from({ length: 18 }, (_, index) => ({ par: 4, score: 5, putts: 2, gir: true, ...overrides[index] }));
+}
+
+function scoresOnlyCard() {
+  return Array.from({ length: 18 }, () => ({ par: 4, score: 5, putts: 2, gir: false, fairway_hit: false }));
 }
 
 let upsert: jest.Mock;
@@ -122,6 +126,15 @@ describe('awardAfterRound', () => {
       'break_80',
     ]);
     expect(awardedIds()).toEqual(useBadgesStore.getState().queue);
+  });
+
+  it('does not celebrate no_three_putt for a card where only the scores were entered', async () => {
+    const saved = round('r1', { total_score: 95, played_at: iso(7) });
+    seedStores({ rounds: [saved], earned: { first_round: iso(1) } });
+
+    await awardAfterRound(saved, scoresOnlyCard());
+
+    expect(useBadgesStore.getState().queue).toEqual(['no_double', 'break_100']);
   });
 
   it('works when the saved round is not in the rounds store yet', async () => {
@@ -333,6 +346,16 @@ describe('syncBadges', () => {
     expect(Object.keys(useBadgesStore.getState().earned).sort()).toEqual(
       ['first_birdie', 'first_round', 'no_double', 'no_three_putt'].sort(),
     );
+  });
+
+  it('does not derive no_three_putt from hole rows that only hold the defaults', async () => {
+    const rounds = [round('r1', { played_at: iso(1), total_score: 100 })];
+    mockLoadHolesForRounds.mockResolvedValue({ r1: scoresOnlyCard() });
+    seedStores({ rounds, backfilled: false });
+
+    await syncBadges();
+
+    expect(Object.keys(useBadgesStore.getState().earned).sort()).toEqual(['first_round', 'no_double']);
   });
 
   it('loads hole rows in chunks', async () => {

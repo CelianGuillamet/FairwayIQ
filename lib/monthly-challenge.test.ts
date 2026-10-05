@@ -252,6 +252,29 @@ describe('getChallengeProgress: no three-putt round', () => {
     expect(progressOf('round_no_three_putt', { rounds: [clean], holesByRound })).toMatchObject({ current: 1, target: 1, done: true });
   });
 
+  it('does not count a round whose putts, greens and fairways were never entered (the defaults are 2 putts, no green, no fairway)', () => {
+    const scoresOnly = round();
+    const holesByRound = holesOf([scoresOnly, card([], 18).map((hole) => ({ ...hole, gir: false, fairway_hit: false }))]);
+
+    expect(progressOf('round_no_three_putt', { rounds: [scoresOnly], holesByRound })).toMatchObject({ current: 0, done: false });
+  });
+
+  it('counts such a round once a green or a fairway was marked', () => {
+    const marked = round();
+    const rows = card([], 18).map((hole, index) => ({ ...hole, gir: index === 4, fairway_hit: false }));
+
+    expect(progressOf('round_no_three_putt', { rounds: [marked], holesByRound: holesOf([marked, rows]) })).toMatchObject({ current: 1, done: true });
+  });
+
+  it('keeps counting the other hole-based rules on a scores-only round', () => {
+    const scoresOnly = round();
+    const rows = card([{ score: 3 }], 18).map((hole) => ({ ...hole, gir: false, fairway_hit: false }));
+    const holesByRound = holesOf([scoresOnly, rows]);
+
+    expect(progressOf('round_no_double', { rounds: [scoresOnly], holesByRound }).done).toBe(true);
+    expect(progressOf('rounds_few_penalties', { rounds: [scoresOnly], holesByRound }).current).toBe(1);
+  });
+
   it('does not count a round with a three-putt hole', () => {
     const dirty = round();
     const holesByRound = holesOf([dirty, card([{}, {}, { putts: 3 }])]);

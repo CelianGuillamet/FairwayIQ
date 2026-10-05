@@ -5,7 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRoundsStore } from '../stores/rounds';
 import { Spacing, Typography } from '../constants';
 import type { ThemeColors } from '../constants';
-import { LEAKS_MIN_ROUNDS, describeLegacyExclusion, getMetricRows } from '../lib/leaks';
+import { LEAKS_MIN_ROUNDS, describeLegacyExclusion, describeMissingDetails, getMetricRows } from '../lib/leaks';
 import type { DrillCategory } from '../lib/drill-library';
 import { useTheme, useThemedStyles } from '../lib/theme';
 import { LeakCard } from '../components/leaks/LeakCard';
@@ -69,6 +69,7 @@ export default function LeaksScreen() {
 
     const { analysis } = leaks;
     const legacyNote = describeLegacyExclusion(analysis.legacyRoundsExcluded);
+    const missingDetails = describeMissingDetails(analysis);
 
     if (analysis.lowConfidence) {
       return (
@@ -110,20 +111,22 @@ export default function LeaksScreen() {
         ) : (
           <AppCard accent="soft">
             <Text style={styles.cardTitle} accessibilityRole="header">
-              Aucune grosse fuite
+              {missingDetails ? 'Pas encore assez de détails' : 'Aucune grosse fuite'}
             </Text>
             <Text style={styles.cardText}>
-              Sur tes derniers rounds, aucun poste ne te coûte plus d’un demi-coup par 18 trous.
+              {missingDetails ?? 'Sur tes derniers rounds, aucun poste ne te coûte plus d’un demi-coup par 18 trous.'}
             </Text>
           </AppCard>
         )}
 
-        {legacyNote ? (
-          <View style={styles.note}>
-            <Icon name="info" size={18} color={colors.ink3} />
-            <Text style={styles.noteText}>{legacyNote}</Text>
-          </View>
-        ) : null}
+        {[analysis.leaks.length > 0 ? missingDetails : null, legacyNote].map((note) =>
+          note ? (
+            <View key={note} style={styles.note}>
+              <Icon name="info" size={18} color={colors.ink3} />
+              <Text style={styles.noteText}>{note}</Text>
+            </View>
+          ) : null,
+        )}
 
         <View>
           <Text style={styles.sectionTitle} accessibilityRole="header">

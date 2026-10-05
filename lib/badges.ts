@@ -3,6 +3,7 @@ import { fr } from 'date-fns/locale';
 import type { IconName } from '../components/ui/Icon';
 import type { Round } from '../types';
 import { getCompletionResult, parseResult, type CompletionWithResult, type DrillResult } from './drill-results';
+import { hasRecordedHoleDetails } from './rounds';
 import { countWeeklySessions, describeWeeklyProgress, getWeekStart } from './weekly-goal';
 
 export const BADGE_IDS = [
@@ -29,7 +30,13 @@ export const BADGE_IDS = [
 export type BadgeId = (typeof BADGE_IDS)[number];
 
 export type BadgeRound = Pick<Round, 'id' | 'played_at' | 'holes' | 'total_score'>;
-export type BadgeHole = { par: number; score: number; putts?: number | null };
+export type BadgeHole = {
+  par: number;
+  score: number;
+  putts?: number | null;
+  gir?: boolean | null;
+  fairway_hit?: boolean | null;
+};
 export type BadgeCompletion = CompletionWithResult;
 export type HolesByRoundId = Readonly<Record<string, readonly BadgeHole[] | undefined>>;
 export type EarnedInput = Iterable<string>;
@@ -131,7 +138,7 @@ export const BADGES: readonly BadgeDefinition[] = [
     title: 'Zéro 3 putts',
     description: 'Tu as joué 18 trous sans 3 putts.',
     icon: 'target',
-    hint: () => '18 trous saisis trou par trou, sans 3 putts',
+    hint: () => '18 trous saisis trou par trou avec putts, greens ou fairways, sans 3 putts',
   },
   {
     id: 'no_double',
@@ -255,10 +262,12 @@ function hasBirdie(holes: readonly BadgeHole[] | null | undefined) {
 }
 
 // A hole saved without putts is unknown, not clean: it cannot prove a round without 3 putts.
+// Neither can a card whose putts, greens and fairways were never entered: 2 putts is the default.
 export function hasNoThreePutt(round: Pick<BadgeRound, 'holes'>, holes: readonly BadgeHole[] | null | undefined) {
   return (
     round.holes === FULL_ROUND_HOLES &&
     isFullCard(holes) &&
+    hasRecordedHoleDetails(holes) &&
     holes.every((hole) => typeof hole.putts === 'number' && hole.putts < 3)
   );
 }
