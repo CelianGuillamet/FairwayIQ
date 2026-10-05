@@ -81,7 +81,7 @@ export default function LeaksScreen() {
               {`Il faut au moins ${LEAKS_MIN_ROUNDS} rounds saisis trou par trou pour repérer où tu perds des coups. ${
                 analysis.roundsAnalyzed === 0
                   ? 'Tu n’en as pas encore.'
-                  : `Tu en as ${analysis.roundsAnalyzed}.`
+                  : `Tu en as\u00a0${analysis.roundsAnalyzed}.`
               }`}
             </Text>
             {legacyNote ? <Text style={styles.cardText}>{legacyNote}</Text> : null}
@@ -118,6 +118,13 @@ export default function LeaksScreen() {
           </AppCard>
         )}
 
+        {legacyNote ? (
+          <View style={styles.note}>
+            <Icon name="info" size={18} color={colors.ink3} />
+            <Text style={styles.noteText}>{legacyNote}</Text>
+          </View>
+        ) : null}
+
         <View>
           <Text style={styles.sectionTitle} accessibilityRole="header">
             Tous les chiffres
@@ -125,13 +132,6 @@ export default function LeaksScreen() {
           <Text style={styles.sectionCaption}>Moyennes sur tes {analysis.roundsAnalyzed} derniers rounds trou par trou</Text>
           <MetricList rows={getMetricRows(analysis.metrics)} />
         </View>
-
-        {legacyNote ? (
-          <View style={styles.note}>
-            <Icon name="info" size={18} color={colors.ink3} />
-            <Text style={styles.noteText}>{legacyNote}</Text>
-          </View>
-        ) : null}
       </View>
     );
   };

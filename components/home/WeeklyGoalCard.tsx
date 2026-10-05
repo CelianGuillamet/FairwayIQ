@@ -27,13 +27,7 @@ export function WeeklyGoalCard({ sessions, goal, onPress }: Props) {
       accessibilityHint="Ouvre le réglage de l’objectif de la semaine"
     >
       <ProgressRing value={sessions.total} max={goal} label={label} size={56} strokeWidth={6}>
-        {reached ? (
-          <Icon name="check" size={22} strokeWidth={2.25} color={colors.green} />
-        ) : (
-          <Text style={styles.ringCount} allowFontScaling={false}>
-            {sessions.total}
-          </Text>
-        )}
+        {reached ? <Icon name="check" size={22} strokeWidth={2.25} color={colors.green} /> : null}
       </ProgressRing>
       <View style={styles.copy}>
         <Text style={styles.label}>Cette semaine</Text>
@@ -64,14 +58,6 @@ const createStyles = (colors: ThemeColors) =>
     },
     pressed: {
       opacity: 0.6,
-    },
-    ringCount: {
-      ...Typography.titleMd,
-      ...Numerals,
-      fontSize: 22,
-      lineHeight: 26,
-      color: colors.ink,
-      includeFontPadding: false,
     },
     copy: {
       flex: 1,

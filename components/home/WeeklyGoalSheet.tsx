@@ -31,7 +31,7 @@ export function WeeklyGoalSheet({ visible, goal, recommended, isCustom, onSelect
           <Text style={styles.title} accessibilityRole="header">
             Objectif de la semaine
           </Text>
-          <Text style={styles.body}>Combien de séances veux-tu faire chaque semaine ? Un round ou un exercice compte pour une séance.</Text>
+          <Text style={styles.body}>Combien de séances veux-tu faire chaque semaine&nbsp;? Un round ou un exercice compte pour une séance.</Text>
 
           <View style={styles.choices} accessibilityRole="radiogroup" accessibilityLabel="Séances par semaine">
             {CHOICES.map((choice) => {

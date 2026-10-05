@@ -39,7 +39,7 @@ const createStyles = (colors: ThemeColors) =>
       borderColor: colors.line,
     },
     row: {
-      minHeight: 48,
+      minHeight: 56,
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
