@@ -7,6 +7,7 @@ import type { GreenDistances } from '../../lib/gps';
 import { describeClubAdvice, formatClubAdvice, type ClubAdvice } from '../../lib/club-advice';
 import type { TeeKey, TeeOption } from '../../lib/golf-courses';
 import { describeStrokes, getNotationWord } from '../../lib/score-labels';
+import { formatTeeName } from '../../lib/tee-names';
 import { useTheme, useThemedStyles } from '../../lib/theme';
 import type { RoundDraftHole } from '../../types';
 import { AppBadge } from '../ui/AppBadge';
@@ -112,7 +113,7 @@ export function HoleOverviewCard({
             {greenDistances.map((item) => (
               <View key={item.label} style={styles.gpsItem}>
                 <Text style={styles.gpsLabel}>{item.label}</Text>
-                <Text style={styles.gpsValue}>
+                <Text style={styles.gpsValue} maxFontSizeMultiplier={1.3}>
                   {item.value}
                   <Text style={styles.unit}> m</Text>
                 </Text>
@@ -147,7 +148,7 @@ export function HoleOverviewCard({
                 onPress={() => onSelectTee(tee.key)}
                 accessibilityRole="radio"
                 accessibilityState={{ checked: active }}
-                accessibilityLabel={`${tee.label}, ${teeDistance} mètres`}
+                accessibilityLabel={`${formatTeeName(tee.label)}, ${teeDistance} mètres`}
               >
                 <View style={[styles.teeDot, { backgroundColor: tee.color }]} />
                 <Text style={styles.teeLabel}>{teeDistance} m</Text>
@@ -176,7 +177,7 @@ function Fact({
   return (
     <View style={styles.fact}>
       <Text style={styles.factLabel}>{label}</Text>
-      <Text style={styles.factValue}>
+      <Text style={styles.factValue} maxFontSizeMultiplier={1.3}>
         {value}
         {unit ? <Text style={styles.unit}> {unit}</Text> : null}
       </Text>

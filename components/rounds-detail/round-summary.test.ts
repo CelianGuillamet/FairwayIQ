@@ -57,6 +57,11 @@ describe('buildRoundSubtitle', () => {
     expect(buildRoundSubtitle({ holes: 18, tee_name: 'Blanc' })).toBe('18 trous · départ Blanc');
   });
 
+  it('shows stored English tee names in French', () => {
+    expect(buildRoundSubtitle({ holes: 18, tee_name: 'White' })).toBe('18 trous · départ Blanc');
+    expect(buildRoundSubtitle({ holes: 18, tee_name: 'Forward' })).toBe('18 trous · départ Forward');
+  });
+
   it('omits a missing or blank tee', () => {
     expect(buildRoundSubtitle({ holes: 9, tee_name: null })).toBe('9 trous');
     expect(buildRoundSubtitle({ holes: 9, tee_name: '  ' })).toBe('9 trous');

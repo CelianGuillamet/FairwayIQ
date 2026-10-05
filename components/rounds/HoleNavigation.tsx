@@ -62,7 +62,7 @@ export const HoleNavigation = memo(function HoleNavigation({ currentHole, scorec
             {played ? (
               <ScoreMark strokes={hole.score} par={hole.par} size="sm" label={hole.hole_number} decorative />
             ) : (
-              <Text style={[styles.number, active ? styles.numberActive : styles.numberFuture]}>
+              <Text style={[styles.number, active ? styles.numberActive : styles.numberFuture]} maxFontSizeMultiplier={1.3}>
                 {hole.hole_number}
               </Text>
             )}

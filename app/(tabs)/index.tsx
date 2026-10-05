@@ -23,6 +23,7 @@ import { MonthlyChallengeCard } from '../../components/home/MonthlyChallengeCard
 import { MonthlyChallengeSheet } from '../../components/home/MonthlyChallengeSheet';
 import { PINNED_CTA_CLEARANCE, PinnedCta } from '../../components/home/PinnedCta';
 import { PracticeCard } from '../../components/home/PracticeCard';
+import { RemindersHint } from '../../components/home/RemindersHint';
 import { RoundRow } from '../../components/home/RoundRow';
 import { StatsStrip, type StatItem } from '../../components/home/StatsStrip';
 import { useMonthlyChallenge } from '../../components/home/useMonthlyChallenge';
@@ -32,6 +33,8 @@ import { WeeklyGoalSheet } from '../../components/home/WeeklyGoalSheet';
 import { useLeaks } from '../../components/leaks/useLeaks';
 import type { Diagnostic, Drill } from '../../types';
 import { fetchLatestDiagnostic } from '../../lib/diagnostics';
+import { ensureRoundsLoaded } from '../../lib/ensure-loaded';
+import { hapticSuccess } from '../../lib/haptics';
 import { getDailyFocusDrill, isDrillDoneToday } from '../../lib/drill-library';
 import type { DrillResult } from '../../lib/drill-results';
 import { hasEnoughLeakData } from '../../lib/leaks';
@@ -89,9 +92,9 @@ export default function DashboardScreen() {
 
   useEffect(() => {
     if (!initialized) {
-      void fetchRounds();
+      void ensureRoundsLoaded();
     }
-  }, [fetchRounds, initialized]);
+  }, [initialized]);
 
   useEffect(() => {
     void fetchCompletions().catch((currentError: any) => {
@@ -199,6 +202,7 @@ export default function DashboardScreen() {
 
     try {
       await markDone(resultDrill.id, user.id, result);
+      hapticSuccess();
       setResultDrill(null);
     } catch (currentError: any) {
       setFocusCompletionError(currentError?.message ?? 'Impossible de valider ce drill.');
@@ -325,6 +329,8 @@ export default function DashboardScreen() {
               sparkValues={sparkValues}
               trend={trendPill}
             />
+
+            <RemindersHint />
 
             {weeklyGoal.loaded ? (
               <WeeklyGoalCard sessions={weeklySessions} goal={weeklyGoal.goal} onPress={() => setGoalSheetOpen(true)} />

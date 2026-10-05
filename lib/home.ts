@@ -2,6 +2,7 @@ import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import type { Round } from '../types';
 import { getRoundPerformanceSummary, getScoreToParTrend, normalizeTo18Holes } from './rounds';
+import { formatTeeName } from './tee-names';
 
 const NOTABLE_TREND_DELTA = 1.5;
 const SPARKLINE_ROUNDS = 8;
@@ -49,7 +50,7 @@ export function formatRoundDay(playedAt: string | Date) {
 export function formatRoundSubtitle(round: Pick<Round, 'tee_name' | 'holes'>) {
   const tee = round.tee_name?.trim();
 
-  return [tee ? `Départ ${tee}` : null, `${round.holes} trous`].filter(Boolean).join(' · ');
+  return [tee ? `Départ ${formatTeeName(tee)}` : null, `${round.holes} trous`].filter(Boolean).join(' · ');
 }
 
 export type TrendPill = {

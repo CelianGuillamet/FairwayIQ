@@ -171,6 +171,7 @@ export default function NotificationsScreen() {
           <>
             <AppCard>
               <SwitchRow
+                first
                 title="Activer les rappels"
                 description="Les rappels sont programmés sur ton téléphone."
                 value={masterOn}

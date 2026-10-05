@@ -73,7 +73,7 @@ export function ResultStepper({ label, value, min, max, valueLabel, decrementLab
       <View style={styles.controls}>
         <StepButton icon="minus" label={decrementLabel} disabled={value <= min} onStep={() => onStep(-1)} />
         <View style={styles.value} accessible accessibilityLabel={valueLabel}>
-          <Text style={styles.valueText}>{value}</Text>
+          <Text style={styles.valueText} maxFontSizeMultiplier={1.3}>{value}</Text>
         </View>
         <StepButton icon="plus" label={incrementLabel} disabled={value >= max} onStep={() => onStep(1)} />
       </View>

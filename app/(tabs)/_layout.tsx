@@ -84,6 +84,7 @@ export default function TabsLayout() {
         },
         tabBarActiveTintColor: colors.ink,
         tabBarInactiveTintColor: colors.ink3,
+        tabBarAllowFontScaling: false,
         tabBarLabelStyle: { fontFamily: Fonts.sansSemiBold, fontSize: 12, lineHeight: 16 },
         tabBarButton: (props) => <TabBarButton {...props} />,
       }}

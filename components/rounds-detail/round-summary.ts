@@ -1,6 +1,7 @@
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { formatScoreToPar } from '../../lib/score-labels';
+import { formatTeeName } from '../../lib/tee-names';
 import type { Round, RoundAggregate } from '../../types';
 
 const MISSING = '–';
@@ -26,7 +27,7 @@ export function buildRoundSubtitle(round: Pick<Round, 'holes' | 'tee_name'>): st
   const tee = round.tee_name?.trim();
 
   if (tee) {
-    parts.push(`départ ${tee}`);
+    parts.push(`départ ${formatTeeName(tee)}`);
   }
 
   return parts.join(' · ');

@@ -25,7 +25,7 @@ export function RoundRow({ round, onPress }: Props) {
       accessibilityHint="Ouvre le détail du round"
     >
       <View style={styles.day}>
-        <Text style={styles.dayNumber}>{date.day}</Text>
+        <Text style={styles.dayNumber} maxFontSizeMultiplier={1.3}>{date.day}</Text>
         <Text style={styles.dayMonth}>{date.month}</Text>
       </View>
       <View style={styles.info}>
@@ -37,7 +37,7 @@ export function RoundRow({ round, onPress }: Props) {
         </Text>
       </View>
       <View style={styles.result}>
-        <Text style={styles.score}>{round.total_score}</Text>
+        <Text style={styles.score} maxFontSizeMultiplier={1.3}>{round.total_score}</Text>
         <Text style={styles.toPar}>{formatSignedFr(scoreToPar, 0)}</Text>
       </View>
     </Pressable>
