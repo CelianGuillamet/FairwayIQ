@@ -5,6 +5,8 @@ import { router } from 'expo-router';
 import { useAuthStore } from '../../stores/auth';
 import { useRoundsStore } from '../../stores/rounds';
 import { useDrillsStore } from '../../stores/drills';
+import { useBadgesStore } from '../../stores/badges';
+import { useBagStore } from '../../stores/bag';
 import { useSubscriptionStore } from '../../stores/subscription';
 import {
   GOALS,
@@ -18,6 +20,8 @@ import {
 import type { ThemeColors } from '../../constants';
 import { useTheme, useThemedStyles } from '../../lib/theme';
 import { capitalizeFirst, formatHandicapValue, formatSignedFr } from '../../lib/home';
+import { countClubs, formatClubCount } from '../../lib/bag';
+import { BADGES } from '../../lib/badges';
 import { openLegalUrl } from '../../lib/legal';
 import { MANAGE_SUBSCRIPTION_URL } from '../../lib/subscription';
 import {
@@ -32,7 +36,6 @@ import { Icon } from '../../components/ui/Icon';
 import { TextAction } from '../../components/ui/TextAction';
 import { ThemePreferenceControl } from '../../components/ui/ThemePreferenceControl';
 import { StatsStrip } from '../../components/home/StatsStrip';
-import { TrophiesRow } from '../../components/badges/TrophiesRow';
 import {
   getAveragePenaltyCount,
   getAverageScorePer18Holes,
@@ -47,6 +50,9 @@ export default function ProfileScreen() {
   const { profile, user, signOut } = useAuthStore();
   const { rounds } = useRoundsStore();
   const { getTotalDone, getStreak } = useDrillsStore();
+  const bagCount = useBagStore((state) => (state.loaded ? countClubs(state.distances) : null));
+  const loadBag = useBagStore((state) => state.load);
+  const trophyCount = useBadgesStore((state) => (state.loaded ? Object.keys(state.earned).length : null));
   const isPremium = useSubscriptionStore((state) => state.isPremium);
   const subscriptionLoading = useSubscriptionStore((state) => state.loading);
   const insets = useSafeAreaInsets();
@@ -70,6 +76,10 @@ export default function ProfileScreen() {
       active = false;
     };
   }, [isPremium, userId]);
+
+  useEffect(() => {
+    if (userId) void loadBag(userId);
+  }, [userId, loadBag]);
 
   const goalLabel = GOALS.find((goal) => goal.value === profile?.goal)?.label ?? profile?.goal ?? PLACEHOLDER;
   const frequencyLabel = PLAY_FREQUENCIES.find((frequency) => frequency.value === profile?.play_frequency)?.label ?? PLACEHOLDER;
@@ -167,18 +177,28 @@ export default function ProfileScreen() {
           </AppCard>
         </Section>
 
-        <Section title="Mon jeu">
-          <AppCard style={styles.listCard}>
-            <TrophiesRow first />
-          </AppCard>
-        </Section>
-
         <Section title="Repères de jeu">
           <AppCard style={styles.listCard}>
             <InfoRow label="Score moyen (18 trous)" value={scoringAverage != null ? `${scoringAverage}`.replace('.', ',') : PLACEHOLDER} first />
             <InfoRow label="Moyenne vs par (18 trous)" value={averageToPar != null ? formatSignedFr(averageToPar) : PLACEHOLDER} />
             <InfoRow label="Pénalités moyennes (18 trous)" value={averagePenaltyCount != null ? `${averagePenaltyCount}`.replace('.', ',') : PLACEHOLDER} />
             <InfoRow label="Exercices réalisés" value={getTotalDone().toString()} />
+          </AppCard>
+        </Section>
+
+        <Section title="Mon jeu">
+          <AppCard style={styles.listCard}>
+            <LinkRow
+              label="Mon sac"
+              value={bagCount != null ? formatClubCount(bagCount) : undefined}
+              first
+              onPress={() => router.push('/bag' as any)}
+            />
+            <LinkRow
+              label="Trophées"
+              value={trophyCount != null ? `${trophyCount} sur ${BADGES.length}` : undefined}
+              onPress={() => router.push('/trophies' as any)}
+            />
           </AppCard>
         </Section>
 
@@ -250,11 +270,13 @@ function InfoRow({ label, value, first = false }: { label: string; value: string
 
 function LinkRow({
   label,
+  value,
   onPress,
   first = false,
   role = 'button',
 }: {
   label: string;
+  value?: string;
   onPress: () => void;
   first?: boolean;
   role?: 'button' | 'link';
@@ -267,9 +289,10 @@ function LinkRow({
       style={({ pressed }) => [styles.row, !first && styles.rowDivider, pressed && styles.pressed]}
       onPress={onPress}
       accessibilityRole={role}
-      accessibilityLabel={label}
+      accessibilityLabel={value ? `${label}, ${value}` : label}
     >
       <Text style={styles.linkLabel}>{label}</Text>
+      {value ? <Text style={styles.linkValue}>{value}</Text> : null}
       <Icon name="chevron-right" size={20} color={colors.ink3} />
     </Pressable>
   );
@@ -370,6 +393,12 @@ const createStyles = (colors: ThemeColors) =>
       ...Typography.bodyStrong,
       color: colors.ink,
       flex: 1,
+    },
+    linkValue: {
+      ...Typography.body,
+      color: colors.ink2,
+      flexShrink: 1,
+      textAlign: 'right',
     },
     caption: {
       ...Typography.caption,

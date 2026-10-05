@@ -22,6 +22,7 @@ jest.mock('../lib/round-draft', () => ({
 
 import { getCachedHoles, loadHolesForRounds, resetHolesData } from '../lib/holes-data';
 import { useAuthStore } from './auth';
+import { useBagStore } from './bag';
 import { useBadgesStore } from './badges';
 import { useDrillsStore } from './drills';
 import { useRoundsStore } from './rounds';
@@ -92,6 +93,7 @@ beforeEach(() => {
   mockResetPurchasesUser.mockReset();
   useRoundsStore.getState().reset();
   useDrillsStore.getState().reset();
+  useBagStore.getState().reset();
   useBadgesStore.getState().reset();
   resetHolesData();
   useAuthStore.setState({
@@ -226,12 +228,14 @@ describe('setSession', () => {
     useAuthStore.getState().setSession(session('user-1'));
     useRoundsStore.setState({ rounds: [{ id: 'r1' } as any], initialized: true, loading: false });
     useDrillsStore.setState({ completions: [{ id: 'c1' } as any], recommendedCategories: ['putting'] });
+    useBagStore.setState({ userId: 'user-1', distances: { iron7: 140 }, loaded: true });
 
     useAuthStore.getState().setSession(session('user-2'));
 
     expect(useRoundsStore.getState().rounds).toEqual([]);
     expect(useRoundsStore.getState().initialized).toBe(false);
     expect(useDrillsStore.getState().completions).toEqual([]);
+    expect(useBagStore.getState()).toMatchObject({ userId: null, distances: {}, loaded: false });
     expect(useAuthStore.getState().profile).toBeNull();
     expect(useAuthStore.getState().profileLoading).toBe(true);
   });
@@ -340,6 +344,7 @@ describe('signOut', () => {
     useAuthStore.setState({ profile: profile() });
     useRoundsStore.setState({ rounds: [{ id: 'r1' } as any], initialized: true, loading: false });
     useDrillsStore.setState({ completions: [{ id: 'c1' } as any], recommendedCategories: ['putting'] });
+    useBagStore.setState({ userId: 'user-1', distances: { iron7: 140 }, loaded: true });
   });
 
   it('signs out globally and clears every per-user cache', async () => {
@@ -359,6 +364,7 @@ describe('signOut', () => {
     expect(useRoundsStore.getState().initialized).toBe(false);
     expect(useDrillsStore.getState().completions).toEqual([]);
     expect(useDrillsStore.getState().recommendedCategories).toEqual([]);
+    expect(useBagStore.getState()).toMatchObject({ userId: null, distances: {}, loaded: false });
   });
 
   it('clears the earned badges and the celebration queue', async () => {

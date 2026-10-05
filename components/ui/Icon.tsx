@@ -15,6 +15,7 @@ import Minus from 'lucide-react-native/icons/minus';
 import Plus from 'lucide-react-native/icons/plus';
 import RefreshCw from 'lucide-react-native/icons/refresh-cw';
 import Settings from 'lucide-react-native/icons/settings';
+import Share from 'lucide-react-native/icons/share';
 import Sparkles from 'lucide-react-native/icons/sparkles';
 import Target from 'lucide-react-native/icons/target';
 import Trash from 'lucide-react-native/icons/trash';
@@ -38,6 +39,7 @@ const ICONS = {
   clock: Clock,
   lock: Lock,
   settings: Settings,
+  share: Share,
   trash: Trash,
   refresh: RefreshCw,
   alert: TriangleAlert,

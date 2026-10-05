@@ -142,6 +142,7 @@ function RootNavigator() {
         <Stack.Screen name="leaks" />
         <Stack.Screen name="trophies" />
         <Stack.Screen name="notifications" />
+        <Stack.Screen name="bag" />
         <Stack.Screen name="edit-profile" options={{ presentation: 'modal' }} />
         <Stack.Screen name="paywall" options={{ presentation: 'modal' }} />
       </Stack>
