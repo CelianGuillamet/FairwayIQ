@@ -32,6 +32,7 @@ import { Icon } from '../../components/ui/Icon';
 import { TextAction } from '../../components/ui/TextAction';
 import { ThemePreferenceControl } from '../../components/ui/ThemePreferenceControl';
 import { StatsStrip } from '../../components/home/StatsStrip';
+import { TrophiesRow } from '../../components/badges/TrophiesRow';
 import {
   getAveragePenaltyCount,
   getAverageScorePer18Holes,
@@ -163,6 +164,12 @@ export default function ProfileScreen() {
             <InfoRow label="Objectif" value={goalLabel} first />
             <InfoRow label="Fréquence de jeu" value={frequencyLabel} />
             <LinkRow label="Modifier le profil" onPress={() => router.push('/edit-profile' as any)} />
+          </AppCard>
+        </Section>
+
+        <Section title="Mon jeu">
+          <AppCard style={styles.listCard}>
+            <TrophiesRow first />
           </AppCard>
         </Section>
 

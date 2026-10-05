@@ -47,6 +47,7 @@ import {
   type GolfCourse,
   type TeeKey,
 } from '../../lib/golf-courses';
+import { awardAfterRound } from '../../lib/badge-awards';
 import { buildHoleViewData } from '../../lib/hole-view';
 import { getGreenDistances } from '../../lib/gps';
 import { clearRoundDraft, loadRoundDraft, saveRoundDraft } from '../../lib/round-draft';
@@ -430,6 +431,7 @@ export default function RoundScreen() {
     }
 
     upsertRound(round);
+    void awardAfterRound(round, effectiveScorecard);
     resetForm();
     setAnalyzing(true);
 

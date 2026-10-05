@@ -12,9 +12,11 @@ import { useAuthStore } from '../stores/auth';
 import { useSubscriptionStore } from '../stores/subscription';
 import { routeForNotificationType, setupNotificationResponseListener } from '../lib/notifications';
 import { useNotificationPlanner } from '../lib/use-notification-planner';
+import { useBadgeSync } from '../lib/use-badge-sync';
 import { identifyPurchasesUser, initPurchases, resetPurchasesUser } from '../lib/purchases';
 import { initSentry } from '../lib/sentry';
 import { ErrorBoundary } from '../components/ErrorBoundary';
+import { BadgeCelebration } from '../components/badges/BadgeCelebration';
 
 initSentry();
 void SplashScreen.preventAutoHideAsync().catch(() => {});
@@ -50,6 +52,7 @@ function RootNavigator() {
   const needsLogin = shouldRedirectToLogin({ loading, hasSession: !!session, segments });
 
   useNotificationPlanner();
+  useBadgeSync();
 
   useEffect(() => {
     if (needsLogin) {
@@ -137,10 +140,12 @@ function RootNavigator() {
         <Stack.Screen name="debrief" />
         <Stack.Screen name="round-detail" />
         <Stack.Screen name="leaks" />
+        <Stack.Screen name="trophies" />
         <Stack.Screen name="notifications" />
         <Stack.Screen name="edit-profile" options={{ presentation: 'modal' }} />
         <Stack.Screen name="paywall" options={{ presentation: 'modal' }} />
       </Stack>
+      <BadgeCelebration />
     </ErrorBoundary>
   );
 }
