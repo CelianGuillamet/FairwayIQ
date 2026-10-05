@@ -6,7 +6,7 @@ jest.mock('../lib/supabase', () => ({
   supabase: { from: (table: string) => mockFrom(table) },
 }));
 
-import { useDrillsStore } from './drills';
+import { onDrillCompleted, useDrillsStore } from './drills';
 
 type Completion = {
   id: string;
@@ -385,5 +385,84 @@ describe('reset', () => {
 
     expect(useDrillsStore.getState().completions).toEqual([]);
     expect(useDrillsStore.getState().recommendedCategories).toEqual([]);
+  });
+});
+
+describe('completion listeners and initialized flag', () => {
+  beforeEach(() => {
+    mockFrom.mockReset();
+    useDrillsStore.getState().reset();
+  });
+
+  it('tells listeners about a new completion, with its result', async () => {
+    const result = { made: 10, attempts: 10 };
+    mockInsertReturning({ data: completionAt(0, 'putting', result), error: null });
+    const listener = jest.fn();
+    const unsubscribe = onDrillCompleted(listener);
+
+    await useDrillsStore.getState().markDone('putting', 'user-1', result);
+    unsubscribe();
+
+    expect(listener).toHaveBeenCalledTimes(1);
+    expect(listener).toHaveBeenCalledWith(expect.objectContaining({ drill_id: 'putting', result_made: 10, result_attempts: 10 }));
+  });
+
+  it('does not tell listeners about a failed insert, a fetch or a completion from before a reset', async () => {
+    const listener = jest.fn();
+    const unsubscribe = onDrillCompleted(listener);
+
+    mockInsertReturning({ data: null, error: { message: 'rls' } });
+    await expect(useDrillsStore.getState().markDone('putting', 'user-1')).rejects.toBeDefined();
+
+    const pending = deferred<Result>();
+    mockInsertReturning(pending.promise);
+    const marking = useDrillsStore.getState().markDone('putting', 'user-1');
+    useDrillsStore.getState().reset();
+    pending.resolve({ data: completionAt(0, 'putting'), error: null });
+    await marking;
+    unsubscribe();
+
+    expect(listener).not.toHaveBeenCalled();
+  });
+
+  it('stops notifying a listener once it is unsubscribed', async () => {
+    mockInsertReturning({ data: completionAt(0, 'putting'), error: null });
+    const listener = jest.fn();
+    onDrillCompleted(listener)();
+
+    await useDrillsStore.getState().markDone('putting', 'user-1');
+
+    expect(listener).not.toHaveBeenCalled();
+  });
+
+  it('still resolves when a listener throws, since the completion is saved', async () => {
+    mockInsertReturning({ data: completionAt(0, 'putting'), error: null });
+    const unsubscribe = onDrillCompleted(() => {
+      throw new Error('boom');
+    });
+
+    await expect(useDrillsStore.getState().markDone('putting', 'user-1')).resolves.toBeUndefined();
+    unsubscribe();
+
+    expect(useDrillsStore.getState().completions).toHaveLength(1);
+  });
+
+  it('is initialized only after a successful fetch and cleared by reset', async () => {
+    mockFrom.mockReturnValue({ select: () => ({ order: () => ({ range: () => Promise.resolve({ data: [completionAt(0)], error: null }) }) }) });
+
+    expect(useDrillsStore.getState().initialized).toBe(false);
+    await useDrillsStore.getState().fetchCompletions();
+    expect(useDrillsStore.getState().initialized).toBe(true);
+
+    useDrillsStore.getState().reset();
+    expect(useDrillsStore.getState().initialized).toBe(false);
+  });
+
+  it('stays uninitialized when the fetch fails', async () => {
+    mockFrom.mockReturnValue({ select: () => ({ order: () => ({ range: () => Promise.resolve({ data: null, error: { message: 'down' } }) }) }) });
+
+    await expect(useDrillsStore.getState().fetchCompletions()).rejects.toEqual({ message: 'down' });
+
+    expect(useDrillsStore.getState().initialized).toBe(false);
   });
 });

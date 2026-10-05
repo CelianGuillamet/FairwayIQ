@@ -9,6 +9,7 @@ import type { Profile } from '../types';
 import { useRoundsStore } from './rounds';
 import { useDrillsStore } from './drills';
 import { useBagStore } from './bag';
+import { useBadgesStore } from './badges';
 
 export type OnboardingValues = Pick<Profile, 'display_name' | 'handicap' | 'play_frequency' | 'goal'>;
 
@@ -36,6 +37,7 @@ function resetUserCaches() {
   useRoundsStore.getState().reset();
   useDrillsStore.getState().reset();
   useBagStore.getState().reset();
+  useBadgesStore.getState().reset();
   resetHolesData();
 }
 

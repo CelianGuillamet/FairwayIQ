@@ -5,6 +5,7 @@ import { router } from 'expo-router';
 import { useAuthStore } from '../../stores/auth';
 import { useRoundsStore } from '../../stores/rounds';
 import { useDrillsStore } from '../../stores/drills';
+import { useBadgesStore } from '../../stores/badges';
 import { useBagStore } from '../../stores/bag';
 import { useSubscriptionStore } from '../../stores/subscription';
 import {
@@ -20,6 +21,7 @@ import type { ThemeColors } from '../../constants';
 import { useTheme, useThemedStyles } from '../../lib/theme';
 import { capitalizeFirst, formatHandicapValue, formatSignedFr } from '../../lib/home';
 import { countClubs, formatClubCount } from '../../lib/bag';
+import { BADGES } from '../../lib/badges';
 import { openLegalUrl } from '../../lib/legal';
 import { MANAGE_SUBSCRIPTION_URL } from '../../lib/subscription';
 import {
@@ -50,6 +52,7 @@ export default function ProfileScreen() {
   const { getTotalDone, getStreak } = useDrillsStore();
   const bagCount = useBagStore((state) => (state.loaded ? countClubs(state.distances) : null));
   const loadBag = useBagStore((state) => state.load);
+  const trophyCount = useBadgesStore((state) => (state.loaded ? Object.keys(state.earned).length : null));
   const isPremium = useSubscriptionStore((state) => state.isPremium);
   const subscriptionLoading = useSubscriptionStore((state) => state.loading);
   const insets = useSafeAreaInsets();
@@ -190,6 +193,11 @@ export default function ProfileScreen() {
               value={bagCount != null ? formatClubCount(bagCount) : undefined}
               first
               onPress={() => router.push('/bag' as any)}
+            />
+            <LinkRow
+              label="Trophées"
+              value={trophyCount != null ? `${trophyCount} sur ${BADGES.length}` : undefined}
+              onPress={() => router.push('/trophies' as any)}
             />
           </AppCard>
         </Section>
