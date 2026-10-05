@@ -18,10 +18,13 @@ import { EvolutionCard, type EvolutionSeries } from '../../components/home/Evolu
 import { FocusBlock } from '../../components/home/FocusBlock';
 import { IndexCard } from '../../components/home/IndexCard';
 import { LeaksCard } from '../../components/home/LeaksCard';
+import { MonthlyChallengeCard } from '../../components/home/MonthlyChallengeCard';
+import { MonthlyChallengeSheet } from '../../components/home/MonthlyChallengeSheet';
 import { PINNED_CTA_CLEARANCE, PinnedCta } from '../../components/home/PinnedCta';
 import { PracticeCard } from '../../components/home/PracticeCard';
 import { RoundRow } from '../../components/home/RoundRow';
 import { StatsStrip, type StatItem } from '../../components/home/StatsStrip';
+import { useMonthlyChallenge } from '../../components/home/useMonthlyChallenge';
 import { useWeeklyGoal } from '../../components/home/useWeeklyGoal';
 import { WeeklyGoalCard } from '../../components/home/WeeklyGoalCard';
 import { WeeklyGoalSheet } from '../../components/home/WeeklyGoalSheet';
@@ -71,7 +74,9 @@ export default function DashboardScreen() {
   const [focusCompletionError, setFocusCompletionError] = useState<string | null>(null);
   const [visibleRoundsCount, setVisibleRoundsCount] = useState(6);
   const [goalSheetOpen, setGoalSheetOpen] = useState(false);
+  const [challengeSheetOpen, setChallengeSheetOpen] = useState(false);
   const leaks = useLeaks();
+  const monthlyChallenge = useMonthlyChallenge(leaks);
   const weeklyGoal = useWeeklyGoal(user?.id, profile?.play_frequency);
   const weekStart = getWeekStart().getTime();
   const weeklySessions = useMemo(
@@ -312,6 +317,14 @@ export default function DashboardScreen() {
               <WeeklyGoalCard sessions={weeklySessions} goal={weeklyGoal.goal} onPress={() => setGoalSheetOpen(true)} />
             ) : null}
 
+            {monthlyChallenge.status === 'ready' ? (
+              <MonthlyChallengeCard
+                challenge={monthlyChallenge.challenge}
+                progress={monthlyChallenge.progress}
+                onPress={() => setChallengeSheetOpen(true)}
+              />
+            ) : null}
+
             <FocusBlock insight={focusInsight} onAction={() => router.push(focusInsight.actionRoute)} />
 
             <PracticeCard
@@ -399,6 +412,21 @@ export default function DashboardScreen() {
         }}
         onClose={() => setGoalSheetOpen(false)}
       />
+
+      {monthlyChallenge.status === 'ready' ? (
+        <MonthlyChallengeSheet
+          visible={challengeSheetOpen}
+          challenge={monthlyChallenge.challenge}
+          progress={monthlyChallenge.progress}
+          canChange={monthlyChallenge.canChange}
+          changeUsed={monthlyChallenge.changeUsed}
+          onChange={() => {
+            monthlyChallenge.change();
+            setChallengeSheetOpen(false);
+          }}
+          onClose={() => setChallengeSheetOpen(false)}
+        />
+      ) : null}
     </View>
   );
 }
