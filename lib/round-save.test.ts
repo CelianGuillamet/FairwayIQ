@@ -1,5 +1,6 @@
 import {
   RoundSaveError,
+  SAVE_ROUND_TIMEOUT_MS,
   buildSaveRoundArgs,
   buildUpdateRoundArgs,
   classifyRoundSaveFailure,
@@ -10,6 +11,7 @@ import {
   saveRound,
   updateRound,
 } from './round-save';
+import { InvokeTimeoutError } from './invoke-timeout';
 import { createDefaultScorecard } from './rounds';
 import { supabase } from './supabase';
 import type { Round, RoundDraftHole } from '../types';
@@ -19,6 +21,24 @@ jest.mock('./supabase', () => ({
 }));
 
 const rpc = supabase.rpc as jest.Mock;
+const abortSignal = jest.fn();
+
+function mockSaveRpc(result: Promise<unknown>) {
+  abortSignal.mockReturnValue(result);
+  rpc.mockReturnValue({ abortSignal });
+}
+
+function saveArgs() {
+  return buildSaveRoundArgs({
+    clientRequestId: '11111111-1111-4111-8111-111111111111',
+    playedAt: '2026-05-01T10:00:00.000Z',
+    courseId: null,
+    courseName: null,
+    teeKey: null,
+    notes: null,
+    scorecard: completedScorecard(),
+  });
+}
 
 const UUID_V4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 
@@ -217,6 +237,11 @@ describe('mapRoundSaveError', () => {
       .toBe('Connexion impossible. Vérifie ton réseau puis réessaie.');
   });
 
+  it('words a deadline that passed like any other network failure', () => {
+    expect(mapRoundSaveError(new InvokeTimeoutError('Délai dépassé (15000 ms).')))
+      .toBe('Connexion impossible. Vérifie ton réseau puis réessaie.');
+  });
+
   it('falls back to an action-specific generic message', () => {
     expect(mapRoundSaveError({ code: 'XX000', message: 'boom' }, 'save'))
       .toBe('Impossible d’enregistrer ce round pour le moment. Réessaie dans un instant.');
@@ -298,6 +323,13 @@ describe('classifyRoundSaveFailure', () => {
     expect(classifyRoundSaveFailure({ code: '23514', message: 'connection check violated' })).toBe('permanent');
   });
 
+  it('treats the client-side deadline as a network failure', () => {
+    expect(classifyRoundSaveFailure(new InvokeTimeoutError('Délai dépassé (15000 ms).'))).toBe('network');
+    expect(classifyRoundSaveFailure(new RoundSaveError('m', 'timeout', 'network'))).toBe('network');
+    expect(classifyRoundSaveFailure({ code: '', message: 'AbortError: The user aborted a request.' }, 0)).toBe('network');
+    expect(classifyRoundSaveFailure(Object.assign(new Error('The operation was aborted'), { name: 'AbortError' }))).toBe('network');
+  });
+
   it('keeps the kind of an already classified RoundSaveError', () => {
     expect(classifyRoundSaveFailure(new RoundSaveError('m', 'unknown', 'network'))).toBe('network');
     expect(classifyRoundSaveFailure(new RoundSaveError('m', '23514', 'permanent'))).toBe('permanent');
@@ -308,41 +340,25 @@ describe('classifyRoundSaveFailure', () => {
 describe('saveRound / updateRound', () => {
   beforeEach(() => {
     rpc.mockReset();
+    abortSignal.mockReset();
   });
 
   it('calls the save_round RPC and returns the saved round', async () => {
     const saved = { id: 'round-1' } as Round;
-    rpc.mockResolvedValue({ data: saved, error: null });
-    const args = buildSaveRoundArgs({
-      clientRequestId: '11111111-1111-4111-8111-111111111111',
-      playedAt: '2026-05-01T10:00:00.000Z',
-      courseId: null,
-      courseName: null,
-      teeKey: null,
-      notes: null,
-      scorecard: completedScorecard(),
-    });
+    mockSaveRpc(Promise.resolve({ data: saved, error: null }));
+    const args = saveArgs();
 
     await expect(saveRound(args)).resolves.toBe(saved);
     expect(rpc).toHaveBeenCalledWith('save_round', args);
   });
 
   it('throws a French RoundSaveError instead of the raw database error', async () => {
-    rpc.mockResolvedValue({
+    mockSaveRpc(Promise.resolve({
       data: null,
       error: { code: '23514', message: 'violates check constraint "rounds_par_range"' },
-    });
-    const args = buildSaveRoundArgs({
-      clientRequestId: '11111111-1111-4111-8111-111111111111',
-      playedAt: '2026-05-01T10:00:00.000Z',
-      courseId: null,
-      courseName: null,
-      teeKey: null,
-      notes: null,
-      scorecard: completedScorecard(),
-    });
+    }));
 
-    const promise = saveRound(args);
+    const promise = saveRound(saveArgs());
 
     await expect(promise).rejects.toBeInstanceOf(RoundSaveError);
     await expect(promise).rejects.toMatchObject({ code: '23514' });
@@ -355,18 +371,102 @@ describe('saveRound / updateRound', () => {
     [{ code: '23514', message: 'violates check constraint' }, 400, 'permanent'],
     [{ code: 'PGRST301', message: 'JWT expired' }, 401, 'auth'],
   ])('tags the thrown RoundSaveError with its failure kind (%#)', async (error, status, kind) => {
-    rpc.mockResolvedValue({ data: null, error, status });
-    const args = buildSaveRoundArgs({
-      clientRequestId: '11111111-1111-4111-8111-111111111111',
-      playedAt: '2026-05-01T10:00:00.000Z',
-      courseId: null,
-      courseName: null,
-      teeKey: null,
-      notes: null,
-      scorecard: completedScorecard(),
+    mockSaveRpc(Promise.resolve({ data: null, error, status }));
+
+    await expect(saveRound(saveArgs())).rejects.toMatchObject({ kind });
+  });
+
+  describe('timeout', () => {
+    beforeEach(() => {
+      jest.useFakeTimers();
     });
 
-    await expect(saveRound(args)).rejects.toMatchObject({ kind });
+    afterEach(() => {
+      jest.useRealTimers();
+    });
+
+    it('gives up after 15 seconds and reports a network failure', async () => {
+      mockSaveRpc(new Promise(() => undefined));
+      const promise = saveRound(saveArgs());
+      const assertion = expect(promise).rejects.toMatchObject({
+        name: 'RoundSaveError',
+        code: 'timeout',
+        kind: 'network',
+        message: 'Connexion impossible. Vérifie ton réseau puis réessaie.',
+      });
+
+      expect(SAVE_ROUND_TIMEOUT_MS).toBe(15_000);
+      await jest.advanceTimersByTimeAsync(SAVE_ROUND_TIMEOUT_MS - 1);
+      expect(abortSignal.mock.calls[0][0].aborted).toBe(false);
+
+      await jest.advanceTimersByTimeAsync(1);
+      await assertion;
+      expect(abortSignal.mock.calls[0][0].aborted).toBe(true);
+    });
+
+    it('hands the abort signal to the request so the connection is dropped', async () => {
+      mockSaveRpc(new Promise(() => undefined));
+      const promise = saveRound(saveArgs());
+      const assertion = expect(promise).rejects.toBeInstanceOf(RoundSaveError);
+
+      expect(abortSignal).toHaveBeenCalledTimes(1);
+      expect(abortSignal.mock.calls[0][0]).toBeInstanceOf(AbortSignal);
+
+      await jest.advanceTimersByTimeAsync(SAVE_ROUND_TIMEOUT_MS);
+      await assertion;
+    });
+
+    it('does not wait when the answer comes in time, and leaves no timer behind', async () => {
+      const saved = { id: 'round-1' } as Round;
+      mockSaveRpc(Promise.resolve({ data: saved, error: null }));
+
+      await expect(saveRound(saveArgs())).resolves.toBe(saved);
+      expect(jest.getTimerCount()).toBe(0);
+    });
+
+    it('ignores an answer that arrives after the timeout', async () => {
+      let answer!: (value: unknown) => void;
+      mockSaveRpc(new Promise((resolve) => {
+        answer = resolve;
+      }));
+      const promise = saveRound(saveArgs());
+      const assertion = expect(promise).rejects.toMatchObject({ kind: 'network' });
+
+      await jest.advanceTimersByTimeAsync(SAVE_ROUND_TIMEOUT_MS);
+      await assertion;
+      answer({ data: { id: 'round-late' }, error: null, status: 201 });
+      await jest.advanceTimersByTimeAsync(0);
+
+      await expect(promise).rejects.toMatchObject({ code: 'timeout' });
+    });
+
+    it('reports a request aborted by the client as a network failure', async () => {
+      mockSaveRpc(Promise.resolve({
+        data: null,
+        error: { message: 'AbortError: The user aborted a request.', details: '', hint: 'Request was aborted (timeout or manual cancellation)', code: '' },
+        status: 0,
+      }));
+
+      await expect(saveRound(saveArgs())).rejects.toMatchObject({ kind: 'network' });
+    });
+
+    it('resends the same idempotency key after a timeout, and the server returns the round it already saved', async () => {
+      const args = saveArgs();
+      const existing = { id: 'round-1', user_id: 'user-1' } as Round;
+      mockSaveRpc(new Promise(() => undefined));
+      const first = saveRound(args);
+      const firstAssertion = expect(first).rejects.toMatchObject({ kind: 'network' });
+      await jest.advanceTimersByTimeAsync(SAVE_ROUND_TIMEOUT_MS);
+      await firstAssertion;
+
+      mockSaveRpc(Promise.resolve({ data: existing, error: null, status: 200 }));
+
+      await expect(saveRound(args)).resolves.toBe(existing);
+      expect(rpc.mock.calls.map(([, sent]) => sent.p_round.client_request_id)).toEqual([
+        args.p_round.client_request_id,
+        args.p_round.client_request_id,
+      ]);
+    });
   });
 
   it('calls the update_round RPC with the metadata-only arguments', async () => {

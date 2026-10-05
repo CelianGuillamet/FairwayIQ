@@ -1,3 +1,4 @@
+import { InvokeTimeoutError, invokeWithTimeout } from './invoke-timeout';
 import { supabase } from './supabase';
 import { aggregateScorecard } from './rounds';
 import type { Round, RoundDraftHole } from '../types';
@@ -77,6 +78,8 @@ export type UpdateRoundArgs = {
 
 export type RoundSaveAction = 'save' | 'update';
 
+export const SAVE_ROUND_TIMEOUT_MS = 15_000;
+
 export type RoundSaveFailureKind = 'network' | 'server' | 'auth' | 'permanent';
 
 const SESSION_MESSAGE = 'Ta session a expiré. Reconnecte-toi puis réessaie.';
@@ -120,6 +123,8 @@ export function getErrorCode(error: unknown) {
 }
 
 export function mapRoundSaveError(error: unknown, action: RoundSaveAction = 'save') {
+  if (error instanceof InvokeTimeoutError) return NETWORK_MESSAGE;
+
   const code = readString(error, 'code');
 
   if (SESSION_CODES.has(code)) return SESSION_MESSAGE;
@@ -136,6 +141,7 @@ export function mapRoundSaveError(error: unknown, action: RoundSaveAction = 'sav
 // Only network and server failures can be fixed by sending the same round again later.
 export function classifyRoundSaveFailure(error: unknown, status?: number): RoundSaveFailureKind {
   if (error instanceof RoundSaveError) return error.kind;
+  if (error instanceof InvokeTimeoutError) return 'network';
 
   const code = readString(error, 'code');
   const sqlStateClass = code.slice(0, 2);
@@ -261,8 +267,25 @@ export function buildUpdateRoundArgs(input: {
   };
 }
 
+// A weak signal can hang a request for a minute. Giving up early is safe: the client_request_id
+// makes the later resend return the round if the server did save it, never a second one.
 export async function saveRound(args: SaveRoundArgs): Promise<Round> {
-  const { data, error, status } = await supabase.rpc('save_round', args);
+  let result;
+
+  try {
+    result = await invokeWithTimeout(
+      async (signal) => supabase.rpc('save_round', args).abortSignal(signal),
+      SAVE_ROUND_TIMEOUT_MS,
+    );
+  } catch (failure) {
+    if (failure instanceof InvokeTimeoutError) {
+      throw new RoundSaveError(NETWORK_MESSAGE, 'timeout', 'network');
+    }
+
+    throw failure;
+  }
+
+  const { data, error, status } = result;
 
   if (error) {
     throw new RoundSaveError(mapRoundSaveError(error, 'save'), getErrorCode(error), classifyRoundSaveFailure(error, status));

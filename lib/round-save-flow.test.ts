@@ -5,6 +5,7 @@ jest.mock('@react-native-async-storage/async-storage', () =>
   require('@react-native-async-storage/async-storage/jest/async-storage-mock')
 );
 
+import { InvokeTimeoutError } from './invoke-timeout';
 import { RoundSaveError } from './round-save';
 import {
   QUEUED_ROUND_TEXT,
@@ -24,6 +25,9 @@ const networkFailures = [
   ['a timeout', { message: 'Request timed out' }],
   ['an already classified network error', new RoundSaveError(NETWORK_MESSAGE, 'unknown', 'network')],
   ['an already classified server error', new RoundSaveError('x', 'unknown', 'server')],
+  ['the 15 s deadline of the save', new RoundSaveError(NETWORK_MESSAGE, 'timeout', 'network')],
+  ['a deadline that passed', new InvokeTimeoutError('Délai dépassé (15000 ms).')],
+  ['an aborted request', { code: '', message: 'AbortError: The user aborted a request.', hint: 'Request was aborted' }],
   ['a statement timeout', { code: '57014', message: 'canceling statement due to statement timeout' }],
 ] as const;
 
