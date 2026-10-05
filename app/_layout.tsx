@@ -7,9 +7,11 @@ import * as SplashScreen from 'expo-splash-screen';
 import { supabase } from '../lib/supabase';
 import { fontAssets } from '../lib/fonts';
 import { ThemeProvider, useTheme } from '../lib/theme';
+import { shouldRedirectToLogin } from '../lib/recovery-session';
 import { useAuthStore } from '../stores/auth';
 import { useSubscriptionStore } from '../stores/subscription';
-import { setupNotificationResponseListener } from '../lib/notifications';
+import { routeForNotificationType, setupNotificationResponseListener } from '../lib/notifications';
+import { useNotificationPlanner } from '../lib/use-notification-planner';
 import { identifyPurchasesUser, initPurchases, resetPurchasesUser } from '../lib/purchases';
 import { initSentry } from '../lib/sentry';
 import { ErrorBoundary } from '../components/ErrorBoundary';
@@ -44,13 +46,16 @@ function RootNavigator() {
   const { colors, scheme } = useTheme();
   const { setSession, fetchProfile, session, loading } = useAuthStore();
   const userId = session?.user?.id ?? null;
-  const onAuthCallback = useSegments()[0] === 'auth-callback';
+  const segments = useSegments();
+  const needsLogin = shouldRedirectToLogin({ loading, hasSession: !!session, segments });
+
+  useNotificationPlanner();
 
   useEffect(() => {
-    if (!loading && !session && !onAuthCallback) {
+    if (needsLogin) {
       router.replace('/(auth)/login');
     }
-  }, [session, loading, onAuthCallback]);
+  }, [needsLogin]);
 
   useEffect(() => {
     initPurchases();
@@ -98,20 +103,19 @@ function RootNavigator() {
         event,
         userId: session?.user?.id ?? null,
       });
-      setSession(session);
+      setSession(session, event);
       if (session) {
         void fetchProfile();
       }
-      if (event === 'SIGNED_IN') {
+      if (event === 'SIGNED_IN' && !useAuthStore.getState().passwordRecovery) {
         router.replace('/');
       }
     });
 
     const notifSub = setupNotificationResponseListener((data) => {
-      if (data.type === 'weekly_plan' || data.type === 'friday_checkin' || data.type === 'midweek_drill') {
-        router.push('/(tabs)');
-      } else if (data.type === 'pre_round') {
-        router.push('/(tabs)/round');
+      const route = routeForNotificationType(data.type);
+      if (route) {
+        router.push(route);
       }
     });
 
@@ -127,11 +131,13 @@ function RootNavigator() {
       <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.bg } }}>
         <Stack.Screen name="index" />
         <Stack.Screen name="(auth)" />
+        <Stack.Screen name="reset-password" options={{ gestureEnabled: false }} />
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="diagnostic" />
         <Stack.Screen name="debrief" />
         <Stack.Screen name="round-detail" />
         <Stack.Screen name="leaks" />
+        <Stack.Screen name="notifications" />
         <Stack.Screen name="edit-profile" options={{ presentation: 'modal' }} />
         <Stack.Screen name="paywall" options={{ presentation: 'modal' }} />
       </Stack>

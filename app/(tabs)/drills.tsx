@@ -9,13 +9,15 @@ import { useAuthStore } from '../../stores/auth';
 import type { Drill } from '../../types';
 import { DRILL_CATEGORY_LABELS, DRILLS } from '../../lib/drill-library';
 import { buildWeeklyPlan, isDrillDoneThisWeek } from '../../lib/drill-plan';
+import { getResultThisWeek, type DrillResult } from '../../lib/drill-results';
 import { useTheme, useThemedStyles } from '../../lib/theme';
 import { AppCard } from '../../components/ui/AppCard';
 import { Icon } from '../../components/ui/Icon';
 import { PageHeader } from '../../components/ui/PageHeader';
 import { TextAction } from '../../components/ui/TextAction';
 import { CategoryFilter } from '../../components/drills/CategoryFilter';
-import { DrillCard } from '../../components/drills/DrillCard';
+import { DrillCard, type DrillCardResults } from '../../components/drills/DrillCard';
+import { DrillResultSheet } from '../../components/drills/DrillResultSheet';
 import { PlanCounter, PlanProgressBar } from '../../components/drills/PlanProgress';
 import { PINNED_CTA_CLEARANCE, PinnedCta } from '../../components/home/PinnedCta';
 
@@ -33,8 +35,21 @@ export default function DrillsScreen() {
   const [activeCategory, setActiveCategory] = useState<string>('recommended');
   const [showLibrary, setShowLibrary] = useState(false);
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
+  const [resultDrill, setResultDrill] = useState<Drill | null>(null);
+  const [savingResult, setSavingResult] = useState(false);
+  const [resultError, setResultError] = useState<string | null>(null);
   const { user } = useAuthStore();
-  const { completions, recommendedCategories, fetchCompletions, markDone, isDoneToday, getStreak } = useDrillsStore();
+  const {
+    completions,
+    recommendedCategories,
+    fetchCompletions,
+    markDone,
+    isDoneToday,
+    getStreak,
+    getLastResult,
+    getBestResult,
+    getSuccessRate,
+  } = useDrillsStore();
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
@@ -80,14 +95,43 @@ export default function DrillsScreen() {
     (category) => DRILL_CATEGORY_LABELS[category as keyof typeof DRILL_CATEGORY_LABELS] ?? category
   );
 
+  const resultsFor = (drillId: string): DrillCardResults => ({
+    last: getLastResult(drillId),
+    best: getBestResult(drillId),
+    rate: getSuccessRate(drillId),
+    week: getResultThisWeek(drillId, completions),
+  });
+
   const handleMarkDone = (drill: Drill) => {
     if (!user) {
       return;
     }
 
-    void markDone(drill.id, user.id).catch((error: any) => {
-      Alert.alert('Erreur', error?.message ?? 'Impossible de marquer ce drill comme terminé.');
-    });
+    setResultError(null);
+    setResultDrill(drill);
+  };
+
+  const closeResultSheet = () => {
+    setResultDrill(null);
+    setResultError(null);
+  };
+
+  const recordCompletion = async (result: DrillResult | null) => {
+    if (!user || !resultDrill || savingResult) {
+      return;
+    }
+
+    setSavingResult(true);
+    setResultError(null);
+
+    try {
+      await markDone(resultDrill.id, user.id, result);
+      setResultDrill(null);
+    } catch (error: any) {
+      setResultError(error?.message ?? 'Impossible de marquer ce drill comme terminé.');
+    } finally {
+      setSavingResult(false);
+    }
   };
 
   const handleStartNext = () => {
@@ -149,6 +193,7 @@ export default function DrillsScreen() {
                 expanded={expandedKey === key}
                 doneToday={isDoneToday(drill.id)}
                 totalCompletions={completions.filter(c => c.drill_id === drill.id).length}
+                results={resultsFor(drill.id)}
                 onToggle={() => toggle(key)}
                 onMarkDone={() => handleMarkDone(drill)}
                 onLayout={(event) => { cardOffsets.current[key] = event.nativeEvent.layout.y; }}
@@ -200,6 +245,7 @@ export default function DrillsScreen() {
                   expanded={expandedKey === key}
                   doneToday={isDoneToday(drill.id)}
                   totalCompletions={completions.filter(c => c.drill_id === drill.id).length}
+                  results={resultsFor(drill.id)}
                   onToggle={() => toggle(key)}
                   onMarkDone={() => handleMarkDone(drill)}
                 />
@@ -215,6 +261,15 @@ export default function DrillsScreen() {
           </View>
         ) : null}
       </ScrollView>
+
+      <DrillResultSheet
+        drill={resultDrill}
+        saving={savingResult}
+        error={resultError}
+        onSave={(result) => void recordCompletion(result)}
+        onSkip={() => void recordCompletion(null)}
+        onClose={closeResultSheet}
+      />
 
       {plan.next ? (
         <PinnedCta

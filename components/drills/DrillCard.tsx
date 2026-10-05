@@ -2,12 +2,21 @@ import { Linking, Pressable, StyleSheet, Text, View, type LayoutChangeEvent } fr
 import { Spacing, Typography } from '../../constants';
 import type { ThemeColors } from '../../constants';
 import { DRILL_CATEGORY_LABELS, DRILL_DIFFICULTY_LABELS } from '../../lib/drill-library';
-import { extractDrillGoal, type PlanStatus } from '../../lib/drill-plan';
+import type { PlanStatus } from '../../lib/drill-plan';
+import { formatResult, formatSuccessRate, isTargetReached, type DrillResult } from '../../lib/drill-results';
 import { useTheme, useThemedStyles } from '../../lib/theme';
 import type { Drill } from '../../types';
+import { AppBadge } from '../ui/AppBadge';
 import { AppButton } from '../ui/AppButton';
 import { Icon } from '../ui/Icon';
 import { TextAction } from '../ui/TextAction';
+
+export type DrillCardResults = {
+  last: DrillResult | null;
+  best: DrillResult | null;
+  rate: number | null;
+  week: DrillResult | null;
+};
 
 type Props = {
   drill: Drill;
@@ -15,6 +24,7 @@ type Props = {
   expanded: boolean;
   doneToday: boolean;
   totalCompletions: number;
+  results: DrillCardResults;
   onToggle: () => void;
   onMarkDone: () => void;
   onLayout?: (event: LayoutChangeEvent) => void;
@@ -32,6 +42,7 @@ export function DrillCard({
   expanded,
   doneToday,
   totalCompletions,
+  results,
   onToggle,
   onMarkDone,
   onLayout,
@@ -39,10 +50,26 @@ export function DrillCard({
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
   const category = DRILL_CATEGORY_LABELS[drill.category];
-  const goal = extractDrillGoal(drill.description);
+  const weekResult = status === 'done' ? results.week : null;
+  const history = results.last && results.best
+    ? `Dernier résultat ${formatResult(results.last)} · meilleur ${formatResult(results.best)}`
+    : null;
+  const accessibilityLabel = [
+    drill.title,
+    category,
+    `${drill.duration_minutes} minutes`,
+    STATUS_LABELS[status],
+    weekResult ? `résultat ${weekResult.made} sur ${weekResult.attempts}` : null,
+    results.last && results.best
+      ? `dernier résultat ${results.last.made} sur ${results.last.attempts}, meilleur ${results.best.made} sur ${results.best.attempts}`
+      : null,
+  ]
+    .filter(Boolean)
+    .join(', ');
   const detail = [
-    goal ? DRILL_DIFFICULTY_LABELS[drill.difficulty] : null,
+    DRILL_DIFFICULTY_LABELS[drill.difficulty],
     totalCompletions > 0 ? `${totalCompletions}× réalisé` : null,
+    results.rate !== null ? `${formatSuccessRate(results.rate)} de réussite` : null,
   ]
     .filter(Boolean)
     .join(' · ');
@@ -54,11 +81,16 @@ export function DrillCard({
         onPress={onToggle}
         accessibilityRole="button"
         accessibilityState={{ expanded }}
-        accessibilityLabel={`${drill.title}, ${category}, ${drill.duration_minutes} minutes, ${STATUS_LABELS[status]}`}
+        accessibilityLabel={accessibilityLabel}
         accessibilityHint={expanded ? 'Masque les détails' : 'Affiche les détails et la validation'}
       >
         <View style={styles.copy}>
-          <Text style={styles.kicker}>{status === 'next' ? `${category} · à faire ensuite` : category}</Text>
+          <View style={styles.kickerRow}>
+            <Text style={styles.kicker}>{status === 'next' ? `${category} · à faire ensuite` : category}</Text>
+            {weekResult ? (
+              <AppBadge label={formatResult(weekResult)} tone={isTargetReached(weekResult, drill) ? 'good' : 'neutral'} />
+            ) : null}
+          </View>
           <Text style={[styles.title, status === 'done' && styles.titleDone]}>{drill.title}</Text>
           <View style={styles.meta}>
             <View style={styles.metaItem}>
@@ -66,9 +98,10 @@ export function DrillCard({
               <Text style={styles.metaText}>{drill.duration_minutes} min</Text>
             </View>
             <Text style={[styles.metaText, styles.metaGoal]} numberOfLines={1}>
-              {goal ? `Objectif ${goal}` : DRILL_DIFFICULTY_LABELS[drill.difficulty]}
+              Objectif {drill.success_threshold} sur {drill.attempts}
             </Text>
           </View>
+          {history ? <Text style={styles.history}>{history}</Text> : null}
         </View>
         <View style={[styles.status, status === 'done' && styles.statusDone]}>
           {status === 'done' ? <Icon name="check" size={16} strokeWidth={2.5} color={colors.surface} /> : null}
@@ -78,7 +111,21 @@ export function DrillCard({
       {expanded ? (
         <View style={styles.details}>
           <Text style={styles.description}>{drill.description}</Text>
-          {detail ? <Text style={styles.detailMeta}>{detail}</Text> : null}
+          <View style={styles.block}>
+            <Text style={styles.blockLabel}>Objectif</Text>
+            <Text style={styles.description}>{drill.success_rule}</Text>
+          </View>
+          <View style={styles.block}>
+            <Text style={styles.blockLabel}>Comment faire</Text>
+            {drill.steps.map((step, index) => (
+              <View key={index} style={styles.step}>
+                <Text style={styles.stepIndex}>{index + 1}</Text>
+                <Text style={[styles.description, styles.stepText]}>{step}</Text>
+              </View>
+            ))}
+          </View>
+          <Text style={styles.detailMeta}>Matériel : {drill.equipment.join(', ')}</Text>
+          <Text style={styles.detailMeta}>{detail}</Text>
           <View style={styles.actions}>
             {drill.youtube_url ? (
               <TextAction
@@ -133,6 +180,11 @@ const createStyles = (colors: ThemeColors) =>
       flex: 1,
       gap: 2,
     },
+    kickerRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Spacing.xs,
+    },
     kicker: {
       ...Typography.label,
       color: colors.ink2,
@@ -185,9 +237,33 @@ const createStyles = (colors: ThemeColors) =>
       ...Typography.body,
       color: colors.ink2,
     },
+    block: {
+      gap: 2,
+    },
+    blockLabel: {
+      ...Typography.label,
+      color: colors.ink,
+    },
+    step: {
+      flexDirection: 'row',
+      gap: Spacing.xs,
+    },
+    stepIndex: {
+      ...Typography.bodyStrong,
+      width: 18,
+      color: colors.ink3,
+    },
+    stepText: {
+      flex: 1,
+    },
     detailMeta: {
       ...Typography.caption,
       color: colors.ink3,
+    },
+    history: {
+      ...Typography.label,
+      fontFamily: Typography.body.fontFamily,
+      color: colors.ink2,
     },
     actions: {
       flexDirection: 'row',

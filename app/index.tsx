@@ -7,9 +7,12 @@ import { useTheme, useThemedStyles } from '../lib/theme';
 import { AppButton } from '../components/ui/AppButton';
 
 export default function Index() {
-  const { session, profile, loading, profileLoading, profileError, fetchProfile, signOut } = useAuthStore();
+  const { session, profile, loading, profileLoading, profileError, passwordRecovery, fetchProfile, signOut } =
+    useAuthStore();
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
+
+  if (session && passwordRecovery) return <Redirect href="/reset-password" />;
 
   if (loading || (session && profileLoading)) {
     return (

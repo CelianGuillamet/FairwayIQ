@@ -1,6 +1,7 @@
 import 'react-native-url-polyfill/auto';
 import { createClient } from '@supabase/supabase-js';
 import { authStorage } from './secure-session-storage';
+import { isRecoveryCodeVerifier, keepVerifierOnFailure } from './recovery-session';
 
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL!;
 const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY!;
@@ -22,6 +23,20 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
 
 export async function hasPkceCodeVerifier() {
   return (await authStorage.getItem(codeVerifierKey)) !== null;
+}
+
+export async function hasPendingPasswordRecovery() {
+  return isRecoveryCodeVerifier(await authStorage.getItem(codeVerifierKey));
+}
+
+export function requestPasswordReset(email: string, redirectTo: string) {
+  return keepVerifierOnFailure(
+    {
+      read: () => authStorage.getItem(codeVerifierKey),
+      write: (value) => authStorage.setItem(codeVerifierKey, value),
+    },
+    () => supabase.auth.resetPasswordForEmail(email, { redirectTo })
+  );
 }
 
 // signOut() returns early on a network error and keeps the stored session, so offline sign-outs need this.

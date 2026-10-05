@@ -99,6 +99,7 @@ beforeEach(() => {
     loading: true,
     profileLoading: false,
     profileError: null,
+    passwordRecovery: false,
   });
 });
 
@@ -390,5 +391,57 @@ describe('signOut', () => {
     mockClearRoundDraft.mockRejectedValue(new Error('storage unavailable'));
 
     await expect(useAuthStore.getState().signOut()).resolves.toBeUndefined();
+  });
+});
+
+describe('password recovery flag', () => {
+  it('starts off', () => {
+    expect(useAuthStore.getState().passwordRecovery).toBe(false);
+  });
+
+  it('turns on with the PASSWORD_RECOVERY event', () => {
+    useAuthStore.getState().setSession(session('user-1'), 'PASSWORD_RECOVERY');
+
+    expect(useAuthStore.getState().passwordRecovery).toBe(true);
+  });
+
+  it('survives the SIGNED_IN a PKCE exchange emits once the reset screen raised it', () => {
+    useAuthStore.getState().setPasswordRecovery(true);
+
+    useAuthStore.getState().setSession(session('user-1'), 'SIGNED_IN');
+    useAuthStore.getState().setSession(session('user-1'), 'USER_UPDATED');
+
+    expect(useAuthStore.getState().passwordRecovery).toBe(true);
+  });
+
+  it('is not raised by an ordinary sign-in', () => {
+    useAuthStore.getState().setSession(session('user-1'), 'SIGNED_IN');
+
+    expect(useAuthStore.getState().passwordRecovery).toBe(false);
+  });
+
+  it('is cleared explicitly once the password is updated', () => {
+    useAuthStore.getState().setSession(session('user-1'), 'PASSWORD_RECOVERY');
+
+    useAuthStore.getState().setPasswordRecovery(false);
+
+    expect(useAuthStore.getState().passwordRecovery).toBe(false);
+    expect(useAuthStore.getState().session).not.toBeNull();
+  });
+
+  it('is cleared when the session disappears', () => {
+    useAuthStore.getState().setSession(session('user-1'), 'PASSWORD_RECOVERY');
+
+    useAuthStore.getState().setSession(null, 'SIGNED_OUT');
+
+    expect(useAuthStore.getState().passwordRecovery).toBe(false);
+  });
+
+  it('is cleared by signOut', async () => {
+    useAuthStore.getState().setSession(session('user-1'), 'PASSWORD_RECOVERY');
+
+    await useAuthStore.getState().signOut();
+
+    expect(useAuthStore.getState().passwordRecovery).toBe(false);
   });
 });

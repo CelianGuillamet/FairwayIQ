@@ -11,13 +11,14 @@ import {
 import { Link, router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase } from '../../lib/supabase';
-import { Fonts, Typography } from '../../constants';
+import { Fonts, Spacing, Typography } from '../../constants';
 import type { ThemeColors } from '../../constants';
 import { useThemedStyles } from '../../lib/theme';
 import { AuthHero } from '../../components/auth/AuthHero';
 import { AppCard } from '../../components/ui/AppCard';
 import { AppButton } from '../../components/ui/AppButton';
 import { AppInput } from '../../components/ui/AppInput';
+import { TextAction } from '../../components/ui/TextAction';
 
 export default function LoginScreen() {
   const insets = useSafeAreaInsets();
@@ -109,6 +110,14 @@ export default function LoginScreen() {
             autoComplete="password"
           />
 
+          <TextAction
+            label="Mot de passe oublié ?"
+            tone="muted"
+            role="link"
+            onPress={() => router.push({ pathname: '/(auth)/forgot-password', params: { email: email.trim() } })}
+            style={styles.forgotLink}
+          />
+
           <AppButton
             label={loading ? 'Connexion...' : 'Se connecter'}
             onPress={handleLogin}
@@ -152,6 +161,10 @@ const createStyles = (colors: ThemeColors) =>
       color: colors.ink2,
       marginTop: 6,
       marginBottom: 18,
+    },
+    forgotLink: {
+      alignSelf: 'flex-end',
+      marginTop: -Spacing.xs,
     },
     primaryButton: {
       marginTop: 6,

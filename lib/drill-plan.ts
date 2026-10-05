@@ -3,6 +3,7 @@ import type { Drill } from '../types';
 import { DRILLS, type DrillCategory, type DrillCompletion } from './drill-library';
 
 export const WEEKLY_PLAN_SIZE = 5;
+export const MAX_PLAN_DRILLS_PER_CATEGORY = 3;
 
 const CATEGORY_ORDER: readonly DrillCategory[] = ['putting', 'short_game', 'approach', 'driving', 'mental'];
 
@@ -24,8 +25,15 @@ function isKnownCategory(category: string): category is DrillCategory {
   return (CATEGORY_ORDER as readonly string[]).includes(category);
 }
 
-function takeRoundRobin(categories: readonly DrillCategory[], size: number) {
-  const queues = categories.map((category) => DRILLS.filter((drill) => drill.category === category));
+function takeRoundRobin(
+  categories: readonly DrillCategory[],
+  size: number,
+  perCategory: number,
+  skip: readonly Drill[] = [],
+) {
+  const queues = categories.map((category) =>
+    DRILLS.filter((drill) => drill.category === category && !skip.includes(drill)).slice(0, perCategory),
+  );
   const picked: Drill[] = [];
 
   for (let round = 0; picked.length < size; round++) {
@@ -46,13 +54,16 @@ function takeRoundRobin(categories: readonly DrillCategory[], size: number) {
 export function selectPlanDrills(recommendedCategories: string[], size = WEEKLY_PLAN_SIZE) {
   const priority = [...new Set(recommendedCategories.filter(isKnownCategory))];
   const rest = CATEGORY_ORDER.filter((category) => !priority.includes(category));
-  const picked = takeRoundRobin(priority, size);
+  const rank = [...priority, ...rest];
+  const picked = takeRoundRobin(priority, size, MAX_PLAN_DRILLS_PER_CATEGORY);
 
   if (picked.length < size) {
-    picked.push(...takeRoundRobin(rest, size - picked.length));
+    picked.push(...takeRoundRobin(rest, size - picked.length, MAX_PLAN_DRILLS_PER_CATEGORY));
   }
 
-  const rank = [...priority, ...rest];
+  if (picked.length < size) {
+    picked.push(...takeRoundRobin(rank, size - picked.length, Infinity, picked));
+  }
 
   return picked
     .map((drill, index) => ({ drill, index }))

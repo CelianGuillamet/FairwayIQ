@@ -1,5 +1,11 @@
 import * as Notifications from 'expo-notifications';
-import { Platform } from 'react-native';
+import {
+  NOTIFICATION_IDS,
+  NOTIFICATION_ID_PREFIX,
+  type NotificationPlan,
+  type PlannedNotification,
+  type PlannedTrigger,
+} from './notification-plan';
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -11,80 +17,130 @@ Notifications.setNotificationHandler({
   }),
 });
 
+export const TEST_NOTIFICATION_ID = `${NOTIFICATION_ID_PREFIX}test`;
+export const TEST_NOTIFICATION_DELAY_SECONDS = 3;
+
+// The first version scheduled repeating notifications under random identifiers; they are still
+// pending on devices that onboarded with it and no setting can reach them.
+const LEGACY_NOTIFICATION_TYPES = new Set(['weekly_plan', 'friday_checkin', 'midweek_drill', 'pre_round']);
+
+export type NotificationRoute = '/(tabs)/round' | '/(tabs)/drills';
+
+export type NotificationPermission = {
+  granted: boolean;
+  canAskAgain: boolean;
+};
+
+export async function getNotificationPermission(): Promise<NotificationPermission> {
+  const { status, canAskAgain } = await Notifications.getPermissionsAsync();
+  return { granted: status === 'granted', canAskAgain };
+}
+
 export async function requestNotificationPermissions(): Promise<boolean> {
-  const { status: existing } = await Notifications.getPermissionsAsync();
-  if (existing === 'granted') return true;
-  const { status } = await Notifications.requestPermissionsAsync();
+  const current = await getNotificationPermission();
+  if (current.granted) return true;
+  if (!current.canAskAgain) return false;
+
+  const { status } = await Notifications.requestPermissionsAsync({
+    ios: { allowAlert: true, allowSound: true, allowBadge: false },
+  });
   return status === 'granted';
 }
 
-export async function scheduleWeeklyNotifications(): Promise<void> {
-  await Notifications.cancelAllScheduledNotificationsAsync();
+function toExpoTrigger(trigger: PlannedTrigger): Notifications.NotificationTriggerInput {
+  if (trigger.type === 'date') {
+    return { type: Notifications.SchedulableTriggerInputTypes.DATE, date: trigger.date };
+  }
 
-  // Monday 8am — weekly plan reminder
-  await Notifications.scheduleNotificationAsync({
-    content: {
-      title: '📅 Ton plan de la semaine t\'attend',
-      body: 'Consulte ton programme FairwayIQ et prépare tes séances d\'entraînement.',
-      data: { type: 'weekly_plan' },
-    },
-    trigger: {
-      type: Notifications.SchedulableTriggerInputTypes.CALENDAR,
-      weekday: 2, // Monday (1=Sunday, 2=Monday)
-      hour: 8,
-      minute: 0,
-      repeats: true,
-    },
+  return {
+    type: Notifications.SchedulableTriggerInputTypes.WEEKLY,
+    // Expo counts weekdays from Sunday = 1, the planner from Monday = 1.
+    weekday: (trigger.weekday % 7) + 1,
+    hour: trigger.hour,
+    minute: trigger.minute,
+  };
+}
+
+function warn(action: string, identifier: string, error: unknown) {
+  console.warn(`[notifications] ${action} failed`, {
+    identifier,
+    message: error instanceof Error ? error.message : String(error),
   });
+}
 
-  // Friday 6pm — weekly check-in
+async function cancelOne(identifier: string) {
+  try {
+    await Notifications.cancelScheduledNotificationAsync(identifier);
+  } catch (error) {
+    warn('Cancel', identifier, error);
+  }
+}
+
+// Scheduling under an existing identifier replaces the pending request on iOS and Android.
+async function scheduleOne(item: PlannedNotification) {
+  try {
+    await Notifications.scheduleNotificationAsync({
+      identifier: item.identifier,
+      content: { title: item.title, body: item.body, data: item.data },
+      trigger: toExpoTrigger(item.trigger),
+    });
+  } catch (error) {
+    warn('Schedule', item.identifier, error);
+  }
+}
+
+export async function cancelLegacyNotifications(): Promise<void> {
+  try {
+    const scheduled = await Notifications.getAllScheduledNotificationsAsync();
+    const legacy = scheduled.filter(({ identifier, content }) => {
+      const type = (content.data as { type?: unknown } | null | undefined)?.type;
+      return !identifier.startsWith(NOTIFICATION_ID_PREFIX) && typeof type === 'string' && LEGACY_NOTIFICATION_TYPES.has(type);
+    });
+    for (const { identifier } of legacy) await cancelOne(identifier);
+  } catch (error) {
+    warn('Legacy cleanup', 'legacy', error);
+  }
+}
+
+export async function applyNotificationPlan(plan: NotificationPlan): Promise<void> {
+  await cancelLegacyNotifications();
+  for (const identifier of plan.cancel) await cancelOne(identifier);
+  for (const item of plan.schedule) await scheduleOne(item);
+}
+
+export async function cancelAllReminders(): Promise<void> {
+  await cancelLegacyNotifications();
+  for (const identifier of [...Object.values(NOTIFICATION_IDS), TEST_NOTIFICATION_ID]) {
+    await cancelOne(identifier);
+  }
+}
+
+export async function scheduleTestNotification(): Promise<void> {
   await Notifications.scheduleNotificationAsync({
+    identifier: TEST_NOTIFICATION_ID,
     content: {
-      title: '🏌️ Check-in du vendredi',
-      body: 'As-tu travaillé ton plan cette semaine ? Enregistre ton prochain round sur FairwayIQ.',
-      data: { type: 'friday_checkin' },
+      title: 'Notification de test',
+      body: 'Tes rappels FairwayIQ s’afficheront comme ceci.',
+      data: { type: 'test' },
     },
     trigger: {
-      type: Notifications.SchedulableTriggerInputTypes.CALENDAR,
-      weekday: 6, // Friday
-      hour: 18,
-      minute: 0,
-      repeats: true,
-    },
-  });
-
-  // Wednesday 12pm — mid-week drill reminder
-  await Notifications.scheduleNotificationAsync({
-    content: {
-      title: '⛳ Mi-semaine : as-tu pratiqué ?',
-      body: 'Un drill de 15 minutes peut changer ton prochain round. On y va ?',
-      data: { type: 'midweek_drill' },
-    },
-    trigger: {
-      type: Notifications.SchedulableTriggerInputTypes.CALENDAR,
-      weekday: 4, // Wednesday
-      hour: 12,
-      minute: 0,
-      repeats: true,
+      type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
+      seconds: TEST_NOTIFICATION_DELAY_SECONDS,
     },
   });
 }
 
-export async function schedulePreRoundReminder(roundDateTime: Date): Promise<void> {
-  const reminderTime = new Date(roundDateTime.getTime() - 60 * 60 * 1000); // 1h before
-  if (reminderTime <= new Date()) return;
-
-  await Notifications.scheduleNotificationAsync({
-    content: {
-      title: '🏌️ Ton round approche !',
-      body: 'Rappel : tu joues dans 1 heure. Pense à ton échauffement et à ta routine.',
-      data: { type: 'pre_round' },
-    },
-    trigger: {
-      type: Notifications.SchedulableTriggerInputTypes.DATE,
-      date: reminderTime,
-    },
-  });
+export function routeForNotificationType(type: unknown): NotificationRoute | null {
+  switch (type) {
+    case 'weekly_plan':
+    case 'streak_at_risk':
+    case 'practice_reminder':
+      return '/(tabs)/drills';
+    case 'play_reminder':
+      return '/(tabs)/round';
+    default:
+      return null;
+  }
 }
 
 export function setupNotificationResponseListener(

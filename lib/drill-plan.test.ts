@@ -1,5 +1,6 @@
 import { DRILLS } from './drill-library';
 import {
+  MAX_PLAN_DRILLS_PER_CATEGORY,
   WEEKLY_PLAN_SIZE,
   buildWeeklyPlan,
   extractDrillGoal,
@@ -49,6 +50,47 @@ describe('selectPlanDrills', () => {
 
   it('never exceeds the library', () => {
     expect(selectPlanDrills([], 100)).toHaveLength(DRILLS.length);
+  });
+});
+
+describe('selectPlanDrills with the full library', () => {
+  const areas = ['putting', 'short_game', 'approach', 'driving', 'mental'];
+
+  it.each(areas)('keeps the plan varied when only %s is recommended', (area) => {
+    const plan = selectPlanDrills([area]);
+
+    expect(plan).toHaveLength(WEEKLY_PLAN_SIZE);
+    expect(new Set(plan.map((drill) => drill.id)).size).toBe(WEEKLY_PLAN_SIZE);
+    expect(plan.filter((drill) => drill.category === area)).toHaveLength(MAX_PLAN_DRILLS_PER_CATEGORY);
+    expect(new Set(categoriesOf(plan)).size).toBeGreaterThanOrEqual(3);
+  });
+
+  it('never puts more than the cap of one area in a default plan', () => {
+    for (const first of areas) {
+      for (const second of areas) {
+        const plan = selectPlanDrills([first, second]);
+        const counts = areas.map((area) => plan.filter((drill) => drill.category === area).length);
+
+        expect(Math.max(...counts)).toBeLessThanOrEqual(MAX_PLAN_DRILLS_PER_CATEGORY);
+        expect(new Set(plan.map((drill) => drill.id)).size).toBe(plan.length);
+      }
+    }
+  });
+
+  it('puts the recommended areas first', () => {
+    const plan = selectPlanDrills(['approach', 'driving']);
+
+    expect(categoriesOf(plan).slice(0, 3)).toEqual(['approach', 'approach', 'approach']);
+    expect(categoriesOf(plan).slice(3)).toEqual(['driving', 'driving']);
+  });
+
+  it('fills a plan larger than the capped areas from the rest of the library', () => {
+    const plan = selectPlanDrills(['putting'], 20);
+
+    expect(plan).toHaveLength(20);
+    expect(new Set(plan.map((drill) => drill.id)).size).toBe(20);
+    expect(categoriesOf(plan).slice(0, 3)).toEqual(['putting', 'putting', 'putting']);
+    expect(plan.filter((drill) => drill.category === 'putting').length).toBeGreaterThan(MAX_PLAN_DRILLS_PER_CATEGORY);
   });
 });
 
