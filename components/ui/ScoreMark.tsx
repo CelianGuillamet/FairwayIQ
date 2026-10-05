@@ -12,6 +12,7 @@ type Props = {
   label?: string | number;
   accessibilityLabel?: string;
   decorative?: boolean;
+  color?: string;
 };
 
 const METRICS = {
@@ -20,8 +21,9 @@ const METRICS = {
   xl: { box: 100, border: 2, gap: 5, squareRadius: 10, fontSize: 68, fontFamily: Fonts.serif, letterSpacing: -2 },
 } as const;
 
-export function ScoreMark({ strokes, par, size = 'sm', label, accessibilityLabel, decorative = false }: Props) {
+export function ScoreMark({ strokes, par, size = 'sm', label, accessibilityLabel, decorative = false, color }: Props) {
   const { colors } = useTheme();
+  const ink = color ?? colors.ink;
   const notation = getScoreNotation(strokes, par);
   const metrics = METRICS[size];
 
@@ -54,7 +56,7 @@ export function ScoreMark({ strokes, par, size = 'sm', label, accessibilityLabel
               right: -ringInset,
               bottom: -ringInset,
               borderWidth: metrics.border,
-              borderColor: colors.ink,
+              borderColor: ink,
               borderRadius: ringRadius,
             },
           ]}
@@ -65,7 +67,7 @@ export function ScoreMark({ strokes, par, size = 'sm', label, accessibilityLabel
           styles.mark,
           (circle || square) && {
             borderWidth: metrics.border,
-            borderColor: colors.ink,
+            borderColor: ink,
             borderRadius: radius,
           },
         ]}
@@ -74,7 +76,7 @@ export function ScoreMark({ strokes, par, size = 'sm', label, accessibilityLabel
           style={[
             styles.value,
             {
-              color: colors.ink,
+              color: ink,
               fontFamily: metrics.fontFamily,
               fontSize: metrics.fontSize,
               lineHeight: metrics.fontSize + 2,
