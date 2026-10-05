@@ -21,6 +21,7 @@ import { IndexCard } from '../../components/home/IndexCard';
 import { LeaksCard } from '../../components/home/LeaksCard';
 import { MonthlyChallengeCard } from '../../components/home/MonthlyChallengeCard';
 import { MonthlyChallengeSheet } from '../../components/home/MonthlyChallengeSheet';
+import { PendingRoundsBanner } from '../../components/home/PendingRoundsBanner';
 import { PINNED_CTA_CLEARANCE, PinnedCta } from '../../components/home/PinnedCta';
 import { PracticeCard } from '../../components/home/PracticeCard';
 import { RemindersHint } from '../../components/home/RemindersHint';
@@ -283,6 +284,7 @@ export default function DashboardScreen() {
   if (error && rounds.length === 0) {
     return (
       <View style={styles.centered}>
+        <PendingRoundsBanner />
         <Text style={styles.errorTitle}>Impossible de charger tes rounds</Text>
         <Text style={styles.errorSubtitle}>{error}</Text>
         <AppButton label="Réessayer" onPress={() => void fetchRounds()} style={styles.retryButton} />
@@ -319,6 +321,8 @@ export default function DashboardScreen() {
             </Pressable>
           )}
         />
+
+        <PendingRoundsBanner />
 
         {hasRounds ? (
           <View style={styles.sections}>

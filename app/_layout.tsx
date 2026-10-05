@@ -13,6 +13,7 @@ import { useSubscriptionStore } from '../stores/subscription';
 import { routeForNotificationType, setupNotificationResponseListener } from '../lib/notifications';
 import { useNotificationPlanner } from '../lib/use-notification-planner';
 import { useBadgeSync } from '../lib/use-badge-sync';
+import { useRoundQueueSync } from '../lib/use-round-queue-sync';
 import { identifyPurchasesUser, initPurchases, resetPurchasesUser } from '../lib/purchases';
 import { initSentry } from '../lib/sentry';
 import { ErrorBoundary } from '../components/ErrorBoundary';
@@ -53,6 +54,7 @@ function RootNavigator() {
 
   useNotificationPlanner();
   useBadgeSync();
+  useRoundQueueSync();
 
   useEffect(() => {
     if (needsLogin) {
