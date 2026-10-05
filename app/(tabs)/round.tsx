@@ -444,6 +444,7 @@ export default function RoundScreen() {
       );
 
       if (resolution.queued) {
+        hapticSuccess();
         resetForm();
         setQueuedNotice(true);
 
