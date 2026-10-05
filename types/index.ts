@@ -109,6 +109,11 @@ export type Drill = {
   category: 'putting' | 'short_game' | 'approach' | 'driving' | 'mental';
   difficulty: 'beginner' | 'intermediate' | 'advanced';
   duration_minutes: number;
+  attempts: number;
+  success_threshold: number;
+  success_rule: string;
+  steps: string[];
+  equipment: string[];
 };
 
 export type OnboardingData = {
