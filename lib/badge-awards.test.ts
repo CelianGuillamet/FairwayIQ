@@ -137,6 +137,27 @@ describe('awardAfterRound', () => {
     expect(useBadgesStore.getState().queue).toEqual(['no_double', 'break_100']);
   });
 
+  it('keeps a badge whose insert failed and retries it at the next award, without celebrating it twice', async () => {
+    const saved = round('r1', { total_score: 95, played_at: iso(7) });
+    seedStores({ rounds: [saved], earned: { first_round: iso(1) } });
+    upsert.mockResolvedValueOnce({ data: null, error: { code: '42501', message: 'denied' } });
+
+    await awardAfterRound(saved, card());
+
+    const failed = useBadgesStore.getState().queue;
+    expect(failed).toEqual(['no_three_putt', 'no_double', 'break_100']);
+    expect(Object.keys(useBadgesStore.getState().unsynced)).toEqual(failed);
+
+    const done = completion('c1', 7);
+    useDrillsStore.setState({ completions: [done] });
+    await awardAfterDrill(done);
+
+    expect(upsert).toHaveBeenCalledTimes(2);
+    expect(upsert.mock.calls[1][0].map((row: { badge_id: string }) => row.badge_id)).toEqual([...failed, 'first_drill']);
+    expect(useBadgesStore.getState().unsynced).toEqual({});
+    expect(useBadgesStore.getState().queue).toEqual([...failed, 'first_drill']);
+  });
+
   it('works when the saved round is not in the rounds store yet', async () => {
     seedStores({ rounds: [] });
 
@@ -299,6 +320,20 @@ describe('syncBadges', () => {
     });
     expect(upsert).toHaveBeenCalledTimes(1);
     expect(upsert.mock.calls[0][1]).toMatchObject({ ignoreDuplicates: true });
+  });
+
+  it('retries the badges whose insert failed, silently, whenever it runs', async () => {
+    seedStores({ rounds: [round('r1')], earned: { first_round: iso(1) }, backfilled: true });
+    upsert.mockResolvedValueOnce({ data: null, error: { code: 'PGRST301', message: 'JWT expired' } });
+    await useBadgesStore.getState().award(['monthly_challenge'], { celebrate: false });
+    expect(useBadgesStore.getState().unsynced).toHaveProperty('monthly_challenge');
+
+    await syncBadges();
+
+    expect(upsert).toHaveBeenCalledTimes(2);
+    expect(upsert.mock.calls[1][0]).toEqual([{ user_id: 'user-1', badge_id: 'monthly_challenge', earned_at: expect.any(String) }]);
+    expect(useBadgesStore.getState().unsynced).toEqual({});
+    expect(useBadgesStore.getState().queue).toEqual([]);
   });
 
   it('does not run before the rounds and the drills are loaded', async () => {

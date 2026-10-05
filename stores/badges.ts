@@ -17,8 +17,10 @@ type BadgesState = {
   loading: boolean;
   backfilled: boolean;
   queue: BadgeId[];
+  unsynced: EarnedBadges;
   load: (userId: string) => Promise<boolean>;
   award: (ids: readonly BadgeId[], options?: AwardOptions) => Promise<BadgeId[]>;
+  retryUnsynced: () => Promise<void>;
   markBackfilled: (userId: string) => void;
   dismissCelebration: () => void;
   reset: () => void;
@@ -35,7 +37,50 @@ const INITIAL = {
   loading: false,
   backfilled: false,
   queue: [],
+  unsynced: {},
 } satisfies Partial<BadgesState>;
+
+type BadgeRow = { id: BadgeId; earnedAt: string };
+
+// A failed insert keeps its rows in `unsynced`; the next call sends them again along with its own.
+// The celebration is not part of it: it was queued once, when the badge was first earned.
+async function insertBadges(userId: string, rows: readonly BadgeRow[]) {
+  const retried = (Object.entries(useBadgesStore.getState().unsynced) as [BadgeId, string][]).map(([id, earnedAt]) => ({
+    id,
+    earnedAt,
+  }));
+  const batch = [...retried, ...rows];
+
+  if (batch.length === 0) {
+    return;
+  }
+
+  const requestGeneration = generation;
+  useBadgesStore.setState({ unsynced: {} });
+
+  let failed = false;
+
+  try {
+    const { error } = await supabase.from('user_badges').upsert(
+      batch.map((row) => ({ user_id: userId, badge_id: row.id, earned_at: row.earnedAt })),
+      { onConflict: 'user_id,badge_id', ignoreDuplicates: true },
+    );
+
+    if (error) {
+      failed = true;
+      console.warn('[badges] award failed', getErrorCode(error));
+    }
+  } catch (error) {
+    failed = true;
+    console.warn('[badges] award failed', getErrorCode(error));
+  }
+
+  if (failed && requestGeneration === generation) {
+    useBadgesStore.setState({
+      unsynced: { ...useBadgesStore.getState().unsynced, ...Object.fromEntries(batch.map((row) => [row.id, row.earnedAt])) },
+    });
+  }
+}
 
 export const useBadgesStore = create<BadgesState>((set, get) => ({
   ...INITIAL,
@@ -97,32 +142,27 @@ export const useBadgesStore = create<BadgesState>((set, get) => ({
     }
 
     const fresh = Array.from(new Set(ids)).filter((id) => isBadgeId(id) && !earned[id]);
-
-    if (fresh.length === 0) {
-      return [];
-    }
-
     const now = new Date().toISOString();
-    const rows = fresh.map((id) => ({ user_id: userId, badge_id: id, earned_at: options.earnedAt?.[id] ?? now }));
+    const rows = fresh.map((id) => ({ id, earnedAt: options.earnedAt?.[id] ?? now }));
 
-    set({
-      earned: { ...earned, ...Object.fromEntries(rows.map((row) => [row.badge_id, row.earned_at])) },
-      queue: options.celebrate === false ? queue : [...queue, ...fresh],
-    });
-
-    try {
-      const { error } = await supabase
-        .from('user_badges')
-        .upsert(rows, { onConflict: 'user_id,badge_id', ignoreDuplicates: true });
-
-      if (error) {
-        console.warn('[badges] award failed', getErrorCode(error));
-      }
-    } catch (error) {
-      console.warn('[badges] award failed', getErrorCode(error));
+    if (fresh.length > 0) {
+      set({
+        earned: { ...earned, ...Object.fromEntries(rows.map((row) => [row.id, row.earnedAt])) },
+        queue: options.celebrate === false ? queue : [...queue, ...fresh],
+      });
     }
+
+    await insertBadges(userId, rows);
 
     return fresh;
+  },
+
+  retryUnsynced: async () => {
+    const { userId, loaded } = get();
+
+    if (userId && loaded) {
+      await insertBadges(userId, []);
+    }
   },
 
   markBackfilled: (userId) => {

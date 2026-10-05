@@ -54,6 +54,7 @@ async function runSync() {
   try {
     const userId = useAuthStore.getState().user?.id;
     if (!userId || !(await useBadgesStore.getState().load(userId))) return;
+    await useBadgesStore.getState().retryUnsynced();
     if (useBadgesStore.getState().backfilled) return;
 
     const roundsState = useRoundsStore.getState();
