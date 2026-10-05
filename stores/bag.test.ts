@@ -113,6 +113,19 @@ describe('load', () => {
     expect(state().error).not.toContain('relation');
   });
 
+  it('turns a rejected request into the same French error and allows a retry', async () => {
+    mockSelectEq.mockRejectedValueOnce(new Error('socket hang up'));
+
+    await state().load('user-1');
+
+    expect(state()).toMatchObject({ loaded: false, loading: false });
+    expect(state().error).toBe('Impossible de charger ton sac pour le moment. Réessaie dans un instant.');
+
+    await loadWith([{ club: 'iron7', carry_m: 140 }]);
+
+    expect(state()).toMatchObject({ loaded: true, error: null });
+  });
+
   it('retries after a failure and clears the error', async () => {
     mockSelectEq.mockResolvedValueOnce({ data: null, error: { code: 'XX000', message: 'boom' } });
     await state().load('user-1');
@@ -218,6 +231,16 @@ describe('saveDistance', () => {
     expect(state().distances).toEqual({ iron7: 140 });
   });
 
+  it('turns a rejected request into a BagError without the raw text', async () => {
+    await loadWith([]);
+    mockUpsert.mockRejectedValueOnce(new Error('socket hang up'));
+
+    const failure = state().saveDistance('iron7', 140);
+
+    await expect(failure).rejects.toBeInstanceOf(BagError);
+    await expect(failure).rejects.toThrow('Impossible d’enregistrer cette distance pour le moment. Réessaie dans un instant.');
+  });
+
   it('maps a constraint violation to the invalid distance message', async () => {
     await loadWith([]);
     mockUpsert.mockResolvedValueOnce({
@@ -293,6 +316,16 @@ describe('removeDistance', () => {
     const failure = state().removeDistance('iron7');
 
     await expect(failure).rejects.toThrow('Connexion impossible. Vérifie ton réseau puis réessaie.');
+    expect(state().distances).toEqual({ iron7: 140 });
+  });
+
+  it('turns a rejected request into a BagError', async () => {
+    await loadWith([{ club: 'iron7', carry_m: 140 }]);
+    mockDeleteEq.mockRejectedValueOnce(new Error('socket hang up'));
+
+    await expect(state().removeDistance('iron7')).rejects.toThrow(
+      'Impossible d’effacer cette distance pour le moment. Réessaie dans un instant.',
+    );
     expect(state().distances).toEqual({ iron7: 140 });
   });
 

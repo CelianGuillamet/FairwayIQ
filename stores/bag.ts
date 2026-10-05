@@ -44,6 +44,11 @@ function enqueueWrite(club: ClubId, task: () => Promise<void>) {
   return next;
 }
 
+function warn(label: string, failure: unknown) {
+  const message = typeof failure === 'object' && failure !== null ? (failure as { message?: unknown }).message : failure;
+  console.warn(label, { message: String(message) });
+}
+
 export const useBagStore = create<BagState>((set, get) => ({
   userId: null,
   distances: {},
@@ -69,22 +74,30 @@ export const useBagStore = create<BagState>((set, get) => ({
       error: null,
     });
 
-    const { data, error } = await supabase
-      .from('club_distances')
-      .select('club, carry_m')
-      .eq('user_id', userId);
+    let rows: Parameters<typeof toClubDistances>[0] = null;
+    let failure: unknown = null;
+    try {
+      const { data, error } = await supabase
+        .from('club_distances')
+        .select('club, carry_m')
+        .eq('user_id', userId);
+      rows = data;
+      failure = error;
+    } catch (thrown) {
+      failure = thrown ?? new Error('Request failed');
+    }
 
     if (requestGeneration !== generation || requestSequence !== loadSequence) {
       return;
     }
 
-    if (error) {
-      console.warn('[bag] Club distances fetch failed', { message: error.message });
-      set({ loading: false, error: mapBagError(error, 'load') });
+    if (failure) {
+      warn('[bag] Club distances fetch failed', failure);
+      set({ loading: false, error: mapBagError(failure, 'load') });
       return;
     }
 
-    set({ distances: toClubDistances(data), loaded: true, loading: false, error: null });
+    set({ distances: toClubDistances(rows), loaded: true, loading: false, error: null });
   },
 
   saveDistance: (club, carryM) => {
@@ -103,16 +116,22 @@ export const useBagStore = create<BagState>((set, get) => ({
         return;
       }
 
-      const { error } = await supabase
-        .from('club_distances')
-        .upsert(
-          { user_id: userId, club, carry_m: carryM, updated_at: new Date().toISOString() },
-          { onConflict: 'user_id,club' },
-        );
+      let failure: unknown = null;
+      try {
+        const { error } = await supabase
+          .from('club_distances')
+          .upsert(
+            { user_id: userId, club, carry_m: carryM, updated_at: new Date().toISOString() },
+            { onConflict: 'user_id,club' },
+          );
+        failure = error;
+      } catch (thrown) {
+        failure = thrown ?? new Error('Request failed');
+      }
 
-      if (error) {
-        console.warn('[bag] Club distance save failed', { message: error.message });
-        throw new BagError(mapBagError(error, 'save'));
+      if (failure) {
+        warn('[bag] Club distance save failed', failure);
+        throw new BagError(mapBagError(failure, 'save'));
       }
 
       if (requestGeneration === generation) {
@@ -137,15 +156,21 @@ export const useBagStore = create<BagState>((set, get) => ({
         return;
       }
 
-      const { error } = await supabase
-        .from('club_distances')
-        .delete()
-        .eq('user_id', userId)
-        .eq('club', club);
+      let failure: unknown = null;
+      try {
+        const { error } = await supabase
+          .from('club_distances')
+          .delete()
+          .eq('user_id', userId)
+          .eq('club', club);
+        failure = error;
+      } catch (thrown) {
+        failure = thrown ?? new Error('Request failed');
+      }
 
-      if (error) {
-        console.warn('[bag] Club distance removal failed', { message: error.message });
-        throw new BagError(mapBagError(error, 'remove'));
+      if (failure) {
+        warn('[bag] Club distance removal failed', failure);
+        throw new BagError(mapBagError(failure, 'remove'));
       }
 
       if (requestGeneration === generation) {
