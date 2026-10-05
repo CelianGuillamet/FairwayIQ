@@ -14,7 +14,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuthStore } from '../../stores/auth';
 import { HANDICAP_LEVELS, PLAY_FREQUENCIES, GOALS, Radius, Typography } from '../../constants';
 import type { ThemeColors } from '../../constants';
-import { requestNotificationPermissions, scheduleWeeklyNotifications } from '../../lib/notifications';
 import { useTheme, useThemedStyles } from '../../lib/theme';
 import { AppCard } from '../../components/ui/AppCard';
 import { AppButton } from '../../components/ui/AppButton';
@@ -100,8 +99,6 @@ export default function OnboardingScreen() {
         return;
       }
 
-      const granted = await requestNotificationPermissions();
-      if (granted) await scheduleWeeklyNotifications();
       router.replace('/paywall' as any);
     } catch (error: any) {
       Alert.alert('Erreur', error?.message ?? 'Impossible d’enregistrer ton profil.');
