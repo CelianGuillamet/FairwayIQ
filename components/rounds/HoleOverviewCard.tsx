@@ -4,6 +4,7 @@ import { Fonts, Numerals, Radius, Spacing, Typography } from '../../constants';
 import type { ThemeColors } from '../../constants';
 import type { HoleViewData } from '../../lib/hole-view';
 import type { GreenDistances } from '../../lib/gps';
+import { describeClubAdvice, formatClubAdvice, type ClubAdvice } from '../../lib/club-advice';
 import type { TeeKey, TeeOption } from '../../lib/golf-courses';
 import { describeStrokes, getNotationWord } from '../../lib/score-labels';
 import { useTheme, useThemedStyles } from '../../lib/theme';
@@ -20,6 +21,7 @@ type Props = {
   onSelectTee: (teeKey: TeeKey) => void;
   liveGreenDistances?: GreenDistances | null;
   gpsHintLabel?: string | null;
+  clubAdvice?: ClubAdvice | null;
 };
 
 export function HoleOverviewCard({
@@ -30,6 +32,7 @@ export function HoleOverviewCard({
   onSelectTee,
   liveGreenDistances,
   gpsHintLabel,
+  clubAdvice,
 }: Props) {
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
@@ -99,7 +102,7 @@ export function HoleOverviewCard({
           accessible
           accessibilityLabel={`Distance au green, ${greenDistances
             .map((item) => `${item.label.toLowerCase()} ${item.value} mètres`)
-            .join(', ')}`}
+            .join(', ')}${clubAdvice ? `. ${describeClubAdvice(clubAdvice, estimated)}` : ''}`}
         >
           <View style={styles.gpsHeader}>
             <Icon name="map-pin" size={16} color={colors.green} />
@@ -116,6 +119,7 @@ export function HoleOverviewCard({
               </View>
             ))}
           </View>
+          {clubAdvice ? <Text style={styles.advice}>{formatClubAdvice(clubAdvice, estimated)}</Text> : null}
         </View>
       ) : gpsHintLabel ? (
         <View style={styles.gpsHint}>
@@ -283,6 +287,12 @@ const createStyles = (colors: ThemeColors) =>
       ...Typography.titleMd,
       ...Numerals,
       color: colors.ink,
+    },
+    advice: {
+      ...Typography.body,
+      fontSize: 14,
+      lineHeight: 20,
+      color: colors.ink2,
     },
     gpsHint: {
       flexDirection: 'row',
