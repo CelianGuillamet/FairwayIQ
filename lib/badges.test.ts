@@ -51,7 +51,7 @@ describe('catalog', () => {
   it('describes every badge id exactly once, in the order of BADGE_IDS', () => {
     expect(BADGES.map((badge) => badge.id)).toEqual([...BADGE_IDS]);
     expect(new Set(BADGES.map((badge) => badge.id)).size).toBe(BADGES.length);
-    expect(BADGES).toHaveLength(17);
+    expect(BADGES).toHaveLength(18);
   });
 
   it('gives each badge a title, a one-line description, an icon and a hint', () => {
@@ -63,6 +63,33 @@ describe('catalog', () => {
       expect(badge.icon.length).toBeGreaterThan(0);
       expect(badge.hint(stats).length).toBeGreaterThan(0);
     }
+  });
+
+  it('describes the monthly challenge badge', () => {
+    const stats = computeBadgeStats({ rounds: [], completions: [], streak: 0 });
+
+    expect(getBadge('monthly_challenge')).toMatchObject({
+      title: 'Défi du mois relevé',
+      description: 'Tu as relevé ton défi du mois.',
+      icon: 'trophy',
+    });
+    expect(getBadge('monthly_challenge').hint(stats)).toBe('Relève ton défi du mois');
+    expect(isBadgeId('monthly_challenge')).toBe(true);
+  });
+
+  it('leaves the monthly challenge badge to the challenge flow: no evaluator or backfill awards it', () => {
+    const rounds = manyRounds(25);
+    const completions = manyCompletions(30);
+    const saved = round({ total_score: 70 });
+
+    const awarded = [
+      ...evaluateRoundBadges({ round: saved, scorecard: card(), rounds, earned: [], weeklyGoalReached: true }),
+      ...evaluateDrillBadges({ completions, streak: 30, result: { made: 10, attempts: 10 }, earned: [], weeklyGoalReached: true }),
+      ...backfillBadges({ rounds, completions, weeklyGoal: 1 }).map((entry) => entry.id),
+    ];
+
+    expect(awarded.length).toBeGreaterThan(10);
+    expect(awarded).not.toContain('monthly_challenge');
   });
 
   it('looks badges up by id and rejects unknown ids', () => {

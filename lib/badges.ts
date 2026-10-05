@@ -23,6 +23,7 @@ export const BADGE_IDS = [
   'streak_30',
   'perfect_drill',
   'week_goal',
+  'monthly_challenge',
 ] as const;
 
 export type BadgeId = (typeof BADGE_IDS)[number];
@@ -212,6 +213,13 @@ export const BADGES: readonly BadgeDefinition[] = [
         ? 'Atteins ton objectif de la semaine'
         : describeWeeklyProgress(Math.min(stats.weekSessions, stats.weeklyGoal), stats.weeklyGoal),
   },
+  {
+    id: 'monthly_challenge',
+    title: 'Défi du mois relevé',
+    description: 'Tu as relevé ton défi du mois.',
+    icon: 'trophy',
+    hint: () => 'Relève ton défi du mois',
+  },
 ];
 
 const BADGES_BY_ID = new Map<string, BadgeDefinition>(BADGES.map((badge) => [badge.id, badge]));
@@ -247,7 +255,7 @@ function hasBirdie(holes: readonly BadgeHole[] | null | undefined) {
 }
 
 // A hole saved without putts is unknown, not clean: it cannot prove a round without 3 putts.
-function hasNoThreePutt(round: BadgeRound, holes: readonly BadgeHole[] | null | undefined) {
+export function hasNoThreePutt(round: Pick<BadgeRound, 'holes'>, holes: readonly BadgeHole[] | null | undefined) {
   return (
     round.holes === FULL_ROUND_HOLES &&
     isFullCard(holes) &&
@@ -255,7 +263,7 @@ function hasNoThreePutt(round: BadgeRound, holes: readonly BadgeHole[] | null | 
   );
 }
 
-function hasNoDouble(round: BadgeRound, holes: readonly BadgeHole[] | null | undefined) {
+export function hasNoDouble(round: Pick<BadgeRound, 'holes'>, holes: readonly BadgeHole[] | null | undefined) {
   return round.holes === FULL_ROUND_HOLES && isFullCard(holes) && holes.every((hole) => hole.score - hole.par < 2);
 }
 
