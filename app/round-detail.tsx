@@ -35,9 +35,11 @@ import { AppBadge } from '../components/ui/AppBadge';
 import { AppInput } from '../components/ui/AppInput';
 import { Icon } from '../components/ui/Icon';
 import { PageHeader } from '../components/ui/PageHeader';
+import { TextAction } from '../components/ui/TextAction';
 import { RoundDiagnosticCard } from '../components/rounds-detail/RoundDiagnosticCard';
 import { ScorecardGrid } from '../components/rounds-detail/ScorecardGrid';
 import { StatsRow } from '../components/rounds-detail/StatsRow';
+import { useShareRound } from '../components/share/useShareRound';
 import { goBackOrHome } from '../components/rounds-detail/navigation';
 import {
   buildRoundStats,
@@ -96,6 +98,8 @@ export default function RoundDetailScreen() {
     () => hasStoredHoles && round ? buildScorecardHalves(scorecard, round.holes) : [],
     [hasStoredHoles, scorecard, round]
   );
+
+  const { share, capturing, shareCard } = useShareRound({ round, aggregate, halves: scorecardHalves });
 
   const frontNine = scorecard.slice(0, 9);
   const backNine = scorecard.length === 18 ? scorecard.slice(9, 18) : [];
@@ -350,6 +354,19 @@ export default function RoundDetailScreen() {
           </View>
         </View>
 
+        {!editing ? (
+          <TextAction
+            label="Partager"
+            icon="share"
+            tone="muted"
+            onPress={() => void share()}
+            loading={capturing}
+            accessibilityLabel="Partager ce round"
+            accessibilityHint="Crée une image du round à partager"
+            style={styles.shareAction}
+          />
+        ) : null}
+
         {editing ? (
           <View style={styles.block}>
             <Text style={styles.sectionTitle}>Infos du round</Text>
@@ -442,6 +459,8 @@ export default function RoundDetailScreen() {
         ) : null}
       </ScrollView>
 
+      {shareCard}
+
       {editing ? (
         <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, Spacing.sm) }]}>
           <AppButton
@@ -502,6 +521,10 @@ const createStyles = (colors: ThemeColors) =>
       alignItems: 'flex-end',
       gap: 14,
       marginBottom: Spacing.lg,
+    },
+    shareAction: {
+      marginTop: -Spacing.sm,
+      marginBottom: Spacing.xs,
     },
     heroScore: {
       ...Typography.numeralXL,
