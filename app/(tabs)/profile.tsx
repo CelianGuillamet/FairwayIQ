@@ -23,6 +23,7 @@ import { capitalizeFirst, formatHandicapValue, formatSignedFr } from '../../lib/
 import { countClubs, formatClubCount } from '../../lib/bag';
 import { BADGES } from '../../lib/badges';
 import { openLegalUrl } from '../../lib/legal';
+import { ensureCompletionsLoaded, ensureRoundsLoaded } from '../../lib/ensure-loaded';
 import { MANAGE_SUBSCRIPTION_URL } from '../../lib/subscription';
 import {
   describeSubscriptionPeriod,
@@ -48,8 +49,8 @@ const PLACEHOLDER = '--';
 
 export default function ProfileScreen() {
   const { profile, user, signOut } = useAuthStore();
-  const { rounds } = useRoundsStore();
-  const { getTotalDone, getStreak } = useDrillsStore();
+  const { rounds, initialized: roundsReady } = useRoundsStore();
+  const { getTotalDone, getStreak, initialized: drillsReady } = useDrillsStore();
   const bagCount = useBagStore((state) => (state.loaded ? countClubs(state.distances) : null));
   const loadBag = useBagStore((state) => state.load);
   const trophyCount = useBadgesStore((state) => (state.loaded ? Object.keys(state.earned).length : null));
@@ -80,6 +81,14 @@ export default function ProfileScreen() {
   useEffect(() => {
     if (userId) void loadBag(userId);
   }, [userId, loadBag]);
+
+  useEffect(() => {
+    if (userId && !roundsReady) void ensureRoundsLoaded();
+  }, [userId, roundsReady]);
+
+  useEffect(() => {
+    if (userId && !drillsReady) void ensureCompletionsLoaded();
+  }, [userId, drillsReady]);
 
   const goalLabel = GOALS.find((goal) => goal.value === profile?.goal)?.label ?? profile?.goal ?? PLACEHOLDER;
   const frequencyLabel = PLAY_FREQUENCIES.find((frequency) => frequency.value === profile?.play_frequency)?.label ?? PLACEHOLDER;

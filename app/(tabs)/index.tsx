@@ -32,6 +32,7 @@ import { WeeklyGoalSheet } from '../../components/home/WeeklyGoalSheet';
 import { useLeaks } from '../../components/leaks/useLeaks';
 import type { Diagnostic, Drill } from '../../types';
 import { fetchLatestDiagnostic } from '../../lib/diagnostics';
+import { ensureRoundsLoaded } from '../../lib/ensure-loaded';
 import { getDailyFocusDrill, isDrillDoneToday } from '../../lib/drill-library';
 import type { DrillResult } from '../../lib/drill-results';
 import { hasEnoughLeakData } from '../../lib/leaks';
@@ -89,9 +90,9 @@ export default function DashboardScreen() {
 
   useEffect(() => {
     if (!initialized) {
-      void fetchRounds();
+      void ensureRoundsLoaded();
     }
-  }, [fetchRounds, initialized]);
+  }, [initialized]);
 
   useEffect(() => {
     void fetchCompletions().catch((currentError: any) => {
