@@ -180,6 +180,12 @@ export default function ProfileScreen() {
           <Text style={styles.caption}>Auto suit le réglage de ton téléphone.</Text>
         </Section>
 
+        <Section title="Rappels">
+          <AppCard style={styles.listCard}>
+            <LinkRow label="Notifications" first onPress={() => router.push('/notifications' as any)} />
+          </AppCard>
+        </Section>
+
         <Section title="Informations légales">
           <AppCard style={styles.listCard}>
             <LinkRow
