@@ -20,10 +20,15 @@ jest.mock('../lib/round-draft', () => ({
   clearRoundDraft: (userId: string) => mockClearRoundDraft(userId),
 }));
 
+jest.mock('@react-native-async-storage/async-storage', () =>
+  require('@react-native-async-storage/async-storage/jest/async-storage-mock')
+);
+
 import { getCachedHoles, loadHolesForRounds, resetHolesData } from '../lib/holes-data';
 import { useAuthStore } from './auth';
 import { useBagStore } from './bag';
 import { useBadgesStore } from './badges';
+import { useMonthlyChallengeStore } from './monthly-challenge';
 import { useDrillsStore } from './drills';
 import { useRoundsStore } from './rounds';
 
@@ -95,6 +100,7 @@ beforeEach(() => {
   useDrillsStore.getState().reset();
   useBagStore.getState().reset();
   useBadgesStore.getState().reset();
+  useMonthlyChallengeStore.getState().reset();
   resetHolesData();
   useAuthStore.setState({
     session: null,
@@ -249,6 +255,15 @@ describe('setSession', () => {
     expect(useBadgesStore.getState()).toMatchObject({ userId: null, earned: {}, loaded: false, queue: [] });
   });
 
+  it('clears the monthly challenge when another user signs in', () => {
+    useAuthStore.getState().setSession(session('user-1'));
+    useMonthlyChallengeStore.setState({ userId: 'user-1', month: '2026-10', challengeId: 'drills_putting', changeUsed: true, loaded: true, doneSeen: true });
+
+    useAuthStore.getState().setSession(session('user-2'));
+
+    expect(useMonthlyChallengeStore.getState()).toMatchObject({ userId: null, month: null, challengeId: null, changeUsed: false, loaded: false, doneSeen: null });
+  });
+
   it('clears the cached hole rows when another user signs in', async () => {
     useAuthStore.getState().setSession(session('user-1'));
     await primeHolesCache();
@@ -373,6 +388,14 @@ describe('signOut', () => {
     await useAuthStore.getState().signOut();
 
     expect(useBadgesStore.getState()).toMatchObject({ userId: null, earned: {}, loaded: false, queue: [] });
+  });
+
+  it('clears the monthly challenge', async () => {
+    useMonthlyChallengeStore.setState({ userId: 'user-1', month: '2026-10', challengeId: 'drills_putting', changeUsed: true, loaded: true, doneSeen: true });
+
+    await useAuthStore.getState().signOut();
+
+    expect(useMonthlyChallengeStore.getState()).toMatchObject({ userId: null, month: null, challengeId: null, changeUsed: false, loaded: false, doneSeen: null });
   });
 
   it('clears the cached hole rows', async () => {
