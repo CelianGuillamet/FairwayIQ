@@ -116,6 +116,11 @@ describe('formatRoundSubtitle', () => {
     expect(formatRoundSubtitle({ tee_name: 'Blanc', holes: 18 })).toBe('Départ Blanc · 18 trous');
   });
 
+  it('shows stored English tee names in French', () => {
+    expect(formatRoundSubtitle({ tee_name: 'Yellow', holes: 18 })).toBe('Départ Jaune · 18 trous');
+    expect(formatRoundSubtitle({ tee_name: 'Championship', holes: 18 })).toBe('Départ Championship · 18 trous');
+  });
+
   it('omits a missing or blank tee', () => {
     expect(formatRoundSubtitle({ tee_name: null, holes: 9 })).toBe('9 trous');
     expect(formatRoundSubtitle({ tee_name: '  ', holes: 18 })).toBe('18 trous');

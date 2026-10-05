@@ -53,6 +53,7 @@ import { getGreenDistances } from '../../lib/gps';
 import { useClubAdvice } from '../../lib/use-club-advice';
 import { clearRoundDraft, loadRoundDraft, saveRoundDraft } from '../../lib/round-draft';
 import { describeToPar, formatHolesPlayed, formatScoreToPar } from '../../lib/score-labels';
+import { formatTeeName } from '../../lib/tee-names';
 import {
   buildSaveRoundArgs,
   createClientRequestId,
@@ -142,7 +143,7 @@ export default function RoundScreen() {
     if (gpsPermission === 'granted' && !livePosition) return 'Recherche du signal GPS…';
     return null;
   }, [currentHoleView, gpsPermission, livePosition]);
-  const teeLabel        = teeOptions.find((tee) => tee.key === teeKey)?.label ?? teeOptions[0]?.label ?? teeKey;
+  const teeLabel        = formatTeeName(teeOptions.find((tee) => tee.key === teeKey)?.label ?? teeOptions[0]?.label ?? teeKey);
   const canGoPrevious   = currentHoleNumber > 1;
   const canGoNext       = currentHoleNumber < scorecard.length;
   const canSave         = progress.completedHoles === scorecard.length && scorecard.length > 0;
@@ -615,7 +616,7 @@ export default function RoundScreen() {
                 {teeOptions.map((tee) => (
                   <ChoiceTile
                     key={tee.key}
-                    label={tee.label}
+                    label={formatTeeName(tee.label)}
                     selected={tee.key === teeKey}
                     onPress={() => { cancelAutoAdvance(); setTeeKey(tee.key); }}
                   />

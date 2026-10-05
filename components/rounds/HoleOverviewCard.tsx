@@ -7,6 +7,7 @@ import type { GreenDistances } from '../../lib/gps';
 import { describeClubAdvice, formatClubAdvice, type ClubAdvice } from '../../lib/club-advice';
 import type { TeeKey, TeeOption } from '../../lib/golf-courses';
 import { describeStrokes, getNotationWord } from '../../lib/score-labels';
+import { formatTeeName } from '../../lib/tee-names';
 import { useTheme, useThemedStyles } from '../../lib/theme';
 import type { RoundDraftHole } from '../../types';
 import { AppBadge } from '../ui/AppBadge';
@@ -147,7 +148,7 @@ export function HoleOverviewCard({
                 onPress={() => onSelectTee(tee.key)}
                 accessibilityRole="radio"
                 accessibilityState={{ checked: active }}
-                accessibilityLabel={`${tee.label}, ${teeDistance} mètres`}
+                accessibilityLabel={`${formatTeeName(tee.label)}, ${teeDistance} mètres`}
               >
                 <View style={[styles.teeDot, { backgroundColor: tee.color }]} />
                 <Text style={styles.teeLabel}>{teeDistance} m</Text>
