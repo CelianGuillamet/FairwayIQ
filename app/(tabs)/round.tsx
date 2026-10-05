@@ -57,9 +57,11 @@ import {
   buildSaveRoundArgs,
   createClientRequestId,
   getErrorCode,
-  getRoundSaveErrorMessage,
   saveRound,
+  type SaveRoundArgs,
 } from '../../lib/round-save';
+import { QUEUED_ROUND_TEXT, QUEUED_ROUND_TITLE, resolveSaveFailure } from '../../lib/round-save-flow';
+import { useRoundQueueStore } from '../../stores/round-queue';
 import type { Round, RoundDraftHole } from '../../types';
 import {
   aggregateScorecard,
@@ -101,6 +103,7 @@ export default function RoundScreen() {
   const [notes, setNotes]                   = useState('');
   const [loading, setLoading]               = useState(false);
   const [analyzing, setAnalyzing]           = useState(false);
+  const [queuedNotice, setQueuedNotice]     = useState(false);
   const [clientRequestId, setClientRequestId] = useState(() => createClientRequestId());
   const [courseLoading, setCourseLoading]   = useState(false);
   const [draftHydrated, setDraftHydrated]   = useState(false);
@@ -176,6 +179,10 @@ export default function RoundScreen() {
   useEffect(() => {
     if (currentHoleNumber > holes) setCurrentHoleNumber(holes);
   }, [currentHoleNumber, holes]);
+
+  useEffect(() => {
+    if (hasMeaningfulDraft) setQueuedNotice(false);
+  }, [hasMeaningfulDraft]);
 
   useEffect(() => {
     holeScrollRef.current?.scrollTo({ y: 0, animated: false });
@@ -406,12 +413,13 @@ export default function RoundScreen() {
     const userId = user.id;
     const previousRounds = rounds.slice(0, 5);
     let round: Round;
+    let saveArgs: SaveRoundArgs | null = null;
 
     try {
       const isCatalog       = selectedCourse != null && !selectedCourse.id.startsWith('custom-');
       const selectedTeeOpt  = teeOptions.find((t) => t.key === teeKey) ?? null;
 
-      round = await saveRound(buildSaveRoundArgs({
+      saveArgs = buildSaveRoundArgs({
         clientRequestId,
         playedAt: new Date().toISOString(),
         courseId: isCatalog ? selectedCourse?.id ?? null : null,
@@ -424,9 +432,28 @@ export default function RoundScreen() {
         teeColor: selectedTeeOpt?.color ?? null,
         notes: notes.trim() || null,
         scorecard: effectiveScorecard,
-      }));
+      });
+      round = await saveRound(saveArgs);
     } catch (error) {
-      Alert.alert('Erreur', getRoundSaveErrorMessage(error));
+      const failedArgs = saveArgs;
+      const resolution = await resolveSaveFailure(
+        error,
+        async () => (failedArgs ? useRoundQueueStore.getState().enqueue(userId, failedArgs) : 'storage'),
+      );
+
+      if (resolution.queued) {
+        resetForm();
+        setQueuedNotice(true);
+
+        try {
+          await clearRoundDraft(userId);
+        } catch (clearError) {
+          console.warn('[round-draft] clear failed', getErrorCode(clearError));
+        }
+      } else {
+        Alert.alert('Erreur', resolution.message);
+      }
+
       savingRef.current = false;
       setLoading(false);
       return;
@@ -541,6 +568,16 @@ export default function RoundScreen() {
                 <View style={styles.bannerBody}>
                   <Text style={styles.bannerTitle}>Round enregistré</Text>
                   <Text style={styles.bannerText}>Analyse du round en cours…</Text>
+                </View>
+              </View>
+            )}
+
+            {queuedNotice && (
+              <View style={[styles.banner, styles.bannerGood]} accessibilityLiveRegion="polite">
+                <Icon name="check" size={20} color={colors.green} />
+                <View style={styles.bannerBody}>
+                  <Text style={styles.bannerTitle}>{QUEUED_ROUND_TITLE}</Text>
+                  <Text style={styles.bannerText}>{QUEUED_ROUND_TEXT}</Text>
                 </View>
               </View>
             )}
