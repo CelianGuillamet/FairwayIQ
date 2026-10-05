@@ -56,3 +56,15 @@ export function describeClubAdvice(advice: ClubAdvice, estimated: boolean) {
   const text = `Conseil de club : ${advice.label.toLowerCase()}, ${advice.carryM} mètres`;
   return estimated ? `${text}, à titre indicatif` : text;
 }
+
+export function describeAdviceReadiness(clubCount: number) {
+  if (clubCount <= 0) {
+    return `Renseigne au moins ${MIN_CLUBS_FOR_ADVICE} clubs pour recevoir un conseil pendant tes rounds, quand la distance au green est connue.`;
+  }
+
+  if (clubCount < MIN_CLUBS_FOR_ADVICE) {
+    return `Il en faut au moins ${MIN_CLUBS_FOR_ADVICE} pour recevoir un conseil pendant tes rounds.`;
+  }
+
+  return 'Le conseil s’affiche pendant un round, sous la distance au green.';
+}

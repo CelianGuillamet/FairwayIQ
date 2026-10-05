@@ -1,5 +1,5 @@
 import type { ClubDistances } from './bag';
-import { adviseClub, describeClubAdvice, formatClubAdvice, MIN_CLUBS_FOR_ADVICE, type ClubAdvice } from './club-advice';
+import { adviseClub, describeAdviceReadiness, describeClubAdvice, formatClubAdvice, MIN_CLUBS_FOR_ADVICE, type ClubAdvice } from './club-advice';
 
 const BAG: ClubDistances = {
   driver: 230,
@@ -108,5 +108,23 @@ describe('formatClubAdvice', () => {
   it('spells the distance out for screen readers', () => {
     expect(describeClubAdvice(advice, false)).toBe('Conseil de club : fer 7, 140 mètres');
     expect(describeClubAdvice(advice, true)).toBe('Conseil de club : fer 7, 140 mètres, à titre indicatif');
+  });
+});
+
+describe('describeAdviceReadiness', () => {
+  it('asks for 3 clubs when the bag is empty', () => {
+    expect(describeAdviceReadiness(0)).toBe(
+      'Renseigne au moins 3 clubs pour recevoir un conseil pendant tes rounds, quand la distance au green est connue.',
+    );
+  });
+
+  it('says how many are missing while the bag is too small', () => {
+    expect(describeAdviceReadiness(1)).toBe('Il en faut au moins 3 pour recevoir un conseil pendant tes rounds.');
+    expect(describeAdviceReadiness(2)).toBe('Il en faut au moins 3 pour recevoir un conseil pendant tes rounds.');
+  });
+
+  it('explains where the advice shows up once the bag is big enough', () => {
+    expect(describeAdviceReadiness(3)).toBe('Le conseil s’affiche pendant un round, sous la distance au green.');
+    expect(describeAdviceReadiness(14)).toBe('Le conseil s’affiche pendant un round, sous la distance au green.');
   });
 });
