@@ -1,4 +1,4 @@
-import { completeAuthCallback, readAuthCode } from './auth-link';
+import { completeAuthCallback, readAuthCode, shouldResumePasswordRecovery } from './auth-link';
 
 const CODE = '3f1c1c0e-9a0b-4f6e-8a56-0b6a2f2f7d11';
 
@@ -111,5 +111,55 @@ describe('completeAuthCallback', () => {
     await completeAuthCallback('fake.access_token&refresh_token=x', deps);
 
     expect(deps.exchange).not.toHaveBeenCalled();
+  });
+});
+
+describe('shouldResumePasswordRecovery', () => {
+  function createRecoveryDeps(overrides: Partial<Parameters<typeof shouldResumePasswordRecovery>[0]> = {}) {
+    return {
+      code: CODE as string | null,
+      hasSession: jest.fn(() => false),
+      hasPendingRecovery: jest.fn(async () => true),
+      ...overrides,
+    };
+  }
+
+  it('resumes the reset when a recovery is pending and nobody is signed in', async () => {
+    await expect(shouldResumePasswordRecovery(createRecoveryDeps())).resolves.toBe(true);
+  });
+
+  it('does not resume it when no recovery is pending', async () => {
+    await expect(shouldResumePasswordRecovery(createRecoveryDeps({ hasPendingRecovery: jest.fn(async () => false) }))).resolves.toBe(false);
+  });
+
+  it('does not read the storage without a usable code or with a session already active', async () => {
+    const withoutCode = createRecoveryDeps({ code: null });
+    const signedIn = createRecoveryDeps({ hasSession: jest.fn(() => true) });
+
+    await expect(shouldResumePasswordRecovery(withoutCode)).resolves.toBe(false);
+    await expect(shouldResumePasswordRecovery(signedIn)).resolves.toBe(false);
+
+    expect(withoutCode.hasPendingRecovery).not.toHaveBeenCalled();
+    expect(signedIn.hasPendingRecovery).not.toHaveBeenCalled();
+  });
+
+  it('falls through to the normal exchange when the storage read rejects, instead of hanging', async () => {
+    const deps = createRecoveryDeps({ hasPendingRecovery: jest.fn(async () => Promise.reject(new Error('SecureStore unavailable'))) });
+
+    await expect(shouldResumePasswordRecovery(deps)).resolves.toBe(false);
+
+    expect(console.warn).toHaveBeenCalledWith('[auth] pending recovery check failed', { message: 'SecureStore unavailable' });
+  });
+
+  it('lets the callback complete normally after a failed storage read', async () => {
+    const recovery = createRecoveryDeps({ hasPendingRecovery: jest.fn(async () => Promise.reject(new Error('boom'))) });
+    const deps = createDeps();
+
+    const resume = await shouldResumePasswordRecovery(recovery);
+    const outcome = await completeAuthCallback(CODE, deps);
+
+    expect(resume).toBe(false);
+    expect(outcome).toEqual({ status: 'success' });
+    expect(deps.exchange).toHaveBeenCalledWith(CODE);
   });
 });

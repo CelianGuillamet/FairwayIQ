@@ -5,7 +5,7 @@ import { Typography } from '../constants';
 import type { ThemeColors } from '../constants';
 import { useTheme, useThemedStyles } from '../lib/theme';
 import { supabase, hasPkceCodeVerifier, hasPendingPasswordRecovery } from '../lib/supabase';
-import { completeAuthCallback, readAuthCode, type AuthCallbackOutcome } from '../lib/auth-link';
+import { completeAuthCallback, readAuthCode, shouldResumePasswordRecovery, type AuthCallbackOutcome } from '../lib/auth-link';
 import { useAuthStore } from '../stores/auth';
 import { AppCard } from '../components/ui/AppCard';
 import { AppButton } from '../components/ui/AppButton';
@@ -53,7 +53,13 @@ export default function AuthCallbackScreen() {
 
     void (async () => {
       const validCode = readAuthCode(code);
-      if (validCode && !useAuthStore.getState().session && (await hasPendingPasswordRecovery())) {
+      const resumeRecovery = await shouldResumePasswordRecovery({
+        code: validCode,
+        hasSession: () => !!useAuthStore.getState().session,
+        hasPendingRecovery: hasPendingPasswordRecovery,
+      });
+
+      if (validCode && resumeRecovery) {
         router.replace({ pathname: '/reset-password', params: { code: validCode } });
         return;
       }
