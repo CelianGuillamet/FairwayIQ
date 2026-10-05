@@ -40,8 +40,8 @@ export default function AuthCallbackScreen() {
   const handledCode = useRef<string | string[] | undefined | null>(null);
 
   useEffect(() => {
-    if (!loading && session) {
-      router.replace(passwordRecovery ? '/reset-password' : '/');
+    if (!loading && session && !passwordRecovery) {
+      router.replace('/');
     }
   }, [loading, session, passwordRecovery]);
 
