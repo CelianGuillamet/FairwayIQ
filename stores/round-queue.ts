@@ -202,11 +202,14 @@ export const useRoundQueueStore = create<RoundQueueState>((set, get) => {
     },
 
     retry: async () => {
-      const { userId } = get();
+      const { userId, entries } = get();
 
       if (!userId) return;
 
-      await commit(userId, reviveAttention);
+      if (entries.some((entry) => entry.status === 'needs_attention')) {
+        await commit(userId, reviveAttention);
+      }
+
       await get().flush('manual');
     },
 
