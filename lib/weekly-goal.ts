@@ -1,4 +1,4 @@
-import { isSameWeek, startOfWeek } from 'date-fns';
+import { format, isSameWeek, startOfWeek } from 'date-fns';
 import type { DrillCompletion } from './drill-library';
 
 export const WEEKLY_GOAL_MIN = 1;
@@ -12,6 +12,7 @@ const FREQUENCY_GOALS = new Map([
   ['frequent', 4],
 ]);
 
+// A day with at least one drill counts once, so five drills in an evening are one session.
 export type WeeklySessions = {
   rounds: number;
   drills: number;
@@ -50,7 +51,12 @@ export function countWeeklySessions(input: {
 }): WeeklySessions {
   const now = input.now ?? new Date();
   const rounds = input.rounds.filter((round) => isInCurrentWeek(round.played_at, now)).length;
-  const drills = input.completions.filter((completion) => isInCurrentWeek(completion.completed_at, now)).length;
+  const drillDays = new Set(
+    input.completions
+      .filter((completion) => isInCurrentWeek(completion.completed_at, now))
+      .map((completion) => format(new Date(completion.completed_at), 'yyyy-MM-dd'))
+  );
+  const drills = drillDays.size;
 
   return { rounds, drills, total: rounds + drills };
 }
@@ -71,8 +77,8 @@ export function describeWeeklyBreakdown(sessions: Pick<WeeklySessions, 'rounds' 
 
   const parts = [
     sessions.rounds > 0 ? `${sessions.rounds} ${sessions.rounds > 1 ? 'rounds' : 'round'}` : null,
-    sessions.drills > 0 ? `${sessions.drills} ${sessions.drills > 1 ? 'exercices' : 'exercice'}` : null,
+    sessions.drills > 0 ? `${sessions.drills} ${sessions.drills > 1 ? 'jours' : 'jour'} d’exercice` : null,
   ].filter(Boolean);
 
-  return parts.length > 0 ? parts.join(' et ') : 'Un round ou un exercice = une séance';
+  return parts.length > 0 ? parts.join(' et ') : 'Un round ou un jour d’exercice = une séance';
 }

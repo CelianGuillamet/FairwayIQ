@@ -79,14 +79,14 @@ describe('week boundaries (Monday start, device time zone)', () => {
 });
 
 describe('countWeeklySessions', () => {
-  it('counts the rounds played and the drills completed since Monday', () => {
+  it('counts each round played and each day with a drill since Monday', () => {
     const sessions = countWeeklySessions({
       now: WEDNESDAY,
       rounds: [{ played_at: iso(6, 9) }, { played_at: iso(4, 18) }, { played_at: iso(5, 0) }],
       completions: [{ completed_at: iso(7, 8) }, { completed_at: iso(7, 8, 30) }, { completed_at: iso(2, 8) }],
     });
 
-    expect(sessions).toEqual({ rounds: 2, drills: 2, total: 4 });
+    expect(sessions).toEqual({ rounds: 2, drills: 1, total: 3 });
   });
 
   it('is empty when nothing happened this week', () => {
@@ -118,10 +118,10 @@ describe('progress', () => {
   });
 
   it('describes what counted so far', () => {
-    expect(describeWeeklyBreakdown({ rounds: 1, drills: 1 }, 3)).toBe('1 round et 1 exercice');
+    expect(describeWeeklyBreakdown({ rounds: 1, drills: 1 }, 3)).toBe('1 round et 1 jour d’exercice');
     expect(describeWeeklyBreakdown({ rounds: 2, drills: 0 }, 4)).toBe('2 rounds');
-    expect(describeWeeklyBreakdown({ rounds: 0, drills: 2 }, 4)).toBe('2 exercices');
-    expect(describeWeeklyBreakdown({ rounds: 0, drills: 0 }, 3)).toBe('Un round ou un exercice = une séance');
+    expect(describeWeeklyBreakdown({ rounds: 0, drills: 2 }, 4)).toBe('2 jours d’exercice');
+    expect(describeWeeklyBreakdown({ rounds: 0, drills: 0 }, 3)).toBe('Un round ou un jour d’exercice = une séance');
     expect(describeWeeklyBreakdown({ rounds: 2, drills: 1 }, 3)).toBe('Objectif atteint');
   });
 });
