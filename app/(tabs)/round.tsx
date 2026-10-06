@@ -20,6 +20,7 @@ import type { ThemeColors } from '../../constants';
 import { useTheme, useThemedStyles } from '../../lib/theme';
 import { useAuthStore } from '../../stores/auth';
 import { useRoundsStore } from '../../stores/rounds';
+import { useCourseMemoryStore } from '../../stores/course-memory';
 import {
   AiCoachLimitError,
   analyzeRound,
@@ -31,15 +32,18 @@ import { CourseSearch } from '../../components/ui/CourseSearch';
 import { HoleNavigation } from '../../components/rounds/HoleNavigation';
 import { HoleOverviewCard } from '../../components/rounds/HoleOverviewCard';
 import { HoleActionBar, HoleScoringPanel } from '../../components/rounds/HoleScoringPanel';
+import { RecentCourses } from '../../components/rounds/RecentCourses';
 import { AppButton } from '../../components/ui/AppButton';
 import { AppInput } from '../../components/ui/AppInput';
 import { ChoiceTile } from '../../components/ui/ChoiceTile';
 import { Icon } from '../../components/ui/Icon';
 import { SegmentedControl } from '../../components/ui/SegmentedControl';
 import {
+  createPlaceholderCourse,
   getCourseById,
   getCourseParSequence,
   getDefaultTeeKey,
+  getKnownCourse,
   getParForHoles,
   getTeeOptions,
   getValidTeeKey,
@@ -52,6 +56,9 @@ import { buildHoleViewData } from '../../lib/hole-view';
 import { getGreenDistances } from '../../lib/gps';
 import { useClubAdvice } from '../../lib/use-club-advice';
 import { clearRoundDraft, loadRoundDraft, saveRoundDraft } from '../../lib/round-draft';
+import { getRememberedTee } from '../../lib/course-memory';
+import { buildRecentCourses, getCourseKey, type RecentCourse } from '../../lib/recent-courses';
+import { ensureRoundsLoaded } from '../../lib/ensure-loaded';
 import { describeToPar, formatHolesPlayed, formatScoreToPar } from '../../lib/score-labels';
 import { hapticSuccess, hapticWarning } from '../../lib/haptics';
 import { formatTeeName } from '../../lib/tee-names';
@@ -91,7 +98,10 @@ function animateLayout() {
 
 export default function RoundScreen() {
   const { user, profile } = useAuthStore();
-  const { upsertRound, rounds } = useRoundsStore();
+  const { upsertRound, rounds, initialized: roundsReady } = useRoundsStore();
+  const courseMemoryReady = useCourseMemoryStore((state) => state.loaded);
+  const loadCourseMemory  = useCourseMemoryStore((state) => state.load);
+  const rememberCourse    = useCourseMemoryStore((state) => state.remember);
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
@@ -121,6 +131,11 @@ export default function RoundScreen() {
   const progress   = useMemo(() => getScorecardProgress(scorecard), [scorecard]);
   const aggregate  = useMemo(() => aggregateScorecard(scorecard), [scorecard]);
   const teeOptions = useMemo(() => getTeeOptions(selectedCourse), [selectedCourse]);
+  const recentCourses = useMemo(() => buildRecentCourses(rounds), [rounds]);
+  const courseMemoryKey = useMemo(
+    () => (selectedCourse ? getCourseKey(selectedCourse.id, selectedCourse.name) : null),
+    [selectedCourse],
+  );
   const courseHasOfficialHoleData = useMemo(
     () => selectedCourse ? hasCompleteCourseHoleDetails(selectedCourse, holes) : false,
     [holes, selectedCourse],
@@ -193,6 +208,19 @@ export default function RoundScreen() {
   useEffect(() => {
     setTeeKey((current) => getValidTeeKey(selectedCourse, current));
   }, [selectedCourse]);
+
+  useEffect(() => {
+    if (user?.id) void loadCourseMemory(user.id);
+  }, [user?.id, loadCourseMemory]);
+
+  useEffect(() => {
+    if (user?.id && !roundsReady) void ensureRoundsLoaded();
+  }, [user?.id, roundsReady]);
+
+  useEffect(() => {
+    if (setupExpanded || !courseMemoryKey || !courseMemoryReady) return;
+    rememberCourse(courseMemoryKey, { teeKey, holes });
+  }, [setupExpanded, courseMemoryKey, courseMemoryReady, teeKey, holes, rememberCourse]);
 
   useEffect(() => {
     if (setupExpanded && progress.completedHoles > 0) {
@@ -324,20 +352,32 @@ export default function RoundScreen() {
     if (setupLocked) return;
     cancelAutoAdvance();
     const reqId = ++courseRequestRef.current;
+    const courseKey = getCourseKey(course.id, course.name);
+    const remembered = courseKey ? useCourseMemoryStore.getState().entries[courseKey] : undefined;
+    const nextHoles = remembered?.holes ?? holes;
+    const pickTee = (target: GolfCourse, curr: TeeKey) =>
+      getRememberedTee(remembered, getTeeOptions(target)) ?? getValidTeeKey(target, curr);
+    const firstTee = pickTee(course, teeKey);
     setCourseName(course.name);
     setSelectedCourse(course);
-    setTeeKey((curr) => getValidTeeKey(course, curr));
-    handleApplyCoursePar(holes, course);
+    setHoles(nextHoles);
+    setTeeKey(firstTee);
+    handleApplyCoursePar(nextHoles, course);
     setCourseLoading(true);
     try {
       const resolved = await getCourseById(course.id);
       if (courseRequestRef.current !== reqId || !resolved) return;
       setSelectedCourse(resolved);
-      setTeeKey((curr) => getValidTeeKey(resolved, curr));
-      handleApplyCoursePar(holes, resolved);
+      // A tee tapped while the course was loading wins over the remembered one.
+      setTeeKey((curr) => (curr === firstTee ? pickTee(resolved, curr) : getValidTeeKey(resolved, curr)));
+      handleApplyCoursePar(nextHoles, resolved);
     } finally {
       if (courseRequestRef.current === reqId) setCourseLoading(false);
     }
+  };
+
+  const handleRecentCourseSelect = (recent: RecentCourse) => {
+    void handleCourseSelect(getKnownCourse(recent.courseId) ?? createPlaceholderCourse(recent.name, recent.courseId));
   };
 
   const handleHolesToggle = (nextHoles: 9 | 18) => {
@@ -648,6 +688,9 @@ export default function RoundScreen() {
                       ? `${selectedCourse.city} · ${selectedCourse.region} · ${courseHasOfficialHoleData ? 'données complètes' : 'données partielles'}`
                       : 'Optionnel — la saisie reste disponible sans parcours.'}
                 </Text>
+                {courseName.trim().length === 0 && (
+                  <RecentCourses courses={recentCourses} onSelect={handleRecentCourseSelect} />
+                )}
               </View>
             )}
 
