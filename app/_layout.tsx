@@ -16,10 +16,12 @@ import { useBadgeSync } from '../lib/use-badge-sync';
 import { useRoundQueueSync } from '../lib/use-round-queue-sync';
 import { identifyPurchasesUser, initPurchases, resetPurchasesUser } from '../lib/purchases';
 import { initSentry } from '../lib/sentry';
+import { trackAlertsForReview } from '../lib/review-prompt';
 import { ErrorBoundary } from '../components/ErrorBoundary';
 import { BadgeCelebration } from '../components/badges/BadgeCelebration';
 
 initSentry();
+trackAlertsForReview();
 void SplashScreen.preventAutoHideAsync().catch(() => {});
 
 export default function RootLayout() {

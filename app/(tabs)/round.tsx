@@ -48,6 +48,7 @@ import {
   type TeeKey,
 } from '../../lib/golf-courses';
 import { awardAfterRound } from '../../lib/badge-awards';
+import { requestReviewAfterRound } from '../../lib/review-prompt';
 import { buildHoleViewData } from '../../lib/hole-view';
 import { getGreenDistances } from '../../lib/gps';
 import { useClubAdvice } from '../../lib/use-club-advice';
@@ -64,6 +65,7 @@ import {
 } from '../../lib/round-save';
 import { QUEUED_ROUND_TEXT, QUEUED_ROUND_TITLE, resolveSaveFailure } from '../../lib/round-save-flow';
 import { useRoundQueueStore } from '../../stores/round-queue';
+import { useBadgesStore } from '../../stores/badges';
 import type { Round, RoundDraftHole } from '../../types';
 import {
   aggregateScorecard,
@@ -464,7 +466,13 @@ export default function RoundScreen() {
 
     upsertRound(round);
     hapticSuccess();
-    void awardAfterRound(round, effectiveScorecard);
+    void awardAfterRound(round, effectiveScorecard).then(() =>
+      requestReviewAfterRound({
+        saveOutcome: 'online',
+        getSavedRoundCount: () => useRoundsStore.getState().rounds.length,
+        isCelebrationPending: () => useBadgesStore.getState().queue.length > 0,
+      }),
+    );
     resetForm();
     setAnalyzing(true);
 

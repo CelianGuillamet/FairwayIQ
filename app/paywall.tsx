@@ -13,6 +13,7 @@ import { Fonts, Numerals, PRIVACY_POLICY_URL, Radius, Spacing, TERMS_OF_USE_URL,
 import type { ThemeColors } from '../constants';
 import { useThemedStyles } from '../lib/theme';
 import { openLegalUrl } from '../lib/legal';
+import { notePaywallViewed } from '../lib/review-prompt';
 import {
   getIntroEligibility,
   getOfferings,
@@ -48,6 +49,10 @@ export default function PaywallScreen() {
   const [offerings, setOfferings] = useState<Awaited<ReturnType<typeof getOfferings>>>(null);
   const [introEligibility, setIntroEligibility] = useState<Record<string, boolean>>({});
   const [loadingOfferings, setLoadingOfferings] = useState(true);
+
+  useEffect(() => {
+    notePaywallViewed();
+  }, []);
 
   useEffect(() => {
     let active = true;
