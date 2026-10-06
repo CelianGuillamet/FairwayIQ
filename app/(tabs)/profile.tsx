@@ -24,6 +24,8 @@ import { countClubs, formatClubCount } from '../../lib/bag';
 import { BADGES } from '../../lib/badges';
 import { hapticWarning } from '../../lib/haptics';
 import { openLegalUrl } from '../../lib/legal';
+import { getAppVersionLabel } from '../../lib/app-info';
+import { contactSupport, getSupportEmail } from '../../lib/support';
 import { ensureCompletionsLoaded, ensureRoundsLoaded } from '../../lib/ensure-loaded';
 import { MANAGE_SUBSCRIPTION_URL } from '../../lib/subscription';
 import {
@@ -100,6 +102,7 @@ export default function ProfileScreen() {
   const averageToPar = getAverageScoreToParPer18Holes(rounds);
   const { planLabel, until } = describeSubscriptionPeriod(period);
   const displayName = profile?.display_name ?? 'Joueur';
+  const supportEmail = getSupportEmail();
 
   const handleSignOut = () => {
     Alert.alert('Déconnexion', 'Es-tu sûr de vouloir te déconnecter ?', [
@@ -252,6 +255,15 @@ export default function ProfileScreen() {
           </AppCard>
         </Section>
 
+        <Section title="Aide">
+          <AppCard style={styles.listCard}>
+            <LinkRow label="Questions fréquentes" first onPress={() => router.push('/help' as any)} />
+            {supportEmail ? (
+              <LinkRow label="Contacter le support" role="link" onPress={() => void contactSupport(supportEmail)} />
+            ) : null}
+          </AppCard>
+        </Section>
+
         <Pressable
           style={({ pressed }) => [styles.signOut, pressed && styles.pressed]}
           onPress={handleSignOut}
@@ -261,7 +273,7 @@ export default function ProfileScreen() {
           <Text style={styles.signOutLabel}>Se déconnecter</Text>
         </Pressable>
 
-        <Text style={styles.version}>Version 1.0.0</Text>
+        <Text style={styles.version}>{getAppVersionLabel()}</Text>
       </ScrollView>
     </View>
   );
