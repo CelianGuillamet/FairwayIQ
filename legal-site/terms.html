@@ -39,7 +39,7 @@
       <p><strong>À retenir</strong></p>
       <ul>
         <li>L’offre gratuite inclut la scorecard, les statistiques, les exercices et le diagnostic IA de partie (3 utilisations du coach IA par jour). <strong>Premium</strong> ajoute le débrief conversationnel et porte la limite à 30 utilisations par jour.</li>
-        <li>Premium est un abonnement mensuel ou annuel <strong>à renouvellement automatique</strong>, facturé par Apple, avec un essai gratuit de 7 jours pour les abonnés éligibles. Pour ne pas être débité, résiliez au moins 24 heures avant la fin de la période en cours, dans les réglages de votre compte Apple.</li>
+        <li>Premium est un abonnement mensuel ou annuel <strong>à renouvellement automatique</strong>, facturé par Apple, avec un éventuel essai gratuit pour les abonnés éligibles (sa durée est affichée sur l’écran Premium) <span class="ph">[À CONFIRMER : essai gratuit proposé ou non, et durée, d’après la configuration d’App Store Connect]</span>. Pour ne pas être débité, résiliez au moins 24 heures avant la fin de la période en cours, dans les réglages de votre compte Apple.</li>
         <li>Supprimer votre compte dans l’Application <strong>ne résilie pas</strong> votre abonnement Apple.</li>
         <li>Le coach IA est un outil d’information : il ne remplace ni un professeur de golf, ni un professionnel de santé.</li>
       </ul>
@@ -86,23 +86,25 @@
     </dl>
     <p>L’Application est un outil de coaching golf, en langue française, destiné à un usage personnel. Elle permet notamment&nbsp;:</p>
     <ul>
-      <li>d’enregistrer vos parties trou par trou (scorecard) et de consulter vos statistiques&nbsp;;</li>
-      <li>de suivre des exercices d’entraînement&nbsp;;</li>
+      <li>d’enregistrer vos parties trou par trou (scorecard), y compris sans connexion, et de consulter vos statistiques et un Handicap Index estimé&nbsp;;</li>
+      <li>de suivre des exercices d’entraînement, vos trophées, un objectif de la semaine et un défi du mois&nbsp;;</li>
       <li>d’obtenir un diagnostic de partie généré par intelligence artificielle (IA) et, avec l’offre Premium, d’échanger avec un coach IA dans un débrief conversationnel&nbsp;;</li>
-      <li>d’afficher, sur les parcours disposant de données GPS, la distance jusqu’au green&nbsp;;</li>
-      <li>de recevoir des rappels hebdomadaires, si vous les autorisez.</li>
+      <li>d’afficher, sur les parcours disposant de données GPS, la distance jusqu’au green, et de saisir les distances de vos clubs (« Mon sac ») pour obtenir un conseil de club indicatif&nbsp;;</li>
+      <li>de recevoir des rappels, si vous les activez&nbsp;;</li>
+      <li>d’exporter vos données et de partager une carte de partie sous forme d’image.</li>
     </ul>
     <p>En créant un compte (en cochant la case d’acceptation) ou en utilisant l’Application, vous acceptez les présentes conditions (« les Conditions ») et la <a href="privacy.html">Politique de confidentialité</a>. Si vous ne les acceptez pas, n’utilisez pas l’Application.</p>
 
     <h2 id="acces">2. Accès au service et âge minimum</h2>
     <ul>
-      <li>L’Application est réservée aux personnes âgées <strong>d’au moins 16&nbsp;ans</strong>. Elle n’est pas destinée aux enfants.</li>
-      <li>Il vous faut un appareil compatible et une connexion à Internet pour la plupart des fonctions (compte, synchronisation, recherche de parcours, coach IA). Les frais de connexion sont à votre charge.</li>
+      <li>L’Application est réservée aux personnes âgées <strong>d’au moins 16&nbsp;ans</strong>. Elle n’est pas destinée aux enfants. <span class="ph">[À CONFIRMER : âge minimum retenu&nbsp;; l’Application ne comporte aucun contrôle d’âge à l’inscription]</span></li>
+      <li>Il vous faut un appareil compatible et une connexion à Internet pour la plupart des fonctions (compte, synchronisation, recherche de parcours, coach IA). Sans connexion, vous pouvez saisir une partie&nbsp;: elle est gardée sur votre appareil (vingt parties en attente au plus) et envoyée dès que la connexion revient. Les frais de connexion sont à votre charge.</li>
     </ul>
 
     <h2 id="compte">3. Votre compte</h2>
     <ul>
       <li>Vous créez un compte avec une adresse e-mail et un mot de passe. Un e-mail de confirmation peut vous être envoyé pour activer le compte.</li>
+      <li>Si vous oubliez votre mot de passe, « Mot de passe oublié&nbsp;? » sur l’écran de connexion envoie un lien à votre adresse e-mail. Ce lien ouvre l’Application sur l’appareil qui l’a demandé&nbsp;; seul le dernier e-mail reçu reste valable.</li>
       <li>Vous vous engagez à fournir une adresse e-mail valide et des informations exactes.</li>
       <li>Vous êtes responsable de la confidentialité de votre mot de passe et de l’activité réalisée depuis votre compte. Prévenez-nous sans délai en cas d’accès non autorisé.</li>
       <li>Le compte est personnel&nbsp;: vous ne devez ni le céder ni le partager, notamment pour faire bénéficier une autre personne de l’offre Premium.</li>
@@ -132,6 +134,11 @@
             <td data-label="Premium">Oui</td>
           </tr>
           <tr>
+            <td data-label="Fonctionnalité">Trophées, défi du mois, objectif de la semaine, « Mon sac » et export de vos données</td>
+            <td data-label="Gratuit">Oui</td>
+            <td data-label="Premium">Oui</td>
+          </tr>
+          <tr>
             <td data-label="Fonctionnalité">Diagnostic IA de partie</td>
             <td data-label="Gratuit">Oui, dans la limite de 3 utilisations du coach IA par jour</td>
             <td data-label="Premium">Oui, dans la limite de 30 utilisations du coach IA par jour</td>
@@ -145,7 +152,7 @@
       </table>
     </div>
     <ul>
-      <li><strong>Quota commun.</strong> Chaque demande adressée au coach IA (diagnostic, nouvelle analyse d’une partie, message de débrief) compte pour une utilisation, y compris si elle n’aboutit pas. Le compteur est remis à zéro chaque jour à minuit, heure UTC (soit 1&nbsp;h ou 2&nbsp;h du matin en France, selon la saison). Quand la limite est atteinte, l’Application vous en informe&nbsp;; vous pouvez réessayer le lendemain ou passer à Premium.</li>
+      <li><strong>Quota commun.</strong> Chaque demande adressée au coach IA (diagnostic, nouvelle analyse d’une partie, message de débrief) compte pour une utilisation. Une demande invalide, ou refusée faute d’abonnement Premium, n’est pas décomptée&nbsp;; l’utilisation est rendue si le fournisseur d’IA ne répond pas (erreur ou délai dépassé). Le compteur est remis à zéro chaque jour à minuit, heure de Paris. Quand la limite est atteinte, l’Application vous en informe&nbsp;; vous pouvez réessayer le lendemain ou passer à Premium.</li>
       <li><strong>Vérification côté serveur.</strong> Votre statut Premium est vérifié par nos serveurs. Sans abonnement actif, vous revenez à l’offre gratuite&nbsp;: vos données sont conservées mais l’accès au débrief conversationnel est suspendu.</li>
       <li><strong>Évolution des limites.</strong> Les limites en vigueur sont celles indiquées dans l’Application. Si nous modifions de façon substantielle les fonctionnalités de l’offre Premium pendant une période d’abonnement, nous vous en informerons et vous pourrez résilier.</li>
     </ul>
@@ -155,8 +162,8 @@
     <h3>5.1 Formules et prix</h3>
     <p>Premium est un abonnement à renouvellement automatique, mensuel ou annuel au choix. Le prix de chaque formule (toutes taxes comprises, dans votre devise locale), sa durée et son contenu sont affichés dans l’Application, sur l’écran Premium, avant toute souscription. Le prix applicable est celui que l’App Store affiche au moment où vous confirmez l’achat.</p>
 
-    <h3>5.2 Essai gratuit de 7 jours</h3>
-    <p>Un essai gratuit de 7&nbsp;jours est proposé aux abonnés qui y sont éligibles (« 7 jours gratuits, puis » suivi du prix de la formule choisie). Pendant l’essai, vous accédez aux fonctionnalités Premium sans être débité. <strong>Sauf résiliation au moins 24&nbsp;heures avant la fin de l’essai, l’abonnement devient automatiquement payant, au prix de la formule sélectionnée, et votre compte Apple est débité.</strong></p>
+    <h3>5.2 Essai gratuit</h3>
+    <p>Un essai gratuit peut être proposé aux abonnés qui y sont éligibles&nbsp;: l’écran Premium indique alors la durée de l’essai, puis le prix de la formule choisie <span class="ph">[À CONFIRMER : essai gratuit proposé ou non, et durée, d’après la configuration d’App Store Connect]</span>. Pendant l’essai, vous accédez aux fonctionnalités Premium sans être débité. <strong>Sauf résiliation au moins 24&nbsp;heures avant la fin de l’essai, l’abonnement devient automatiquement payant, au prix de la formule sélectionnée, et votre compte Apple est débité.</strong></p>
     <p>L’éligibilité à l’essai est déterminée par Apple (en principe, un seul essai gratuit par groupe d’abonnements). La feuille de confirmation de l’App Store indique, avant que vous ne confirmiez, les conditions qui s’appliquent à votre achat (essai gratuit ou non, prix, périodicité). Si vous résiliez pendant l’essai, vous conservez l’accès Premium jusqu’à la fin de l’essai et vous n’êtes pas débité.</p>
 
     <h3>5.3 Paiement et renouvellement automatique</h3>
@@ -167,7 +174,7 @@
     </ul>
 
     <h3>5.4 Gérer et résilier votre abonnement</h3>
-    <p>Vous pouvez gérer ou résilier votre abonnement à tout moment dans les réglages de votre compte Apple&nbsp;: <strong>Réglages</strong> de votre iPhone ou iPad, puis <strong>votre nom</strong>, puis <strong>Abonnements</strong>, puis FairwayIQ (ou via l’App Store, en touchant votre photo de profil puis « Abonnements »).</p>
+    <p>Vous pouvez gérer ou résilier votre abonnement à tout moment dans les réglages de votre compte Apple&nbsp;: <strong>Réglages</strong> de votre iPhone ou iPad, puis <strong>votre nom</strong>, puis <strong>Abonnements</strong>, puis FairwayIQ (ou via l’App Store, en touchant votre photo de profil puis « Abonnements »). Le lien « Gérer mon abonnement » de l’écran Premium, de « Modifier le profil » et, pour un abonné, du Profil ouvre directement ces réglages.</p>
     <ul>
       <li>La résiliation prend effet à la fin de la période en cours&nbsp;: vous conservez l’accès Premium jusqu’à cette date. Sauf droit légal ou décision d’Apple, la période en cours n’est pas remboursée au prorata.</li>
       <li>Désinstaller l’Application ou supprimer votre compte FairwayIQ <strong>ne résilie pas</strong> l’abonnement&nbsp;: résiliez-le d’abord auprès d’Apple.</li>
@@ -188,7 +195,7 @@
 
     <h2 id="ia">6. Coach IA</h2>
     <ul>
-      <li><strong>Fonctionnement.</strong> Les diagnostics et les réponses du débrief sont générés automatiquement par un modèle d’intelligence artificielle (Claude, d’Anthropic) à partir des informations que vous saisissez (profil, scores, notes, messages). Les données transmises sont détaillées dans la <a href="privacy.html#ia">Politique de confidentialité</a>.</li>
+      <li><strong>Fonctionnement.</strong> Les diagnostics et les réponses du débrief sont générés automatiquement par un modèle d’intelligence artificielle (Claude, d’Anthropic) à partir des informations que vous saisissez (profil, scores, notes, messages). Le diagnostic d’une partie est lancé automatiquement à son enregistrement, dans la limite de votre quota&nbsp;; si le coach IA est indisponible, l’Application peut afficher un diagnostic ou une réponse simplifiés, calculés sur votre appareil. Les données transmises sont détaillées dans la <a href="privacy.html#ia">Politique de confidentialité</a>.</li>
       <li><strong>Outil d’information.</strong> Les contenus générés sont des conseils généraux d’entraînement et de stratégie. Ils peuvent être inexacts, incomplets ou inadaptés à votre situation. Ils ne constituent ni un avis professionnel, ni un enseignement personnalisé d’un professeur de golf diplômé, ni un conseil médical, de kinésithérapie ou de santé.</li>
       <li><strong>Votre pratique.</strong> Avant tout exercice physique, tenez compte de votre condition physique et, en cas de doute ou de douleur, consultez un professionnel de santé. Vous restez responsable de l’usage que vous faites des suggestions du coach IA.</li>
       <li><strong>Pas de garantie de résultat.</strong> Nous nous engageons à fournir le service avec soin, mais nous ne garantissons ni une amélioration de votre score ou de votre handicap, ni l’exactitude de chaque réponse.</li>
@@ -199,7 +206,9 @@
     <h2 id="parcours">7. Statistiques, données de parcours et GPS</h2>
     <ul>
       <li><strong>Statistiques non officielles.</strong> Les statistiques et le Handicap Index estimé affichés par l’Application sont indicatifs et non officiels. Ils ne remplacent ni votre index officiel, ni les cartes de score validées par votre club, et ne sont pas transmis à la Fédération française de golf.</li>
-      <li><strong>Données de parcours.</strong> Les informations sur les parcours (par, distances, tracés, points GPS) proviennent de fournisseurs tiers (golfapi.io) et de la base OpenStreetMap. Elles peuvent être incomplètes, anciennes ou inexactes. Les distances GPS sont indicatives et leur précision dépend de votre appareil et de l’environnement. En cas de différence, fiez-vous aux repères du parcours.</li>
+      <li><strong>Handicap Index estimé.</strong> Il est calculé sur votre appareil selon la méthode WHS, à partir de vos parties de 18&nbsp;trous (trois au minimum&nbsp;; les parties de 9&nbsp;trous ne sont pas prises en compte). Quand le course rating et le slope du départ joué ne sont pas connus, l’Application utilise des valeurs neutres et présente le résultat comme une estimation.</li>
+      <li><strong>Conseil de club.</strong> Il se fonde sur les distances de vol que vous avez saisies dans « Mon sac » et sur la distance GPS jusqu’au centre du green&nbsp;; il est indicatif.</li>
+      <li><strong>Données de parcours.</strong> Les informations sur les parcours (par, distances, tracés, points GPS) proviennent de fournisseurs tiers (golfapi.io) et de la base OpenStreetMap. Lorsque le catalogue ne fournit pas la longueur d’un trou, l’Application en affiche une estimation, signalée « Estimée ». Ces informations peuvent être incomplètes, anciennes ou inexactes. Les distances GPS sont indicatives et leur précision dépend de votre appareil et de l’environnement. En cas de différence, fiez-vous aux repères du parcours.</li>
       <li><strong>Règles locales.</strong> Certains clubs ou compétitions limitent ou interdisent l’usage d’appareils de mesure de distance. Il vous appartient de respecter les règles locales et celles de l’épreuve.</li>
       <li><strong>Sécurité.</strong> Restez attentif à votre environnement, aux autres joueurs et aux consignes de sécurité du golf. N’utilisez pas l’Application au moment de jouer un coup.</li>
       <li><strong>OpenStreetMap.</strong> Une partie des données de parcours est © les contributeurs d’OpenStreetMap, disponibles sous licence ODbL (<a href="https://www.openstreetmap.org/copyright" rel="noopener">openstreetmap.org/copyright</a>).</li>
@@ -219,7 +228,7 @@
     <p>En cas de manquement, l’Éditeur peut suspendre ou supprimer le compte dans les conditions de la <a href="#resiliation">section 13</a>.</p>
 
     <h2 id="contenus">9. Vos contenus</h2>
-    <p>Vous conservez tous vos droits sur les contenus que vous saisissez (scores, notes, messages). Vous accordez à l’Éditeur, pour la durée de votre utilisation de l’Application, une licence non exclusive limitée à ce qui est nécessaire pour héberger, afficher et traiter ces contenus afin de vous fournir le service, y compris leur transmission à des prestataires techniques comme le fournisseur d’IA. Vous garantissez que vos contenus ne portent pas atteinte aux droits de tiers. Vous pouvez les supprimer à tout moment (<a href="#resiliation">section 13</a>).</p>
+    <p>Vous conservez tous vos droits sur les contenus que vous saisissez (scores, notes, messages, résultats d’exercices, distances de votre sac). Vous accordez à l’Éditeur, pour la durée de votre utilisation de l’Application, une licence non exclusive limitée à ce qui est nécessaire pour héberger, afficher et traiter ces contenus afin de vous fournir le service, y compris leur transmission à des prestataires techniques comme le fournisseur d’IA. Vous garantissez que vos contenus ne portent pas atteinte aux droits de tiers. Vous pouvez les supprimer à tout moment (<a href="#resiliation">section 13</a>).</p>
 
     <h2 id="pi">10. Propriété intellectuelle</h2>
     <p>L’Application (code, design, textes, bibliothèque d’exercices, nom, logo et identité visuelle) appartient à l’Éditeur ou à ses concédants. L’Éditeur vous accorde un droit personnel, non exclusif, non cessible et révocable d’utiliser l’Application sur vos appareils, pour un usage personnel et pendant la durée de votre utilisation. Aucun autre droit ne vous est cédé. Les composants open source restent soumis à leurs licences, les données de parcours à celles de leurs fournisseurs, et les vidéos liées dans la bibliothèque d’exercices à leurs auteurs.</p>
@@ -237,7 +246,7 @@
 
     <h2 id="resiliation">13. Résiliation et suppression du compte</h2>
     <h3>Par vous</h3>
-    <p>Vous pouvez cesser d’utiliser l’Application et supprimer votre compte à tout moment&nbsp;: onglet <strong>Profil</strong>, puis <strong>Modifier le profil</strong>, puis <strong>Supprimer mon compte</strong>. La suppression est immédiate et irréversible&nbsp;: elle efface votre profil, vos parties, vos diagnostics et vos débriefs, comme détaillé dans la <a href="privacy.html#suppression">Politique de confidentialité</a>. <strong>Elle ne résilie pas votre abonnement Premium auprès d’Apple</strong> (voir la <a href="#abonnement">section 5.4</a>).</p>
+    <p>Vous pouvez cesser d’utiliser l’Application et supprimer votre compte à tout moment&nbsp;: onglet <strong>Profil</strong>, puis <strong>Modifier le profil</strong>, puis <strong>Supprimer mon compte</strong>. La suppression est immédiate et irréversible&nbsp;: elle efface votre profil, vos parties, vos diagnostics, vos débriefs, vos exercices, vos trophées et les distances de votre sac, comme détaillé dans la <a href="privacy.html#suppression">Politique de confidentialité</a>. Pour en garder une copie, exportez vos données avant (Profil, puis « Exporter mes données »). <strong>Elle ne résilie pas votre abonnement Premium auprès d’Apple</strong> (voir la <a href="#abonnement">section 5.4</a>).</p>
     <h3>Par l’Éditeur</h3>
     <p>En cas de manquement grave ou répété aux Conditions, notamment à la <a href="#usage">section 8</a>, l’Éditeur peut suspendre ou supprimer votre compte après vous en avoir informé par e-mail et vous avoir donné la possibilité de présenter vos observations, sauf urgence, impératif de sécurité ou obligation légale. Les éventuels remboursements d’abonnement suivent les règles d’Apple (<a href="#abonnement">section 5.7</a>).</p>
 
