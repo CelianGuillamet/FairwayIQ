@@ -9,6 +9,7 @@ import {
   type CourseSearchResult,
   type GolfCourse,
 } from '../../lib/golf-courses';
+import { COURSE_SEARCH_ATTRIBUTION, hasOpenStreetMapCourse } from '../../lib/credits';
 import { Radius, Shadows, Spacing, Typography } from '../../constants';
 import type { ThemeColors } from '../../constants';
 import { useTheme, useThemedStyles } from '../../lib/theme';
@@ -93,6 +94,7 @@ export function CourseSearch({ value, onSelect, onChangeText }: Props) {
   };
 
   const showDropdown = focused && value.trim().length >= 2 && (loading || results.length > 0 || searchUnavailable);
+  const showAttribution = hasOpenStreetMapCourse(results);
 
   return (
     <View style={styles.wrapper}>
@@ -139,6 +141,7 @@ export function CourseSearch({ value, onSelect, onChangeText }: Props) {
               </Pressable>
             );
           })}
+          {showAttribution ? <Text style={styles.attribution}>{COURSE_SEARCH_ATTRIBUTION}</Text> : null}
         </View>
       )}
     </View>
@@ -211,6 +214,12 @@ const createStyles = (colors: ThemeColors) =>
     noticeLabel: {
       ...Typography.caption,
       color: colors.ink2,
+    },
+    attribution: {
+      ...Typography.caption,
+      color: colors.ink3,
+      paddingHorizontal: Spacing.md,
+      paddingVertical: Spacing.xs,
     },
     resultName: { ...Typography.bodyStrong, color: colors.ink },
     resultMeta: { ...Typography.caption, color: colors.ink2, marginTop: 2 },

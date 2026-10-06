@@ -149,6 +149,7 @@ function RootNavigator() {
         <Stack.Screen name="bag" />
         <Stack.Screen name="export-data" />
         <Stack.Screen name="help" />
+        <Stack.Screen name="credits" />
         <Stack.Screen name="edit-profile" options={{ presentation: 'modal' }} />
         <Stack.Screen name="paywall" options={{ presentation: 'modal' }} />
       </Stack>
