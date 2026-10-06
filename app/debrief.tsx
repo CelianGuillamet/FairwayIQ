@@ -25,6 +25,7 @@ import type { ThemeColors } from '../constants';
 import { useTheme, useThemedStyles } from '../lib/theme';
 import type { Profile, Round } from '../types';
 import { AppButton } from '../components/ui/AppButton';
+import { AiNotice } from '../components/ui/AiNotice';
 import { Icon } from '../components/ui/Icon';
 import { NoticeRow } from '../components/rounds-detail/NoticeRow';
 import { useKeyboardVisible } from '../components/rounds-detail/useKeyboardVisible';
@@ -318,6 +319,8 @@ export default function DebriefScreen() {
     >
       <DebriefHeader round={round} topInset={insets.top} />
 
+      <AiNotice style={styles.aiNotice} />
+
       <FlatList
         ref={flatListRef}
         data={messages}
@@ -460,6 +463,10 @@ const createStyles = (colors: ThemeColors) =>
       fontSize: 13,
       lineHeight: 18,
       color: colors.ink2,
+    },
+    aiNotice: {
+      paddingHorizontal: Spacing.md,
+      paddingTop: Spacing.xs,
     },
     upsell: {
       padding: Spacing.lg,

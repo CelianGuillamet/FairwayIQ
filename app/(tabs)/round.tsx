@@ -28,6 +28,7 @@ import {
   type DiagnosticResult,
 } from '../../lib/claude';
 import { DIAGNOSTIC_SAVE_FAILED_MESSAGE, persistDiagnostic } from '../../lib/diagnostics';
+import { buildDiagnosticParams } from '../../lib/diagnostic-shape';
 import { CourseSearch } from '../../components/ui/CourseSearch';
 import { HoleNavigation } from '../../components/rounds/HoleNavigation';
 import { HoleOverviewCard } from '../../components/rounds/HoleOverviewCard';
@@ -544,7 +545,7 @@ export default function RoundScreen() {
 
       router.push({
         pathname: '/diagnostic',
-        params: { roundId: round.id, diagnosis: JSON.stringify(diagnosis) },
+        params: buildDiagnosticParams({ roundId: round.id, diagnosis, isFallback }),
       });
     } catch (analysisFlowError) {
       console.warn('[round] post-save analysis failed', getErrorCode(analysisFlowError));

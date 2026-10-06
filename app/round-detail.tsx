@@ -20,6 +20,7 @@ import {
   type DiagnosticResult,
 } from '../lib/claude';
 import { DIAGNOSTIC_SAVE_FAILED_MESSAGE, persistDiagnostic } from '../lib/diagnostics';
+import { buildDiagnosticParams } from '../lib/diagnostic-shape';
 import { buildUpdateRoundArgs, getRoundSaveErrorMessage, updateRound } from '../lib/round-save';
 import { useRoundsStore } from '../stores/rounds';
 import { useAuthStore } from '../stores/auth';
@@ -250,10 +251,7 @@ export default function RoundDetailScreen() {
 
       router.push({
         pathname: '/diagnostic',
-        params: {
-          roundId: round.id,
-          diagnosis: JSON.stringify(diagnosis),
-        },
+        params: buildDiagnosticParams({ roundId: round.id, diagnosis, isFallback }),
       });
     } finally {
       setReanalyzing(false);
