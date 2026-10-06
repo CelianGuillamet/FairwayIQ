@@ -637,6 +637,16 @@ function resolveCourse(courseOrId?: GolfCourse | string | null) {
   return withFallbackCourseData(courseOrId);
 }
 
+export function getKnownCourse(courseId: string | null | undefined) {
+  return courseId ? resolveCourse(courseId) : null;
+}
+
+export function createPlaceholderCourse(name: string, courseId?: string | null): CourseSearchResult {
+  const course = createCustomCourse(name);
+
+  return courseId ? { ...course, id: courseId, isCustom: false } : course;
+}
+
 export function getCourseHoleDetails(courseOrId?: GolfCourse | string | null, holes?: 9 | 18) {
   const course = resolveCourse(courseOrId);
 

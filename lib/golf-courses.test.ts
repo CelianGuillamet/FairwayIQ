@@ -1,7 +1,9 @@
 import {
   COURSE_CATALOG_TIMEOUT_MS,
   COURSE_SEARCH_UNAVAILABLE_MESSAGE,
+  createPlaceholderCourse,
   getCourseById,
+  getKnownCourse,
   searchCourses,
   searchCoursesWithStatus,
 } from './golf-courses';
@@ -122,5 +124,51 @@ describe('getCourseById', () => {
     invoke.mockResolvedValue({ data: null, error: { message: 'invalid id' } });
 
     await expect(getCourseById('golfapi:course:missing')).resolves.toBeNull();
+  });
+});
+
+describe('getKnownCourse', () => {
+  beforeEach(() => {
+    invoke.mockReset();
+  });
+
+  it('returns a bundled course synchronously, with its tees', () => {
+    const course = getKnownCourse('saint-cloud');
+
+    expect(course).toMatchObject({ id: 'saint-cloud', city: 'Saint-Cloud' });
+    expect(course?.teeOptions?.length).toBeGreaterThan(0);
+  });
+
+  it('returns a course already fetched from the catalog', async () => {
+    invoke.mockResolvedValue({ data: { courses: [remoteCourse] }, error: null });
+    await searchCoursesWithStatus('golf de test remote');
+
+    expect(getKnownCourse(remoteCourse.id)).toMatchObject({ id: remoteCourse.id, city: 'Testville' });
+  });
+
+  it('returns null for an unknown or missing id without calling the catalog', () => {
+    expect(getKnownCourse('golfapi:course:never-seen')).toBeNull();
+    expect(getKnownCourse(null)).toBeNull();
+    expect(getKnownCourse(undefined)).toBeNull();
+    expect(getKnownCourse('')).toBeNull();
+    expect(invoke).not.toHaveBeenCalled();
+  });
+});
+
+describe('createPlaceholderCourse', () => {
+  it('builds the same course as choosing "Utiliser" in the search for a custom course', async () => {
+    invoke.mockReset();
+    invoke.mockResolvedValue({ data: null, error: { message: 'down' } });
+    const { courses } = await searchCoursesWithStatus('Golf du Lac Bleu');
+    const fromSearch = courses.find((course) => course.isCustom);
+
+    expect(createPlaceholderCourse('Golf du Lac Bleu')).toEqual(fromSearch);
+  });
+
+  it('keeps the catalog id of a course whose entry could not be loaded', () => {
+    const course = createPlaceholderCourse('Golf de Test Remote', 'golfapi:course:42');
+
+    expect(course).toMatchObject({ id: 'golfapi:course:42', name: 'Golf de Test Remote', par18: 72, par9: 36, isCustom: false });
+    expect(course.teeOptions?.length).toBeGreaterThan(0);
   });
 });
