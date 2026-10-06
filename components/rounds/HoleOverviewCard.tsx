@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Fonts, Numerals, Radius, Spacing, Typography } from '../../constants';
 import type { ThemeColors } from '../../constants';
-import type { HoleViewData } from '../../lib/hole-view';
+import { describeHoleHandicap, type HoleViewData } from '../../lib/hole-view';
 import type { GreenDistances } from '../../lib/gps';
 import { describeClubAdvice, formatClubAdvice, type ClubAdvice } from '../../lib/club-advice';
 import type { TeeKey, TeeOption } from '../../lib/golf-courses';
@@ -13,6 +13,8 @@ import type { RoundDraftHole } from '../../types';
 import { AppBadge } from '../ui/AppBadge';
 import { Icon } from '../ui/Icon';
 import { ScoreMark } from '../ui/ScoreMark';
+
+const ESTIMATE_LABEL = 'Estimée';
 
 type Props = {
   hole: RoundDraftHole;
@@ -44,6 +46,7 @@ export function HoleOverviewCard({
     Object.values(holeView.distanceByTee).find((d) => typeof d === 'number') ??
     0;
   const estimated = holeView.distanceSource !== 'catalog';
+  const handicap = describeHoleHandicap(holeView.handicapIndex);
 
   const greenDistances = [
     { label: 'Avant', value: liveGreenDistances?.front ?? null },
@@ -55,7 +58,7 @@ export function HoleOverviewCard({
     `Trou ${hole.hole_number}`,
     `par ${holeView.par}`,
     `${distance} mètres${estimated ? ', distance estimée' : ''}`,
-    `handicap ${holeView.handicapIndex}`,
+    handicap.spoken,
   ].join(', ');
 
   return (
@@ -65,9 +68,9 @@ export function HoleOverviewCard({
           <Fact label="Trou" value={hole.hole_number} />
           <Fact label="Par" value={holeView.par} />
           <Fact label="Distance" value={distance} unit="m">
-            {estimated ? <AppBadge label="Estimée" tone="neutral" style={styles.estimateBadge} /> : null}
+            {estimated ? <AppBadge label={ESTIMATE_LABEL} tone="neutral" style={styles.estimateBadge} /> : null}
           </Fact>
-          <Fact label="Hcp" value={holeView.handicapIndex} />
+          <Fact label="Hcp" value={handicap.text} />
         </View>
 
         <View style={styles.big}>
@@ -101,13 +104,14 @@ export function HoleOverviewCard({
         <View
           style={styles.gps}
           accessible
-          accessibilityLabel={`Distance au green, ${greenDistances
+          accessibilityLabel={`Distance au green${estimated ? ' estimée' : ''}, ${greenDistances
             .map((item) => `${item.label.toLowerCase()} ${item.value} mètres`)
             .join(', ')}${clubAdvice ? `. ${describeClubAdvice(clubAdvice, estimated)}` : ''}`}
         >
           <View style={styles.gpsHeader}>
             <Icon name="map-pin" size={16} color={colors.green} />
             <Text style={styles.gpsTitle}>Distance au green</Text>
+            {estimated ? <AppBadge label={ESTIMATE_LABEL} tone="neutral" /> : null}
           </View>
           <View style={styles.gpsValues}>
             {greenDistances.map((item) => (
@@ -168,7 +172,7 @@ function Fact({
   children,
 }: {
   label: string;
-  value: number;
+  value: number | string;
   unit?: string;
   children?: ReactNode;
 }) {

@@ -8,7 +8,7 @@ type HoleHazard = 'bunker' | 'water' | 'trees';
 export type HoleViewData = {
   holeNumber: number;
   par: number;
-  handicapIndex: number;
+  handicapIndex: number | null;
   distanceByTee: Partial<Record<TeeKey, number>>;
   distanceSource: 'catalog' | 'generated';
   shape: HoleShape;
@@ -25,6 +25,10 @@ export type ScoreDescriptor = {
   diffLabel: string;
   tone: 'elite' | 'positive' | 'neutral' | 'warning' | 'danger';
 };
+
+const MAX_STROKE_INDEX = 18;
+
+export const HANDICAP_PLACEHOLDER = '—';
 
 const MIN_DISTANCE_BY_PAR = {
   3: 80,
@@ -138,6 +142,49 @@ function buildDifficultyScore(
   return selectedDistance + shapeWeight + hazardWeight + par * 18;
 }
 
+function isStrokeIndex(value: unknown): value is number {
+  return typeof value === 'number' && Number.isInteger(value) && value >= 1 && value <= MAX_STROKE_INDEX;
+}
+
+// The course-catalog function answers with the hole number when a hole has no stroke index, so a course whose
+// indexes all equal their hole numbers has none, and a hole sharing its own number with another hole is a filler.
+export function resolveStrokeIndexes(
+  details: ReadonlyArray<{ holeNumber: number; handicapIndex?: number | null }>
+) {
+  const strokeIndexes = new Map<number, number>();
+  const hasRealIndexes = details.some(
+    (detail) => isStrokeIndex(detail.handicapIndex) && detail.handicapIndex !== detail.holeNumber
+  );
+
+  if (!hasRealIndexes) {
+    return strokeIndexes;
+  }
+
+  for (const detail of details) {
+    const value = detail.handicapIndex;
+
+    if (!isStrokeIndex(value)) {
+      continue;
+    }
+
+    const sharedWithAnotherHole = details.some((other) => other !== detail && other.handicapIndex === value);
+
+    if (value === detail.holeNumber && sharedWithAnotherHole) {
+      continue;
+    }
+
+    strokeIndexes.set(detail.holeNumber, value);
+  }
+
+  return strokeIndexes;
+}
+
+export function describeHoleHandicap(handicapIndex: number | null) {
+  return handicapIndex == null
+    ? { text: HANDICAP_PLACEHOLDER, spoken: 'handicap non renseigné' }
+    : { text: `${handicapIndex}`, spoken: `handicap ${handicapIndex}` };
+}
+
 function getDifficultyLabel(rank: number, holeCount: number) {
   if (rank <= Math.ceil(holeCount / 3)) {
     return 'Exigeant';
@@ -168,9 +215,10 @@ function buildSummary(par: number, shape: HoleShape, hazards: HoleHazard[]) {
   return `${shapeLabel} · ${strategyLabel}${hazards.includes('water') ? ' · eau en jeu' : ''}`;
 }
 
-// Temporary stopgap until provider/GPS data covers the courses: shape, hazards and any missing distance/HCP are
+// Temporary stopgap until provider/GPS data covers the courses: shape, hazards and any missing distance are
 // hash-generated, never real data - don't present them as such. Only distances are flagged (distanceSource ->
-// "Estimée" badge in HoleOverviewCard).
+// "Estimée" badge in HoleOverviewCard). A missing stroke index is null, not a generated rank; the rank only feeds
+// difficultyLabel.
 export function buildHoleViewData(input: {
   course: GolfCourse | null;
   scorecard: RoundDraftHole[];
@@ -181,6 +229,7 @@ export function buildHoleViewData(input: {
   const courseHoleDetails = input.course
     ? getCourseHoleDetails(input.course, input.scorecard.length === 9 ? 9 : 18)
     : null;
+  const strokeIndexes = resolveStrokeIndexes((input.course ? getCourseHoleDetails(input.course) : null) ?? []);
 
   const baseViews = input.scorecard.map((hole) => {
     const courseHoleDetail = courseHoleDetails?.find((detail) => detail.holeNumber === hole.hole_number) ?? null;
@@ -202,8 +251,7 @@ export function buildHoleViewData(input: {
     return {
       holeNumber: hole.hole_number,
       par: courseHoleDetail?.par ?? hole.par,
-      handicapIndex: courseHoleDetail?.handicapIndex ?? hole.hole_number,
-      hasCatalogHandicap: !!courseHoleDetail,
+      strokeIndex: strokeIndexes.get(hole.hole_number) ?? null,
       distanceByTee,
       distanceSource: hasCompleteCatalogDistances ? 'catalog' as const : 'generated' as const,
       shape,
@@ -222,19 +270,17 @@ export function buildHoleViewData(input: {
     .map((hole) => hole.holeNumber);
 
   return baseViews.map((hole) => {
-    const handicapIndex = hole.hasCatalogHandicap
-      ? hole.handicapIndex
-      : rankedByDifficulty.indexOf(hole.holeNumber) + 1;
+    const difficultyRank = hole.strokeIndex ?? rankedByDifficulty.indexOf(hole.holeNumber) + 1;
 
     return {
       holeNumber: hole.holeNumber,
       par: hole.par,
-      handicapIndex,
+      handicapIndex: hole.strokeIndex,
       distanceByTee: hole.distanceByTee,
       distanceSource: hole.distanceSource,
       shape: hole.shape,
       hazards: hole.hazards,
-      difficultyLabel: getDifficultyLabel(handicapIndex, baseViews.length),
+      difficultyLabel: getDifficultyLabel(difficultyRank, baseViews.length),
       summary: hole.summary,
       gpsPointCount: hole.gpsPointCount,
       gpsAvailable: hole.gpsAvailable,
