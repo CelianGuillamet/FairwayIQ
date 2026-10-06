@@ -114,6 +114,7 @@ Limite : l’adresse IP de l’appareil est visible de Supabase, RevenueCat et S
 | File d’attente des parties non envoyées (20 au plus) | AsyncStorage, par utilisateur ; chaque partie est envoyée comme une partie normale dès que le réseau revient | `lib/round-save-queue.ts`, `stores/round-queue.ts` |
 | Objectif de la semaine, défi du mois, réglages de rappels, indice « rappels » | AsyncStorage, par utilisateur | `lib/weekly-goal-storage.ts`, `lib/monthly-challenge-storage.ts`, `lib/notification-settings-storage.ts`, `lib/reminders-hint.ts` |
 | Préférence d’apparence | AsyncStorage | `lib/theme-preference.ts` |
+| Dernier départ et dernier format (9 ou 18 trous) utilisés sur chacun des 50 derniers parcours (clé = identifiant du parcours ou nom normalisé d’un parcours libre) | AsyncStorage, par utilisateur. La liste « Mes parcours » (5 derniers parcours) est déduite des parties déjà enregistrées, rien de plus n’est stocké ni envoyé | `lib/course-memory.ts`, `stores/course-memory.ts`, `lib/recent-courses.ts` |
 | Rappels | Notifications locales programmées par le téléphone, aucun jeton de notification push, aucun serveur | `lib/notifications.ts`, `lib/notification-plan.ts` (recherche `PushToken` sans résultat) |
 | Fichier d’export (JSON ou CSV) | Cache de l’app, un seul fichier conservé, envoyé ailleurs par l’utilisateur via la feuille de partage | `lib/export-files.ts`, `lib/export-flow.ts` |
 | Image de la carte de partage | Fichier temporaire, partagé par l’utilisateur | `components/share/useShareRound.tsx` |

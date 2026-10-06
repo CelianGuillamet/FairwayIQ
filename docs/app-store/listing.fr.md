@@ -30,14 +30,14 @@ Saisis tes parties trou par trou, suis ton Handicap Index estimé (non officiel)
 
 ## 4. Description (4000 max)
 
-Les adresses réelles des deux liens du bloc « Abonnement » ajouteront quelques dizaines de caractères aux marques `[À RENSEIGNER]` : la marge du tableau de la section 10 la couvre largement.
+Les deux marques `[À RENSEIGNER : ...]` du bloc « Abonnement » seront remplacées par des adresses de longueur comparable : la marge du tableau de la section 10 couvre l’écart.
 
 ```text
 FairwayIQ t’aide à suivre tes parties de golf, à repérer où tu perds des coups et à t’entraîner en conséquence. L’application est en français.
 
 SAISIR TA PARTIE
 • Scorecard trou par trou, sur 9 ou 18 trous : coups, putts, green en régulation, fairway, pénalités.
-• Parcours et départ choisis dans un catalogue, ou saisie libre : le parcours est optionnel.
+• Parcours et départ choisis dans un catalogue, ou saisie libre : le parcours est optionnel. Tes derniers parcours sont proposés, avec le départ et le format utilisés la dernière fois.
 • Brouillon enregistré automatiquement, partie modifiable après coup.
 • Saisie hors connexion : sans réseau, la partie est gardée sur ton téléphone et envoyée dès que la connexion revient.
 • Carte de la partie partageable en image.
@@ -162,7 +162,7 @@ Généré par `node docs/app-store/check-limits.mjs --write`. Les caractères so
 | 1. Nom de l’app | 30 | 9 | 21 | OK |
 | 2. Sous-titre | 30 | 30 | 0 | OK |
 | 3. Texte promotionnel | 170 | 167 | 3 | OK |
-| 4. Description | 4000 | 3731 | 269 | OK |
+| 4. Description | 4000 | 3823 | 177 | OK |
 | 5. Mots-clés | 100 | 98 | 2 | OK |
 | 6. Nouveautés de la version 1.0 | 4000 | 565 | 3435 | OK |
 | Abonnement mensuel : nom d’affichage | 30 | 15 | 15 | OK |

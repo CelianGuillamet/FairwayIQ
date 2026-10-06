@@ -22,7 +22,7 @@ Apple a refondu le questionnaire et l’échelle d’âges (4+, 9+, 13+, 16+, 18
 
 Résultat attendu : la classe la plus basse (4+) si toutes les réponses sont négatives. `[À VÉRIFIER]` : la classe calculée par Apple.
 
-Âge minimum des conditions : le brouillon de `legal-site/terms.html` (section 2) et de `legal-site/privacy.html` (section 14) exige 16 ans, alors que l’app ne contrôle pas l’âge. Ces deux chiffres sont indépendants (la classe d’âge de l’App Store décrit le contenu, pas l’âge légal de consentement). Décision du propriétaire et du juriste : `[À CONFIRMER]` (âge retenu et, si besoin, relèvement de la classe d’âge dans App Store Connect ou contrôle à l’inscription).
+Âge minimum des conditions : le brouillon de `legal-site/terms.html` (section 2) et de `legal-site/privacy.html` (section 14) exige 16 ans, alors que l’app ne contrôle pas l’âge. L’âge minimum des conditions et la classe d’âge de l’App Store sont indépendants (la classe décrit le contenu, pas l’âge légal de consentement). Décision du propriétaire et du juriste : `[À CONFIRMER]` (âge retenu et, si besoin, relèvement de la classe d’âge dans App Store Connect ou contrôle à l’inscription).
 
 ## 2. Droits sur le contenu
 

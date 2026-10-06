@@ -41,6 +41,7 @@ OTHER
 |---|---|---|
 | Saisie sans parcours | Onglet Score > « Commencer le round » (le champ parcours indique « Optionnel — la saisie reste disponible sans parcours. ») | L’en-tête affiche « Score rapide ». Aucune demande de localisation : un parcours libre n’a pas de points GPS. |
 | Saisie hors ligne | Mode avion > fin de partie | Bandeau « Round enregistré sur ton téléphone — Il sera envoyé dès que la connexion revient. » (`lib/round-save-flow.ts`). Envoi automatique au retour du réseau, à l’ouverture de l’app et toutes les 30 s (`lib/use-round-queue-sync.ts`). 20 parties en attente au plus. |
+| Parcours récents | Onglet Score, champ parcours vide, après une première partie enregistrée | Liste « Mes parcours » (5 au plus, déduite des parties enregistrées). Le départ et le format 9 ou 18 trous du dernier usage sont repris (`lib/course-memory.ts`, gardés sur l’appareil). |
 | Brouillon | Quitter l’app en pleine saisie, rouvrir | « Brouillon restauré » (`app/(tabs)/round.tsx`). |
 | Diagnostic IA | Automatique après l’enregistrement ; relançable dans le détail d’une partie | Gratuit : 3 utilisations par jour, partagées entre diagnostic et débrief. Au-delà : message de limite et diagnostic simplifié. |
 | Index estimé | Onglet Accueil, après 3 parties de 18 trous | Libellé « méthode WHS, non officiel » (`lib/rounds.ts`). |
