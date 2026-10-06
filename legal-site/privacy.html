@@ -38,11 +38,12 @@
     <div class="note">
       <p><strong>En bref</strong></p>
       <ul>
-        <li>Votre compte, votre profil, vos parties, vos diagnostics et vos débriefs sont stockés chez notre hébergeur de base de données (Supabase).</li>
-        <li>Pour le coach IA, un extrait de ces données est envoyé à Anthropic (États-Unis) — voir la <a href="#ia">section 4</a>. Votre e-mail, votre mot de passe et l’identifiant de votre compte ne lui sont pas transmis.</li>
+        <li>Votre compte, votre profil, vos parties, vos diagnostics, vos débriefs, vos exercices, vos trophées et les distances de votre sac sont stockés chez notre hébergeur de base de données (Supabase).</li>
+        <li>Pour le coach IA, un extrait de ces données est envoyé à Anthropic (États-Unis) quand une partie est enregistrée et quand vous envoyez un message de débrief — voir la <a href="#ia">section 4</a>. Votre e-mail, votre mot de passe et l’identifiant de votre compte ne lui sont pas transmis.</li>
         <li>Votre position GPS reste sur votre téléphone : elle n’est ni envoyée à nos serveurs, ni enregistrée.</li>
+        <li>Vos rappels sont des notifications locales : ni serveur de notifications, ni jeton d’envoi.</li>
         <li>Pas de publicité, pas de revente de données, pas de traceur publicitaire.</li>
-        <li>Vous pouvez supprimer votre compte et vos données directement depuis l’Application.</li>
+        <li>Vous pouvez exporter vos données et supprimer votre compte directement depuis l’Application.</li>
       </ul>
     </div>
 
@@ -95,7 +96,7 @@
         <tbody>
           <tr>
             <td data-label="Catégorie">Compte</td>
-            <td data-label="Données">Adresse e-mail&nbsp;; mot de passe (conservé sous forme hachée par le service d’authentification, nous ne pouvons pas le lire)&nbsp;; identifiant technique unique du compte&nbsp;; dates de création et de connexion&nbsp;; statut de confirmation de l’e-mail.</td>
+            <td data-label="Données">Adresse e-mail (utilisée aussi pour vous envoyer, à votre demande, le lien de réinitialisation du mot de passe)&nbsp;; mot de passe (conservé sous forme hachée par le service d’authentification, nous ne pouvons pas le lire)&nbsp;; identifiant technique unique du compte&nbsp;; dates de création et de connexion&nbsp;; statut de confirmation de l’e-mail.</td>
             <td data-label="Origine">Vous, à l’inscription</td>
           </tr>
           <tr>
@@ -105,7 +106,7 @@
           </tr>
           <tr>
             <td data-label="Catégorie">Parties</td>
-            <td data-label="Données">Date&nbsp;; nom du parcours et références du parcours et du départ (tee) choisis&nbsp;; nombre de trous&nbsp;; score total et par&nbsp;; putts, greens en régulation, fairways, pénalités&nbsp;; détail trou par trou&nbsp;; notes libres facultatives.</td>
+            <td data-label="Données">Date&nbsp;; nom du parcours et références du parcours et du départ (tee) choisis&nbsp;; nombre de trous&nbsp;; score total et par&nbsp;; putts, greens en régulation, fairways, pénalités&nbsp;; détail trou par trou&nbsp;; notes libres facultatives&nbsp;; identifiant technique aléatoire de l’envoi (il évite d’enregistrer deux fois la même partie si l’envoi est répété).</td>
             <td data-label="Origine">Vous</td>
           </tr>
           <tr>
@@ -120,12 +121,22 @@
           </tr>
           <tr>
             <td data-label="Catégorie">Exercices</td>
-            <td data-label="Données">Identifiant de l’exercice marqué comme réalisé, avec la date et l’heure (utilisés pour votre progression et votre série de jours).</td>
+            <td data-label="Données">Identifiant de l’exercice marqué comme réalisé, avec la date et l’heure&nbsp;; résultat facultatif (nombre de réussites sur nombre de tentatives). Ils servent à votre progression, à votre série de jours et à vos trophées.</td>
             <td data-label="Origine">Vous</td>
           </tr>
           <tr>
+            <td data-label="Catégorie">Distances de votre sac</td>
+            <td data-label="Données">Pour chaque club, la distance de vol (carry, en mètres) que vous saisissez, et la date de dernière modification.</td>
+            <td data-label="Origine">Vous</td>
+          </tr>
+          <tr>
+            <td data-label="Catégorie">Trophées</td>
+            <td data-label="Données">Identifiant de chaque trophée obtenu et date d’obtention. L’Application détermine les trophées à partir de vos propres données (parties, exercices, objectifs) et n’enregistre que ceux que vous avez obtenus&nbsp;; un trophée obtenu reste acquis même si la donnée à son origine est ensuite modifiée ou supprimée.</td>
+            <td data-label="Origine">Générés par l’Application d’après vos données</td>
+          </tr>
+          <tr>
             <td data-label="Catégorie">Abonnement</td>
-            <td data-label="Données">Statut Premium (actif ou non), formule souscrite (identifiant du produit), date d’expiration, date de dernière mise à jour. Nous ne recevons ni votre numéro de carte ni vos coordonnées de paiement.</td>
+            <td data-label="Données">Statut Premium (actif ou non), formule souscrite (identifiant du produit), date d’expiration, dates de dernière mise à jour et du dernier événement d’abonnement reçu. Nous ne recevons ni votre numéro de carte ni vos coordonnées de paiement.</td>
             <td data-label="Origine">Apple, via RevenueCat</td>
           </tr>
           <tr>
@@ -134,20 +145,25 @@
             <td data-label="Origine">Générés par l’Application</td>
           </tr>
           <tr>
+            <td data-label="Catégorie">Cache de recherche de parcours</td>
+            <td data-label="Données">Texte d’une recherche de parcours qui n’a donné aucun résultat, conservé sans identifiant d’utilisateur pour ne pas relancer la même requête chez le fournisseur de données de parcours (24&nbsp;heures par défaut <span class="ph">[À CONFIRMER : durée configurée en production]</span>).</td>
+            <td data-label="Origine">Vous (texte saisi), sans lien avec votre compte</td>
+          </tr>
+          <tr>
             <td data-label="Catégorie">Données techniques et de diagnostic</td>
             <td data-label="Données">Rapports d’erreur et de performance (type d’erreur, trace technique, version de l’Application, modèle d’appareil et version du système, événements précédant l’erreur). Voir la <a href="#traceurs">section 9</a>.</td>
             <td data-label="Origine">Votre appareil</td>
           </tr>
           <tr>
             <td data-label="Catégorie">Stockées uniquement sur votre appareil</td>
-            <td data-label="Données">Session de connexion&nbsp;; brouillon de partie en cours (parcours, scores, notes).</td>
+            <td data-label="Données">Session de connexion (dans l’espace sécurisé du système, le Trousseau sur iPhone)&nbsp;; brouillon de partie en cours (parcours, scores, notes)&nbsp;; parties terminées qui n’ont pas pu être envoyées faute de connexion (vingt au plus, avec leur détail trou par trou et leurs notes)&nbsp;; réglages de rappels&nbsp;; objectif de la semaine&nbsp;; défi du mois en cours&nbsp;; préférence d’apparence&nbsp;; indicateur qui masque l’invitation à activer les rappels&nbsp;; fichier temporaire du dernier export&nbsp;; image temporaire de la carte de partage.</td>
             <td data-label="Origine">Vous</td>
           </tr>
         </tbody>
       </table>
     </div>
     <p>Les données de parcours (noms de clubs, tracés, distances, points GPS des greens) proviennent de bases de données publiques ou de fournisseurs : ce ne sont pas des données personnelles.</p>
-    <p>L’Application ne demande l’accès ni à vos contacts, ni à vos photos, ni à votre micro ou à votre caméra. Nous ne vous demandons aucune donnée sensible (santé, opinions, etc.). <strong>Merci de ne pas en saisir dans les notes libres ni dans le chat avec le coach IA</strong>, ni d’y mentionner d’autres personnes.</p>
+    <p>L’Application ne demande l’accès ni à vos contacts, ni à vos photos, ni à votre micro ou à votre caméra. Nous ne vous demandons aucune donnée sensible (santé, opinions, etc.). <strong>Merci de ne pas en saisir dans les notes libres ni dans le chat avec le coach IA</strong>, ni d’y mentionner d’autres personnes. Le partage d’une carte de partie et l’export de vos données créent un fichier sur votre appareil&nbsp;: c’est vous qui choisissez ensuite où l’envoyer, nous ne le recevons pas.</p>
 
     <h2 id="finalites">3. Finalités et bases légales</h2>
     <div class="table-wrap">
@@ -157,14 +173,19 @@
         </thead>
         <tbody>
           <tr>
-            <td data-label="Finalité">Créer et gérer votre compte, vous connecter, faire fonctionner l’Application (profil, parties, statistiques, exercices)</td>
-            <td data-label="Données concernées">Compte, profil, parties, exercices, diagnostics</td>
+            <td data-label="Finalité">Créer et gérer votre compte, vous connecter, faire fonctionner l’Application (profil, parties, statistiques, exercices, trophées, distances de votre sac)</td>
+            <td data-label="Données concernées">Compte, profil, parties, exercices, trophées, distances du sac, diagnostics</td>
             <td data-label="Base légale">Exécution du contrat (6.1.b)</td>
           </tr>
           <tr>
-            <td data-label="Finalité">Produire vos diagnostics de partie et vos débriefs avec le coach IA, à votre demande</td>
-            <td data-label="Données concernées">Profil, parties, notes, messages</td>
+            <td data-label="Finalité">Vous envoyer les e-mails du compte (confirmation de l’adresse, réinitialisation du mot de passe)</td>
+            <td data-label="Données concernées">Adresse e-mail</td>
             <td data-label="Base légale">Exécution du contrat (6.1.b)</td>
+          </tr>
+          <tr>
+            <td data-label="Finalité">Produire vos diagnostics de partie (lancés automatiquement à l’enregistrement d’une partie, ou à votre demande depuis le détail de la partie) et vos débriefs avec le coach IA</td>
+            <td data-label="Données concernées">Profil, parties, notes, messages</td>
+            <td data-label="Base légale">Exécution du contrat (6.1.b) <span class="ph">[À CONFIRMER : base légale du traitement par Anthropic, exécution du contrat (6.1.b) ou consentement (6.1.a), compte tenu de la case à cocher présentée à l’inscription]</span></td>
           </tr>
           <tr>
             <td data-label="Finalité">Gérer l’abonnement Premium et déterminer vos droits d’accès</td>
@@ -182,14 +203,19 @@
             <td data-label="Base légale">Intérêt légitime (6.1.f) : stabilité et sécurité de l’Application</td>
           </tr>
           <tr>
-            <td data-label="Finalité">Afficher les distances GPS jusqu’au green pendant une partie</td>
-            <td data-label="Données concernées">Position (traitée uniquement sur votre appareil)</td>
+            <td data-label="Finalité">Afficher les distances GPS jusqu’au green et un conseil de club pendant une partie</td>
+            <td data-label="Données concernées">Position (traitée uniquement sur votre appareil), distances de votre sac</td>
             <td data-label="Base légale">Consentement (6.1.a), donné via l’autorisation de localisation du système</td>
           </tr>
           <tr>
-            <td data-label="Finalité">Vous envoyer des rappels hebdomadaires</td>
+            <td data-label="Finalité">Vous envoyer les rappels que vous avez activés</td>
             <td data-label="Données concernées">Aucune donnée transmise (rappels programmés sur votre appareil)</td>
             <td data-label="Base légale">Consentement (6.1.a), donné via l’autorisation de notifications du système</td>
+          </tr>
+          <tr>
+            <td data-label="Finalité">Vous permettre d’exporter vos données (fichier JSON ou CSV créé sur votre appareil)</td>
+            <td data-label="Données concernées">Les données de votre compte, hors mot de passe</td>
+            <td data-label="Base légale">Obligation légale (6.1.c) : droits d’accès et de portabilité</td>
           </tr>
           <tr>
             <td data-label="Finalité">Répondre à vos demandes et à l’exercice de vos droits</td>
@@ -207,12 +233,12 @@
     <p>Nous n’utilisons pas vos données à des fins de publicité ou de prospection commerciale et nous ne les vendons pas. Aucune décision produisant des effets juridiques à votre égard, ou vous affectant de manière significative, n’est prise de manière entièrement automatisée.</p>
 
     <h2 id="ia">4. Coach IA et Anthropic</h2>
-    <p>Quand vous lancez un diagnostic de partie ou envoyez un message de débrief, l’Application appelle une fonction serveur de l’Éditeur, qui vérifie votre identité et votre quota quotidien, puis interroge l’API d’Anthropic (modèles Claude). Aucune clé d’API d’Anthropic n’est présente dans l’Application&nbsp;: les requêtes ne partent jamais directement de votre téléphone vers Anthropic.</p>
+    <p>Quand une partie est enregistrée (le diagnostic est alors lancé automatiquement, si la connexion et votre quota quotidien le permettent), quand vous relancez l’analyse d’une partie ou quand vous envoyez un message de débrief, l’Application appelle une fonction serveur de l’Éditeur, qui vérifie votre identité et votre quota quotidien, puis interroge l’API d’Anthropic (modèles Claude). Aucune clé d’API d’Anthropic n’est présente dans l’Application&nbsp;: les requêtes ne partent jamais directement de votre téléphone vers Anthropic.</p>
     <p>Votre appareil envoie à notre fonction serveur la partie et le profil concernés&nbsp;; la fonction n’en transmet à Anthropic que les éléments suivants.</p>
     <h3>Diagnostic de partie</h3>
     <ul>
       <li>votre niveau de handicap, votre objectif principal et votre fréquence de jeu&nbsp;;</li>
-      <li>le score moyen de vos parties récentes (calculé par l’Application)&nbsp;;</li>
+      <li>les scores de vos dernières parties (dix au plus), dont la fonction serveur calcule la moyenne&nbsp;;</li>
       <li>le score, le par, les putts, les greens en régulation, les fairways et les pénalités de la partie analysée&nbsp;;</li>
       <li>vos notes libres sur la partie, si vous en avez saisi&nbsp;;</li>
       <li>des indicateurs tirés de la carte de score trou par trou (score à l’aller et au retour, nombre de birdies ou mieux, de doubles bogeys ou pire, de trois-putts probables, trous les plus coûteux).</li>
@@ -224,7 +250,7 @@
       <li>l’historique de la conversation et votre nouveau message (l’historique est renvoyé à chaque message pour que le coach garde le fil).</li>
     </ul>
     <h3>Ce qui n’est pas transmis à Anthropic</h3>
-    <p>Votre adresse e-mail, votre mot de passe, l’identifiant de votre compte, le nom du parcours, la date de la partie, votre position GPS et vos informations d’abonnement.</p>
+    <p>Votre adresse e-mail, votre mot de passe, l’identifiant de votre compte, le nom du parcours, la date de la partie, votre position GPS, vos informations d’abonnement, vos exercices, vos trophées et les distances de votre sac. Dans le débrief, les notes de la partie ne sont pas transmises.</p>
     <h3>Rôle d’Anthropic, conservation et transfert</h3>
     <p>Anthropic, PBC, société établie aux États-Unis, traite ces données pour notre compte afin de générer les réponses du coach IA (sous-traitant au sens du RGPD). Ce transfert hors de l’Union européenne est encadré comme indiqué à la <a href="#transferts">section 8</a>. Anthropic applique ses propres règles de conservation&nbsp;: <span class="ph">[À VÉRIFIER AVANT PUBLICATION : durée de conservation et conditions d'utilisation des données de l'API d'Anthropic en vigueur, d'après le contrat et la documentation d'Anthropic]</span>.</p>
     <p>Les résultats (diagnostics et messages du débrief) sont enregistrés dans votre compte et supprimés avec lui. Si le coach IA est indisponible, l’Application peut afficher un diagnostic ou une réponse simplifiés, calculés sur votre appareil.</p>
@@ -236,11 +262,12 @@
     <p>Lorsque le parcours choisi dispose de points GPS, l’Application peut demander l’autorisation d’accéder à votre position <strong>uniquement lorsque vous utilisez l’Application</strong> (pas de localisation en arrière-plan). Elle calcule alors, sur votre appareil, la distance jusqu’au devant, au centre et au fond du green.</p>
     <ul>
       <li>Votre position n’est <strong>pas envoyée</strong> à nos serveurs ni à nos prestataires, et n’est <strong>pas enregistrée</strong> dans la base de données&nbsp;: elle n’est utilisée que le temps de l’affichage.</li>
+      <li>Le conseil de club, calculé à partir des distances que vous avez saisies dans « Mon sac », est lui aussi calculé sur votre appareil.</li>
       <li>Vous pouvez refuser ou retirer l’autorisation à tout moment dans les réglages de votre appareil&nbsp;; l’Application reste utilisable sans les distances GPS.</li>
     </ul>
 
     <h2 id="notifications">6. Notifications</h2>
-    <p>À la fin de la création de votre profil, l’Application vous demande l’autorisation d’envoyer des notifications. Si vous acceptez, elle programme sur votre appareil des rappels hebdomadaires (plan de la semaine, rappel de mi-semaine, point du vendredi). Ce sont des notifications locales&nbsp;: elles sont déclenchées par votre téléphone, sans serveur de notifications, et leur contenu est identique pour tous les utilisateurs. Elles restent actives tant que vous ne les désactivez pas dans les réglages de votre appareil ou que vous ne désinstallez pas l’Application.</p>
+    <p>Les rappels sont désactivés par défaut. Si vous les activez (Profil, puis Notifications), l’Application vous demande l’autorisation d’envoyer des notifications et programme sur votre appareil les rappels que vous choisissez&nbsp;: plan de la semaine (le lundi à 8&nbsp;h), partie à enregistrer (jour et heure de votre choix), série d’exercices à garder (à 18&nbsp;h&nbsp;30, si vous avez une série en cours) et exercice de la semaine (jour et heure de votre choix). Ce sont des notifications locales&nbsp;: elles sont déclenchées par votre téléphone, sans serveur de notifications ni jeton d’envoi. Leur texte est composé sur votre appareil&nbsp;; le rappel de série peut y afficher le nombre de jours de votre série. Vous pouvez les désactiver dans l’Application ou dans les réglages de votre appareil&nbsp;; elles sont annulées à la déconnexion.</p>
 
     <h2 id="destinataires">7. Destinataires et prestataires</h2>
     <p>Vos données ne sont accessibles qu’à l’Éditeur et aux prestataires ci-dessous, dans la mesure nécessaire à leur mission. Ceux qui agissent pour notre compte (Supabase, Anthropic, RevenueCat, Sentry) sont des sous-traitants au sens du RGPD <span class="ph">[À CONFIRMER : accord de traitement des données (DPA) conclu ou accepté avec chacun]</span>. Comme pour toute connexion à Internet, Supabase, RevenueCat et Sentry voient l’adresse IP de votre appareil lorsque l’Application les contacte&nbsp;; Anthropic, golfapi.io et OpenStreetMap sont appelés depuis nos serveurs et ne la voient pas.</p>
@@ -253,7 +280,7 @@
           <tr>
             <td data-label="Prestataire">Supabase (Supabase, Inc.)</td>
             <td data-label="Rôle">Base de données, authentification, fonctions serveur</td>
-            <td data-label="Données concernées">Compte, profil, parties, diagnostics, débriefs, exercices, abonnement, compteurs techniques</td>
+            <td data-label="Données concernées">Compte, profil, parties, diagnostics, débriefs, exercices, trophées, distances du sac, abonnement, compteurs techniques</td>
             <td data-label="Localisation">Base hébergée dans la région <span class="ph">[RÉGION DU PROJET SUPABASE]</span>. Les fonctions serveur s’exécutent sur l’infrastructure de Supabase, dont l’emplacement d’exécution peut différer. Société établie aux États-Unis.</td>
           </tr>
           <tr>
@@ -288,7 +315,7 @@
           </tr>
           <tr>
             <td data-label="Prestataire"><span class="ph">[FOURNISSEUR D'E-MAIL TRANSACTIONNEL — service d'e-mail de Supabase par défaut, ou SMTP personnalisé]</span></td>
-            <td data-label="Rôle">Envoi des e-mails de confirmation de compte</td>
+            <td data-label="Rôle">Envoi des e-mails de confirmation de compte et de réinitialisation du mot de passe</td>
             <td data-label="Données concernées">Adresse e-mail</td>
             <td data-label="Localisation"><span class="ph">[LOCALISATION DU FOURNISSEUR]</span></td>
           </tr>
@@ -307,7 +334,7 @@
       <li><strong>Pas de cookies</strong> dans l’Application mobile.</li>
       <li><strong>Rapports d’erreur (Sentry).</strong> Lorsque l’Application plante ou rencontre une erreur, un rapport technique est envoyé à Sentry (type d’erreur, trace technique, version de l’Application, modèle d’appareil, version du système, informations de session pour mesurer la stabilité des versions, événements précédant l’erreur). Ces événements peuvent mentionner l’identifiant technique de votre compte ou des adresses de services utilisés par l’Application. Nous ne demandons pas à Sentry d’enregistrer votre e-mail ni votre nom. Base légale&nbsp;: intérêt légitime (stabilité et sécurité) — vous pouvez vous y opposer (<a href="#droits">section 12</a>).</li>
       <li><strong>Achats (RevenueCat).</strong> Tant que vous n’êtes pas connecté, RevenueCat attribue à l’installation un identifiant anonyme&nbsp;; une fois connecté, il utilise l’identifiant de votre compte. Cet identifiant sert uniquement à gérer vos achats et votre abonnement.</li>
-      <li><strong>Stockage local.</strong> L’Application conserve sur votre appareil votre session de connexion et, pendant une partie, un brouillon (parcours, scores, notes). La session est effacée à la déconnexion&nbsp;; le brouillon l’est à l’enregistrement ou à l’abandon de la partie, ou à la désinstallation de l’Application.</li>
+      <li><strong>Stockage local.</strong> L’Application conserve sur votre appareil les données listées à la <a href="#donnees">section 2</a> (session de connexion, brouillon de partie, parties en attente d’envoi, réglages). La session et le brouillon sont effacés à la déconnexion&nbsp;; le brouillon l’est aussi à l’enregistrement ou à l’abandon de la partie&nbsp;; une partie en attente d’envoi est effacée dès qu’elle est envoyée ou que vous la supprimez&nbsp;; les réglages restent jusqu’à la désinstallation de l’Application.</li>
       <li><strong>Ce site</strong> ne dépose aucun cookie et n’utilise aucun outil de mesure d’audience.</li>
     </ul>
 
@@ -319,8 +346,12 @@
         </thead>
         <tbody>
           <tr>
-            <td data-label="Données">Compte, profil, parties, diagnostics, débriefs, exercices, abonnement, compteurs techniques</td>
+            <td data-label="Données">Compte, profil, parties, diagnostics, débriefs, exercices, trophées, distances du sac, abonnement, compteurs techniques</td>
             <td data-label="Durée">Tant que votre compte existe&nbsp;; supprimés lors de la suppression du compte (<a href="#suppression">section 11</a>). Aucune suppression automatique des comptes inactifs n’est en place à ce jour&nbsp;: <span class="ph">[DURÉE D'INACTIVITÉ AU-DELÀ DE LAQUELLE LES COMPTES SONT SUPPRIMÉS — À DÉFINIR PAR L'ÉDITEUR]</span></td>
+          </tr>
+          <tr>
+            <td data-label="Données">Cache de recherche de parcours (recherches sans résultat, sans identifiant)</td>
+            <td data-label="Durée">24&nbsp;heures par défaut <span class="ph">[À CONFIRMER : durée configurée en production]</span></td>
           </tr>
           <tr>
             <td data-label="Données">Sauvegardes de la base de données</td>
@@ -348,7 +379,7 @@
           </tr>
           <tr>
             <td data-label="Données">Données stockées sur votre appareil</td>
-            <td data-label="Durée">Jusqu’à déconnexion, enregistrement ou abandon de la partie, ou désinstallation de l’Application</td>
+            <td data-label="Durée">Session et brouillon&nbsp;: jusqu’à la déconnexion, l’enregistrement ou l’abandon de la partie. Parties en attente d’envoi&nbsp;: jusqu’à leur envoi ou leur suppression. Réglages&nbsp;: jusqu’à la désinstallation de l’Application.</td>
           </tr>
         </tbody>
       </table>
@@ -356,28 +387,28 @@
 
     <h2 id="suppression">11. Supprimer votre compte et vos données</h2>
     <h3>Supprimer votre compte depuis l’Application</h3>
-    <p>Allez dans l’onglet <strong>Profil</strong>, puis <strong>Modifier le profil</strong>, et en bas de l’écran, dans la « Zone dangereuse », choisissez <strong>Supprimer mon compte</strong> et confirmez. L’opération est immédiate et irréversible.</p>
-    <p><strong>Ce qui est supprimé&nbsp;:</strong> les messages et sessions de débrief, le détail trou par trou, les diagnostics, les exercices réalisés, les parties, l’enregistrement d’abonnement, le profil, puis le compte lui-même (adresse e-mail et mot de passe haché). Les compteurs techniques liés au compte sont supprimés avec lui.</p>
+    <p>Allez dans l’onglet <strong>Profil</strong>, puis <strong>Modifier le profil</strong>, et en bas de l’écran, dans la « Zone dangereuse », choisissez <strong>Supprimer mon compte</strong> et confirmez. L’opération est immédiate et irréversible&nbsp;: si vous voulez garder une copie de vos données, exportez-les avant (<a href="#droits">section 12</a>).</p>
+    <p><strong>Ce qui est supprimé&nbsp;:</strong> les messages et sessions de débrief, le détail trou par trou, les diagnostics, les exercices réalisés et leurs résultats, les parties, l’enregistrement d’abonnement, le profil, puis le compte lui-même (adresse e-mail et mot de passe haché). Les distances de votre sac, vos trophées et les compteurs techniques liés au compte sont supprimés avec lui.</p>
     <p><strong>Ce qui n’est pas supprimé automatiquement&nbsp;:</strong></p>
     <ul>
       <li><strong>Votre abonnement Apple n’est pas résilié.</strong> Si vous êtes abonné à Premium, résiliez-le dans les réglages de votre compte Apple (voir les <a href="terms.html#abonnement">conditions d’utilisation</a>), sans quoi Apple continuera à le facturer.</li>
       <li>Les enregistrements techniques conservés par RevenueCat (identifiant d’abonné, historique d’achat) ne sont pas effacés par l’Application&nbsp;: écrivez-nous et nous en demanderons la suppression à RevenueCat.</li>
       <li>Les rapports d’erreur détenus par Sentry, les sauvegardes et les journaux techniques expirent selon les durées de la <a href="#conservation">section 10</a>.</li>
-      <li>Les données stockées sur votre appareil (brouillon de partie, rappels) disparaissent à la désinstallation de l’Application.</li>
+      <li>Les données stockées sur votre appareil ne sont pas toutes effacées par la suppression du compte&nbsp;: seul le brouillon de partie l’est à la déconnexion&nbsp;; les parties en attente d’envoi et les réglages (rappels, objectif de la semaine, défi du mois) y restent jusqu’à la désinstallation de l’Application.</li>
     </ul>
     <p>Si la suppression échoue (un message d’erreur s’affiche), réessayez plus tard ou écrivez-nous&nbsp;: nous la ferons à votre place.</p>
     <h3>Supprimer une partie</h3>
-    <p>Dans le détail d’une partie, <strong>Supprimer ce round</strong> efface la partie, son détail trou par trou et son débrief. Le diagnostic IA associé est conservé, sans lien avec la partie, jusqu’à la suppression de votre compte&nbsp;; vous pouvez nous en demander l’effacement.</p>
+    <p>Dans le détail d’une partie, <strong>Supprimer ce round</strong> efface la partie, son détail trou par trou et son débrief. Le diagnostic IA associé est conservé, sans lien avec la partie, jusqu’à la suppression de votre compte&nbsp;; vous pouvez nous en demander l’effacement. Les trophées déjà obtenus restent acquis.</p>
 
     <h2 id="droits">12. Vos droits</h2>
     <p>Vous disposez des droits suivants sur vos données&nbsp;:</p>
     <ul>
-      <li><strong>Accès</strong> : obtenir une copie des données vous concernant. Vous pouvez déjà consulter la plupart d’entre elles dans l’Application.</li>
-      <li><strong>Rectification</strong> : corriger vos données, notamment dans « Modifier le profil » et en modifiant une partie.</li>
+      <li><strong>Accès</strong> : obtenir une copie des données vous concernant. Vous pouvez en exporter la plupart vous-même dans l’Application (Profil, puis « Exporter mes données »)&nbsp;: un fichier JSON avec votre compte, votre profil, vos parties et leur détail, vos diagnostics, exercices, trophées, distances de sac et débriefs et le statut de votre abonnement, ou un fichier CSV de vos parties. Le mot de passe, les informations de paiement (qui restent chez Apple) et les réglages gardés sur votre appareil n’en font pas partie.</li>
+      <li><strong>Rectification</strong> : corriger vos données, notamment dans « Modifier le profil », dans « Mon sac » et en modifiant une partie.</li>
       <li><strong>Effacement</strong> : voir la <a href="#suppression">section 11</a>.</li>
       <li><strong>Limitation</strong> du traitement dans les cas prévus par le RGPD.</li>
       <li><strong>Opposition</strong> aux traitements fondés sur l’intérêt légitime (limites d’usage et lutte contre les abus, rapports d’erreur), pour des raisons tenant à votre situation particulière.</li>
-      <li><strong>Portabilité</strong> : recevoir les données que vous nous avez fournies (profil, parties, notes, messages, exercices) dans un format structuré et couramment utilisé, sur demande par e-mail.</li>
+      <li><strong>Portabilité</strong> : recevoir les données que vous nous avez fournies (profil, parties, notes, messages, exercices, trophées, distances de sac) dans un format structuré et couramment utilisé&nbsp;: l’export intégré à l’Application (JSON ou CSV) fournit ces données&nbsp;; pour une demande plus large, écrivez-nous.</li>
       <li><strong>Retrait du consentement</strong> à tout moment pour la localisation et les notifications, dans les réglages de votre appareil, sans effet sur ce qui a eu lieu avant.</li>
       <li><strong>Directives après décès</strong> : définir des directives sur le sort de vos données après votre décès, conformément à la loi Informatique et Libertés.</li>
     </ul>
@@ -388,19 +419,20 @@
     <p>Nous mettons en œuvre des mesures techniques et organisationnelles adaptées, notamment&nbsp;:</p>
     <ul>
       <li>chiffrement des échanges entre l’Application et les services (HTTPS)&nbsp;;</li>
-      <li>mots de passe conservés sous forme hachée par le service d’authentification&nbsp;;</li>
+      <li>mots de passe conservés sous forme hachée par le service d’authentification&nbsp;; session de connexion gardée sur votre appareil dans l’espace sécurisé du système&nbsp;;</li>
       <li>règles d’accès au niveau de la base de données : chaque utilisateur ne peut lire et modifier que ses propres données&nbsp;;</li>
       <li>clés secrètes (Anthropic, accès administrateur à la base) conservées côté serveur, jamais dans l’Application&nbsp;;</li>
       <li>fonctions serveur qui vérifient l’authentification, avec limites d’usage contre les abus&nbsp;;</li>
+      <li>masquage, dans les rapports d’erreur, des codes et jetons présents dans les adresses de retour de connexion (liens de confirmation et de réinitialisation)&nbsp;;</li>
       <li>accès administrateur restreint à l’Éditeur.</li>
     </ul>
     <p>Aucun système n’est infaillible. En cas de violation de données susceptible d’engendrer un risque pour vos droits et libertés, nous la notifierons à la CNIL et, lorsque la loi l’exige, aux personnes concernées.</p>
 
     <h2 id="mineurs">14. Mineurs</h2>
-    <p>L’Application est réservée aux personnes âgées d’au moins 16&nbsp;ans et n’est pas destinée aux enfants. Nous ne collectons pas sciemment de données relatives à des personnes de moins de 16&nbsp;ans. Si vous pensez qu’un enfant de moins de 16&nbsp;ans nous a fourni des données, contactez-nous&nbsp;: nous supprimerons le compte concerné.</p>
+    <p>L’Application est réservée aux personnes âgées d’au moins 16&nbsp;ans et n’est pas destinée aux enfants. <span class="ph">[À CONFIRMER : âge minimum retenu&nbsp;; l’Application ne comporte aucun contrôle d’âge à l’inscription]</span> Nous ne collectons pas sciemment de données relatives à des personnes de moins de 16&nbsp;ans. Si vous pensez qu’un enfant de moins de 16&nbsp;ans nous a fourni des données, contactez-nous&nbsp;: nous supprimerons le compte concerné.</p>
 
     <h2 id="liens">15. Liens externes</h2>
-    <p>Certains exercices proposent un lien « Vidéo » vers YouTube. En l’ouvrant, vous quittez l’Application&nbsp;: YouTube (Google) traite alors vos données selon ses propres règles, sur lesquelles nous n’avons aucun contrôle.</p>
+    <p>Certains exercices proposent un lien « Vidéo » vers YouTube. En l’ouvrant, vous quittez l’Application&nbsp;: YouTube (Google) traite alors vos données selon ses propres règles, sur lesquelles nous n’avons aucun contrôle. Les liens vers nos pages légales et vers les réglages d’abonnement d’Apple s’ouvrent aussi hors de l’Application.</p>
 
     <h2 id="modifications">16. Modifications de cette politique</h2>
     <p>Nous pouvons modifier cette politique, par exemple si l’Application évolue ou si la réglementation change. La date de dernière mise à jour figure en haut de la page. En cas de changement important, nous vous en informerons par un moyen approprié (notification dans l’Application ou e-mail) avant son entrée en vigueur.</p>
