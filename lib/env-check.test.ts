@@ -1,4 +1,4 @@
-import { assertClientEnv, getMissingClientEnv } from './env-check';
+import { assertClientEnv, getInvalidOptionalClientEnv, getMissingClientEnv } from './env-check';
 
 const COMPLETE_ENV = {
   EXPO_PUBLIC_SUPABASE_URL: 'https://example.supabase.co',
@@ -24,6 +24,25 @@ describe('getMissingClientEnv', () => {
   });
 });
 
+describe('optional client env', () => {
+  it('never makes the support email required', () => {
+    expect(getMissingClientEnv()).not.toContain('EXPO_PUBLIC_SUPPORT_EMAIL');
+    expect(() => assertClientEnv(COMPLETE_ENV, { EXPO_PUBLIC_SUPPORT_EMAIL: '' })).not.toThrow();
+  });
+
+  it('accepts an unset, empty or valid support email', () => {
+    expect(getInvalidOptionalClientEnv({})).toEqual([]);
+    expect(getInvalidOptionalClientEnv({ EXPO_PUBLIC_SUPPORT_EMAIL: '  ' })).toEqual([]);
+    expect(getInvalidOptionalClientEnv({ EXPO_PUBLIC_SUPPORT_EMAIL: 'aide@fairwayiq.app' })).toEqual([]);
+  });
+
+  it('flags a support email that is set but invalid', () => {
+    expect(getInvalidOptionalClientEnv({ EXPO_PUBLIC_SUPPORT_EMAIL: 'aide at fairwayiq' })).toEqual([
+      'EXPO_PUBLIC_SUPPORT_EMAIL',
+    ]);
+  });
+});
+
 describe('assertClientEnv', () => {
   afterEach(() => {
     jest.restoreAllMocks();
@@ -31,6 +50,22 @@ describe('assertClientEnv', () => {
 
   it('does not throw when everything is set', () => {
     expect(() => assertClientEnv(COMPLETE_ENV)).not.toThrow();
+  });
+
+  it('warns about an invalid support email without throwing', () => {
+    const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+
+    expect(() => assertClientEnv(COMPLETE_ENV, { EXPO_PUBLIC_SUPPORT_EMAIL: 'not-an-email' })).not.toThrow();
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('EXPO_PUBLIC_SUPPORT_EMAIL'));
+  });
+
+  it('stays quiet when the support email is unset or valid', () => {
+    const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+
+    assertClientEnv(COMPLETE_ENV, {});
+    assertClientEnv(COMPLETE_ENV, { EXPO_PUBLIC_SUPPORT_EMAIL: 'aide@fairwayiq.app' });
+
+    expect(warnSpy).not.toHaveBeenCalled();
   });
 
   it('throws a clear message in development', () => {

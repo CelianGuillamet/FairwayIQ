@@ -41,6 +41,7 @@ Variables client dans `.env.local` (publiques : elles sont embarquées dans l'ap
 | `EXPO_PUBLIC_SUPABASE_ANON_KEY` | Clé publique Supabase (anon) | Oui (l'app plante au lancement sans) |
 | `EXPO_PUBLIC_PRIVACY_POLICY_URL` | URL de la politique de confidentialité | Oui pour l'App Store (liens vides sinon) |
 | `EXPO_PUBLIC_TERMS_URL` | URL des conditions d'utilisation | Oui pour l'App Store (liens vides sinon) |
+| `EXPO_PUBLIC_SUPPORT_EMAIL` | Adresse du support, utilisée par « Contacter le support » (profil, section Aide) | Non (la ligne est masquée si vide ou invalide) |
 | `EXPO_PUBLIC_REVENUECAT_IOS_KEY` / `EXPO_PUBLIC_REVENUECAT_ANDROID_KEY` | Clés SDK publiques RevenueCat | Pour les achats |
 | `EXPO_PUBLIC_SENTRY_DSN` | DSN Sentry | Pour le suivi des crashs |
 
@@ -156,7 +157,7 @@ eas env:set --name EXPO_PUBLIC_PRIVACY_POLICY_URL --value https://example.com/pr
 eas env:set --name EXPO_PUBLIC_TERMS_URL --value https://example.com/terms --environment production --environment preview --visibility plaintext
 ```
 
-Faire de même pour `EXPO_PUBLIC_REVENUECAT_IOS_KEY`, `EXPO_PUBLIC_REVENUECAT_ANDROID_KEY` et `EXPO_PUBLIC_SENTRY_DSN`. Sur les anciennes versions d'EAS CLI, `eas env:set` s'appelle `eas env:create`. Vérification : `eas env:list --environment production`.
+Faire de même pour `EXPO_PUBLIC_REVENUECAT_IOS_KEY`, `EXPO_PUBLIC_REVENUECAT_ANDROID_KEY`, `EXPO_PUBLIC_SENTRY_DSN` et, si le support par e-mail est activé, `EXPO_PUBLIC_SUPPORT_EMAIL`. Sur les anciennes versions d'EAS CLI, `eas env:set` s'appelle `eas env:create`. Vérification : `eas env:list --environment production`.
 
 Pour les mises à jour OTA, passer le même environnement : `eas update --environment production`.
 
