@@ -12,6 +12,7 @@ import { useBagStore } from './bag';
 import { useBadgesStore } from './badges';
 import { useMonthlyChallengeStore } from './monthly-challenge';
 import { useRoundQueueStore } from './round-queue';
+import { useCourseMemoryStore } from './course-memory';
 
 export type OnboardingValues = Pick<Profile, 'display_name' | 'handicap' | 'play_frequency' | 'goal'>;
 
@@ -42,6 +43,7 @@ function resetUserCaches() {
   useBadgesStore.getState().reset();
   useMonthlyChallengeStore.getState().reset();
   useRoundQueueStore.getState().reset();
+  useCourseMemoryStore.getState().reset();
   resetHolesData();
 }
 

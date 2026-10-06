@@ -26,6 +26,7 @@ jest.mock('@react-native-async-storage/async-storage', () =>
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getCachedHoles, loadHolesForRounds, resetHolesData } from '../lib/holes-data';
+import { getCourseMemoryStorageKey } from '../lib/course-memory';
 import { getRoundQueueStorageKey } from '../lib/round-save-queue';
 import { useAuthStore } from './auth';
 import { useBagStore } from './bag';
@@ -33,6 +34,7 @@ import { useBadgesStore } from './badges';
 import { useMonthlyChallengeStore } from './monthly-challenge';
 import { useDrillsStore } from './drills';
 import { useRoundQueueStore } from './round-queue';
+import { useCourseMemoryStore } from './course-memory';
 import { useRoundsStore } from './rounds';
 
 type Result = { data: unknown; error: { message: string } | null };
@@ -115,6 +117,7 @@ beforeEach(async () => {
   useBadgesStore.getState().reset();
   useMonthlyChallengeStore.getState().reset();
   useRoundQueueStore.getState().reset();
+  useCourseMemoryStore.getState().reset();
   resetHolesData();
   useAuthStore.setState({
     session: null,
@@ -278,6 +281,18 @@ describe('setSession', () => {
     expect(useMonthlyChallengeStore.getState()).toMatchObject({ userId: null, month: null, challengeId: null, changeUsed: false, loaded: false, doneSeen: null });
   });
 
+  it('clears the remembered tees in memory when another user signs in, but keeps them stored for their owner', async () => {
+    useAuthStore.getState().setSession(session('user-1'));
+    await useCourseMemoryStore.getState().load('user-1');
+    useCourseMemoryStore.getState().remember('id:saint-cloud', { teeKey: 'white', holes: 9 });
+    await new Promise((resolve) => setImmediate(resolve));
+
+    useAuthStore.getState().setSession(session('user-2'));
+
+    expect(useCourseMemoryStore.getState()).toMatchObject({ userId: null, entries: {}, loaded: false });
+    await expect(AsyncStorage.getItem(getCourseMemoryStorageKey('user-1'))).resolves.not.toBeNull();
+  });
+
   it('clears the queued rounds in memory when another user signs in, but keeps them stored for their owner', async () => {
     useAuthStore.getState().setSession(session('user-1'));
     await primeRoundQueue('user-1');
@@ -420,6 +435,20 @@ describe('signOut', () => {
     await useAuthStore.getState().signOut();
 
     expect(useMonthlyChallengeStore.getState()).toMatchObject({ userId: null, month: null, challengeId: null, changeUsed: false, loaded: false, doneSeen: null });
+  });
+
+  it('clears the remembered tees in memory, but keeps them stored for when the user comes back', async () => {
+    useAuthStore.getState().setSession(session('user-1'));
+    await useCourseMemoryStore.getState().load('user-1');
+    useCourseMemoryStore.getState().remember('id:saint-cloud', { teeKey: 'white', holes: 9 });
+    await new Promise((resolve) => setImmediate(resolve));
+
+    await useAuthStore.getState().signOut();
+
+    expect(useCourseMemoryStore.getState()).toMatchObject({ userId: null, entries: {}, loaded: false });
+
+    await useCourseMemoryStore.getState().load('user-1');
+    expect(useCourseMemoryStore.getState().entries['id:saint-cloud']).toMatchObject({ teeKey: 'white', holes: 9 });
   });
 
   it('clears the queued rounds in memory, but keeps them stored for when the user comes back', async () => {
