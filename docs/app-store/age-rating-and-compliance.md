@@ -31,7 +31,7 @@ Question d’App Store Connect : l’app contient, affiche ou donne accès à du
 | Contenu | Source | Licence ou droit | État |
 |---|---|---|---|
 | Catalogue de parcours, distances, points GPS | golfapi.io (fonction `supabase/functions/course-catalog`, `GOLFAPI_BASE_URL`) | Conditions du fournisseur | `[À VÉRIFIER]` : autorisent-elles le stockage en base et l’affichage à tous les utilisateurs ? |
-| Données OpenStreetMap (parcours, tracés de trous) | Overpass (`OSM_OVERPASS_URL`) | ODbL : attribution obligatoire | Mention présente dans `legal-site/terms.html` (section 7) et dans la description de la fiche. Aucune mention dans l’app (recherche `OpenStreetMap` dans `app/`, `lib/`, `components/` : rien). `[À VÉRIFIER]` : ajouter une attribution dans l’app. |
+| Données OpenStreetMap (parcours, tracés de trous) | Overpass (`OSM_OVERPASS_URL`) | ODbL : attribution obligatoire | Mention présente dans `legal-site/terms.html` (section 7), dans la description de la fiche et dans l’app : écran « Crédits et licences » (`app/credits.tsx`) et ligne « Parcours : © OpenStreetMap » sous les résultats de recherche issus d’OpenStreetMap. |
 | Polices Newsreader et Hanken Grotesk | `@expo-google-fonts/*` | MIT et OFL-1.1 (`package-lock.json`) | `[À VÉRIFIER]` : conservation des mentions de licence si requise. |
 | Icônes de l’interface | `lucide-react-native` | ISC (`package-lock.json`) | Rien à faire. |
 | Icône, écran de lancement | `assets/` | Créations du propriétaire | `[À CONFIRMER]` |
@@ -99,8 +99,8 @@ Non requis ici. La règle 4.8 s’applique aux apps qui utilisent un service de 
 | Notifications non imposées et sans promotion (4.5.4) | Fait : désactivées par défaut, permission demandée à l’activation, rappels de pratique uniquement | `lib/notification-settings.ts`, `app/notifications.tsx`, `lib/notification-plan.ts` |
 | Manifeste de confidentialité (API à raison obligatoire) | Fait pour l’app ; manifestes des SDK à contrôler dans le build | `app.json` > `ios.privacyManifests` ; `privacy-nutrition-labels.md` section 6 |
 | Exactitude des métadonnées (2.3) | Textes de `listing.fr.md` limités à ce que le code fait. Captures à tirer de l’app réelle (`screenshots.md`). | `listing.fr.md` |
-| Données de trou génériques | Quand le catalogue n’a pas la distance d’un trou, l’app en génère une et l’étiquette « Estimée ». Le « Hcp » du trou, lui, retombe sur le numéro du trou sans étiquette (`lib/hole-view.ts`, `components/rounds/HoleOverviewCard.tsx`). Les formes et dangers générés dans le même fichier ne sont affichés nulle part. `[À VÉRIFIER]` : étiqueter ou masquer le « Hcp » de repli. | `lib/hole-view.ts` |
-| Distances GPS | Le calcul est sur l’appareil. L’app n’affiche pas « estimée » sur les distances Avant, Milieu, Fond (seules la longueur du trou et le conseil de club le sont). La fiche les dit estimées, comme les conditions (section 7). `[À VÉRIFIER]` : ajouter la mention dans l’app. | `components/rounds/HoleOverviewCard.tsx` |
+| Données de trou génériques | Quand le catalogue n’a pas la distance d’un trou, l’app en génère une et l’étiquette « Estimée ». Le « Hcp » du trou s’affiche « — » quand le catalogue n’a pas l’index (`lib/hole-view.ts`, `components/rounds/HoleOverviewCard.tsx`). Les formes et dangers générés dans le même fichier ne sont affichés nulle part. | `lib/hole-view.ts` |
+| Distances GPS | Le calcul est sur l’appareil. L’app affiche « Estimée » sur les distances Avant, Milieu, Fond quand les données du trou sont estimées, comme sur la longueur du trou et le conseil de club. La fiche les dit estimées, comme les conditions (section 7). `[À DÉCIDER]` : rendre la mention systématique. | `components/rounds/HoleOverviewCard.tsx` |
 | Application complète (2.1) | Compte de démonstration et serveur actifs pendant la revue | `review-notes.md` sections 6 et 9 |
 | Famille d’appareils | iPhone seulement | `app.json` : `supportsTablet: false` |
 
@@ -139,4 +139,4 @@ Non requis ici. La règle 4.8 s’applique aux apps qui utilisent un service de 
 
 1. `delete-account` : ajouter `club_distances` et `user_badges` à la liste explicite.
 2. Sentry : l’UUID de l’utilisateur peut apparaître dans les adresses de requêtes et les journaux (`stores/auth.ts`, `stores/subscription.ts`, `app/_layout.tsx`, `lib/redact-url.ts`).
-3. « Hcp » de repli sans étiquette ; distances GPS sans mention « estimée » ; attribution OpenStreetMap et avertissement sur l’IA absents de l’app ; aucun contrôle d’âge.
+3. Aucun contrôle d’âge dans l’app. L’attribution OpenStreetMap, la mention « Généré par une IA » et le « Hcp » de repli sont traités.
