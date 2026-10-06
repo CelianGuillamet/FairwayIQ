@@ -4,3 +4,6 @@ export const SUPPORT_EMAIL = process.env.EXPO_PUBLIC_SUPPORT_EMAIL ?? '';
 
 export const AI_DATA_NOTICE =
   'Les données du coaching IA sont traitées par Anthropic (Claude).';
+
+export const AI_CONTENT_NOTICE =
+  'Généré par une IA, à titre indicatif. Ce n’est pas un avis de professionnel.';

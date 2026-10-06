@@ -63,3 +63,23 @@ export function parseDiagnosisParam(param: string | string[] | undefined) {
     return null;
   }
 }
+
+const RULE_BASED_FLAG = '1';
+
+export function buildDiagnosticParams(input: { roundId: string; diagnosis: DiagnosticResult; isFallback: boolean }) {
+  const params: Record<string, string> = {
+    roundId: input.roundId,
+    diagnosis: JSON.stringify(input.diagnosis),
+  };
+
+  if (input.isFallback) {
+    params.fallback = RULE_BASED_FLAG;
+  }
+
+  return params;
+}
+
+export function parseFallbackParam(param: string | string[] | undefined) {
+  const raw = Array.isArray(param) ? param[0] : param;
+  return raw === RULE_BASED_FLAG;
+}

@@ -1,4 +1,9 @@
-import { parseDiagnosisParam, parseDiagnosticResult } from './diagnostic-shape';
+import {
+  buildDiagnosticParams,
+  parseDiagnosisParam,
+  parseDiagnosticResult,
+  parseFallbackParam,
+} from './diagnostic-shape';
 
 const VALID = {
   strengths: ['Bon putting'],
@@ -71,5 +76,32 @@ describe('parseDiagnosisParam', () => {
     ['oversized', JSON.stringify({ ...VALID, raw_analysis: 'x'.repeat(30000) })],
   ])('returns null for %s', (_label, value) => {
     expect(parseDiagnosisParam(value)).toBeNull();
+  });
+});
+
+describe('buildDiagnosticParams', () => {
+  it('carries the round and the serialized diagnosis for an AI diagnostic', () => {
+    const params = buildDiagnosticParams({ roundId: 'r1', diagnosis: VALID, isFallback: false });
+
+    expect(params).toEqual({ roundId: 'r1', diagnosis: JSON.stringify(VALID) });
+    expect(parseDiagnosisParam(params.diagnosis)).toEqual(VALID);
+    expect(parseFallbackParam(params.fallback)).toBe(false);
+  });
+
+  it('flags a rule-based diagnostic', () => {
+    const params = buildDiagnosticParams({ roundId: 'r1', diagnosis: VALID, isFallback: true });
+
+    expect(parseFallbackParam(params.fallback)).toBe(true);
+  });
+});
+
+describe('parseFallbackParam', () => {
+  it('only treats the explicit flag as a rule-based diagnostic', () => {
+    expect(parseFallbackParam('1')).toBe(true);
+    expect(parseFallbackParam(['1', '0'])).toBe(true);
+    expect(parseFallbackParam(undefined)).toBe(false);
+    expect(parseFallbackParam('')).toBe(false);
+    expect(parseFallbackParam('0')).toBe(false);
+    expect(parseFallbackParam('true')).toBe(false);
   });
 });

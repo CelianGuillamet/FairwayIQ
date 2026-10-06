@@ -261,6 +261,7 @@ export default function ProfileScreen() {
             {supportEmail ? (
               <LinkRow label="Contacter le support" role="link" onPress={() => void contactSupport(supportEmail)} />
             ) : null}
+            <LinkRow label="Crédits et licences" onPress={() => router.push('/credits' as any)} />
           </AppCard>
         </Section>
 

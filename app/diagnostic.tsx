@@ -17,7 +17,8 @@ import { useDrillsStore } from '../stores/drills';
 import { useRoundsStore } from '../stores/rounds';
 import { useSubscriptionStore } from '../stores/subscription';
 import { fetchDiagnosticByRound } from '../lib/diagnostics';
-import { parseDiagnosisParam, parseDiagnosticResult } from '../lib/diagnostic-shape';
+import { parseDiagnosisParam, parseDiagnosticResult, parseFallbackParam } from '../lib/diagnostic-shape';
+import { AiNotice } from '../components/ui/AiNotice';
 import { AppButton } from '../components/ui/AppButton';
 import { AppCard } from '../components/ui/AppCard';
 import { Icon } from '../components/ui/Icon';
@@ -41,9 +42,10 @@ const UNSAVED_MESSAGE =
   'Il a été établi sans le coach IA (hors ligne) ou n’a pas pu être sauvegardé. Il disparaît à la fermeture de l’écran : relance-le depuis le détail du round pour le retrouver.';
 
 export default function DiagnosticScreen() {
-  const { roundId: roundIdParam, diagnosis } = useLocalSearchParams<{
+  const { roundId: roundIdParam, diagnosis, fallback: fallbackParam } = useLocalSearchParams<{
     roundId?: string | string[];
     diagnosis?: string | string[];
+    fallback?: string | string[];
   }>();
   const roundId = typeof roundIdParam === 'string' ? roundIdParam : undefined;
   const { setRecommendedCategories } = useDrillsStore();
@@ -54,9 +56,11 @@ export default function DiagnosticScreen() {
   const styles = useThemedStyles(createStyles);
   const insets = useSafeAreaInsets();
   const paramDiagnosis = useMemo(() => parseDiagnosisParam(diagnosis), [diagnosis]);
+  const paramIsRuleBased = parseFallbackParam(fallbackParam);
 
   const [result, setResult] = useState<DiagnosticResult | null>(null);
   const [unsaved, setUnsaved] = useState(false);
+  const [ruleBased, setRuleBased] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -89,6 +93,7 @@ export default function DiagnosticScreen() {
         if (shown) {
           setResult(shown);
           setUnsaved(!stored);
+          setRuleBased(!stored && paramIsRuleBased);
         } else {
           setError(diagnostic ? 'Diagnostic illisible.' : 'Aucun diagnostic enregistré pour ce round.');
         }
@@ -98,6 +103,7 @@ export default function DiagnosticScreen() {
         if (fallback) {
           setResult(fallback);
           setUnsaved(true);
+          setRuleBased(paramIsRuleBased);
         } else {
           setError(currentError?.message ?? 'Impossible de charger le diagnostic.');
         }
@@ -111,7 +117,7 @@ export default function DiagnosticScreen() {
     return () => {
       cancelled = true;
     };
-  }, [paramDiagnosis, roundId]);
+  }, [paramDiagnosis, paramIsRuleBased, roundId]);
 
   useEffect(() => {
     if (result?.recommended_categories?.length) {
@@ -198,6 +204,8 @@ export default function DiagnosticScreen() {
             </View>
           </Section>
         ) : null}
+
+        {ruleBased ? null : <AiNotice style={styles.aiNotice} />}
 
         <View style={styles.secondary}>
           <AppButton
@@ -324,6 +332,9 @@ const createStyles = (colors: ThemeColors) =>
     },
     pressed: {
       opacity: 0.7,
+    },
+    aiNotice: {
+      marginTop: Spacing.lg,
     },
     secondary: {
       marginTop: Spacing.xl,
