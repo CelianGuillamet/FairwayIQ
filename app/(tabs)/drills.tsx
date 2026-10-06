@@ -1,15 +1,26 @@
-import { useState, useEffect } from 'react';
-import { Alert, View, Text, ScrollView, StyleSheet, TouchableOpacity, Linking } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import { Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Colors } from '../../constants';
+import { Spacing, Typography } from '../../constants';
+import type { ThemeColors } from '../../constants';
 import { useDrillsStore } from '../../stores/drills';
 import { useAuthStore } from '../../stores/auth';
 import type { Drill } from '../../types';
-import { DRILL_CATEGORY_LABELS, DRILL_DIFFICULTY_LABELS, DRILLS } from '../../lib/drill-library';
+import { DRILL_CATEGORY_LABELS, DRILLS } from '../../lib/drill-library';
+import { buildWeeklyPlan, isDrillDoneThisWeek } from '../../lib/drill-plan';
+import { getResultThisWeek, type DrillResult } from '../../lib/drill-results';
+import { hapticSuccess } from '../../lib/haptics';
+import { useTheme, useThemedStyles } from '../../lib/theme';
 import { AppCard } from '../../components/ui/AppCard';
-import { AppButton } from '../../components/ui/AppButton';
+import { Icon } from '../../components/ui/Icon';
 import { PageHeader } from '../../components/ui/PageHeader';
-import { DecorativeBackground } from '../../components/ui/DecorativeBackground';
+import { TextAction } from '../../components/ui/TextAction';
+import { CategoryFilter } from '../../components/drills/CategoryFilter';
+import { DrillCard, type DrillCardResults } from '../../components/drills/DrillCard';
+import { DrillResultSheet } from '../../components/drills/DrillResultSheet';
+import { PlanCounter, PlanProgressBar } from '../../components/drills/PlanProgress';
+import { PINNED_CTA_CLEARANCE, PinnedCta } from '../../components/home/PinnedCta';
 
 const CATEGORIES = [
   { key: 'recommended', label: 'Focus' },
@@ -23,9 +34,47 @@ const CATEGORIES = [
 
 export default function DrillsScreen() {
   const [activeCategory, setActiveCategory] = useState<string>('recommended');
+  const [showLibrary, setShowLibrary] = useState(false);
+  const [expandedKey, setExpandedKey] = useState<string | null>(null);
+  const [resultDrill, setResultDrill] = useState<Drill | null>(null);
+  const [savingResult, setSavingResult] = useState(false);
+  const [resultError, setResultError] = useState<string | null>(null);
   const { user } = useAuthStore();
-  const { completions, recommendedCategories, fetchCompletions, markDone, isDoneToday, getStreak, getTotalDone } = useDrillsStore();
+  const {
+    completions,
+    recommendedCategories,
+    fetchCompletions,
+    markDone,
+    isDoneToday,
+    getStreak,
+    getLastResult,
+    getBestResult,
+    getSuccessRate,
+  } = useDrillsStore();
   const insets = useSafeAreaInsets();
+  const { colors } = useTheme();
+  const styles = useThemedStyles(createStyles);
+  const scrollRef = useRef<ScrollView>(null);
+  const planOffset = useRef(0);
+  const cardOffsets = useRef<Record<string, number>>({});
+  const libraryOffset = useRef<number | null>(null);
+  const scrollToLibrary = useRef(false);
+  const { category, focus } = useLocalSearchParams<{ category?: string; focus?: string }>();
+
+  useEffect(() => {
+    if (typeof category !== 'string' || !(category in DRILL_CATEGORY_LABELS)) {
+      return;
+    }
+
+    setActiveCategory(category);
+
+    if (showLibrary && libraryOffset.current != null) {
+      scrollRef.current?.scrollTo({ y: Math.max(0, libraryOffset.current - Spacing.md), animated: true });
+    } else {
+      scrollToLibrary.current = true;
+      setShowLibrary(true);
+    }
+  }, [category, focus]);
 
   useEffect(() => {
     void fetchCompletions().catch((error: any) => {
@@ -42,165 +91,251 @@ export default function DrillsScreen() {
       : DRILLS.filter(d => d.category === activeCategory);
 
   const streak = getStreak();
-  const totalDone = getTotalDone();
+  const plan = buildWeeklyPlan({ categories: recommendedCategories, completions });
+  const recommendedLabels = recommendedCategories.map(
+    (category) => DRILL_CATEGORY_LABELS[category as keyof typeof DRILL_CATEGORY_LABELS] ?? category
+  );
+
+  const resultsFor = (drillId: string): DrillCardResults => ({
+    last: getLastResult(drillId),
+    best: getBestResult(drillId),
+    rate: getSuccessRate(drillId),
+    week: getResultThisWeek(drillId, completions),
+  });
+
+  const handleMarkDone = (drill: Drill) => {
+    if (!user) {
+      return;
+    }
+
+    setResultError(null);
+    setResultDrill(drill);
+  };
+
+  const closeResultSheet = () => {
+    setResultDrill(null);
+    setResultError(null);
+  };
+
+  const recordCompletion = async (result: DrillResult | null) => {
+    if (!user || !resultDrill || savingResult) {
+      return;
+    }
+
+    setSavingResult(true);
+    setResultError(null);
+
+    try {
+      await markDone(resultDrill.id, user.id, result);
+      hapticSuccess();
+      setResultDrill(null);
+    } catch (error: any) {
+      setResultError(error?.message ?? 'Impossible de marquer ce drill comme terminé.');
+    } finally {
+      setSavingResult(false);
+    }
+  };
+
+  const handleStartNext = () => {
+    if (!plan.next) {
+      return;
+    }
+
+    const key = `plan:${plan.next.id}`;
+    setExpandedKey(key);
+    scrollRef.current?.scrollTo({
+      y: Math.max(0, planOffset.current + (cardOffsets.current[key] ?? 0) - Spacing.md),
+      animated: true,
+    });
+  };
+
+  const toggle = (key: string) => setExpandedKey((current) => (current === key ? null : key));
 
   return (
     <View style={styles.container}>
-      <DecorativeBackground />
       <ScrollView
-        contentContainerStyle={[styles.content, { paddingTop: insets.top + 16 }]}
+        ref={scrollRef}
+        contentContainerStyle={[
+          styles.content,
+          {
+            paddingTop: insets.top + Spacing.md,
+            paddingBottom: (plan.next ? PINNED_CTA_CLEARANCE : Spacing.xl) + Spacing.md,
+          },
+        ]}
       >
         <PageHeader
-          eyebrow="Practice"
-          title="Drills & routines"
-          subtitle="Une bibliothèque plus lisible, pilotée par ton diagnostic et pensée pour un usage court, efficace et répétable."
-          trailing={(
-            <View style={styles.statsColumn}>
-              <StatBadge value={streak.toString()} label="série" />
-              <StatBadge value={totalDone.toString()} label="faits" />
-            </View>
-          )}
+          title="Exercices"
+          subtitle="Plan de la semaine"
+          trailing={<PlanCounter done={plan.doneCount} total={plan.total} />}
         />
 
-        {recommendedCategories.length > 0 && activeCategory === 'recommended' && (
-          <AppCard accent="highlight" style={styles.recommendBanner}>
-            <Text style={styles.recommendEyebrow}>Focus du moment</Text>
-            <Text style={styles.recommendText}>
-              {recommendedCategories.map(c => {
-                return DRILL_CATEGORY_LABELS[c as keyof typeof DRILL_CATEGORY_LABELS] ?? c;
-              }).join(' · ')}
+        <View style={styles.intro}>
+          <PlanProgressBar done={plan.doneCount} total={plan.total} />
+          <Text style={styles.introText}>
+            {recommendedLabels.length > 0
+              ? `Choisis d’après ton dernier diagnostic : ${recommendedLabels.join(' · ')}.`
+              : 'Un exercice par domaine pour commencer. Analyse un round pour obtenir un plan sur mesure.'}
+          </Text>
+          {streak > 0 ? (
+            <Text style={styles.streak}>
+              Série en cours : {streak} {streak > 1 ? 'jours' : 'jour'}
             </Text>
-          </AppCard>
-        )}
+          ) : null}
+        </View>
 
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterScroll} contentContainerStyle={styles.filterContent}>
-          {CATEGORIES.map(cat => (
-            <TouchableOpacity
-              key={cat.key}
-              style={[styles.filterChip, activeCategory === cat.key && styles.filterChipActive]}
-              onPress={() => setActiveCategory(cat.key)}
-            >
-              <Text style={[styles.filterChipText, activeCategory === cat.key && styles.filterChipTextActive]}>
-                {cat.label}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
+        <View style={styles.list} onLayout={(event) => { planOffset.current = event.nativeEvent.layout.y; }}>
+          {plan.items.map(({ drill, status }) => {
+            const key = `plan:${drill.id}`;
 
-        {filtered.map(drill => (
-          <DrillCard
-            key={drill.id}
-            drill={drill}
-            doneToday={isDoneToday(drill.id)}
-            totalCompletions={completions.filter(c => c.drill_id === drill.id).length}
-            onMarkDone={() => {
-              if (!user) {
-                return;
+            return (
+              <DrillCard
+                key={key}
+                drill={drill}
+                status={status}
+                expanded={expandedKey === key}
+                doneToday={isDoneToday(drill.id)}
+                totalCompletions={completions.filter(c => c.drill_id === drill.id).length}
+                results={resultsFor(drill.id)}
+                onToggle={() => toggle(key)}
+                onMarkDone={() => handleMarkDone(drill)}
+                onLayout={(event) => { cardOffsets.current[key] = event.nativeEvent.layout.y; }}
+              />
+            );
+          })}
+        </View>
+
+        {plan.total > 0 && !plan.next ? (
+          <View style={styles.complete} accessible accessibilityRole="text">
+            <Icon name="check" size={18} strokeWidth={2.5} color={colors.green} />
+            <Text style={styles.completeText}>Plan terminé pour cette semaine.</Text>
+          </View>
+        ) : null}
+
+        <TextAction
+          label={showLibrary ? 'Masquer tous les exercices' : 'Parcourir tous les exercices'}
+          icon={showLibrary ? undefined : 'chevron-right'}
+          tone="muted"
+          onPress={() => setShowLibrary((current) => !current)}
+          style={styles.libraryToggle}
+        />
+
+        {showLibrary ? (
+          <View
+            style={styles.library}
+            onLayout={(event) => {
+              libraryOffset.current = event.nativeEvent.layout.y;
+
+              if (scrollToLibrary.current) {
+                scrollToLibrary.current = false;
+                scrollRef.current?.scrollTo({ y: Math.max(0, event.nativeEvent.layout.y - Spacing.md), animated: true });
               }
-
-              void markDone(drill.id, user.id).catch((error: any) => {
-                Alert.alert('Erreur', error?.message ?? 'Impossible de marquer ce drill comme terminé.');
-              });
             }}
-          />
-        ))}
+          >
+            <Text style={styles.sectionTitle} accessibilityRole="header">
+              Tous les exercices
+            </Text>
+            <CategoryFilter options={CATEGORIES} value={activeCategory} onChange={setActiveCategory} />
 
-        {filtered.length === 0 ? (
-          <AppCard accent="soft" style={styles.emptyCard}>
-            <Text style={styles.emptyTitle}>Aucun drill sur ce filtre</Text>
-            <Text style={styles.emptyText}>Change de catégorie ou attends un nouveau diagnostic pour faire remonter une priorité.</Text>
-          </AppCard>
+            {filtered.map(drill => {
+              const key = `lib:${drill.id}`;
+
+              return (
+                <DrillCard
+                  key={key}
+                  drill={drill}
+                  status={isDrillDoneThisWeek(drill.id, completions) ? 'done' : 'todo'}
+                  expanded={expandedKey === key}
+                  doneToday={isDoneToday(drill.id)}
+                  totalCompletions={completions.filter(c => c.drill_id === drill.id).length}
+                  results={resultsFor(drill.id)}
+                  onToggle={() => toggle(key)}
+                  onMarkDone={() => handleMarkDone(drill)}
+                />
+              );
+            })}
+
+            {filtered.length === 0 ? (
+              <AppCard accent="soft">
+                <Text style={styles.emptyTitle}>Aucun exercice sur ce filtre</Text>
+                <Text style={styles.emptyText}>Change de catégorie ou attends un nouveau diagnostic pour faire remonter une priorité.</Text>
+              </AppCard>
+            ) : null}
+          </View>
         ) : null}
       </ScrollView>
+
+      <DrillResultSheet
+        drill={resultDrill}
+        saving={savingResult}
+        error={resultError}
+        onSave={(result) => void recordCompletion(result)}
+        onSkip={() => void recordCompletion(null)}
+        onClose={closeResultSheet}
+      />
+
+      {plan.next ? (
+        <PinnedCta
+          label={`Commencer ${plan.next.title}`}
+          accessibilityHint="Affiche les détails de l’exercice et sa validation"
+          onPress={handleStartNext}
+        />
+      ) : null}
     </View>
   );
 }
 
-function DrillCard({ drill, doneToday, totalCompletions, onMarkDone }: {
-  drill: Drill;
-  doneToday: boolean;
-  totalCompletions: number;
-  onMarkDone: () => void;
-}) {
-  const diffColors: Record<string, string> = { beginner: Colors.accentBlue, intermediate: Colors.warning, advanced: Colors.error };
-
-  return (
-    <AppCard style={[styles.card, doneToday && styles.cardDone]} accent={doneToday ? 'highlight' : 'default'}>
-      <View style={styles.cardHeader}>
-        <Text style={styles.cardTitle}>{drill.title}</Text>
-        <View style={[styles.diffBadge, { borderColor: diffColors[drill.difficulty] }]}>
-          <Text style={[styles.diffText, { color: diffColors[drill.difficulty] }]}>
-            {DRILL_DIFFICULTY_LABELS[drill.difficulty]}
-          </Text>
-        </View>
-      </View>
-      <Text style={styles.cardDescription}>{drill.description}</Text>
-      <View style={styles.cardFooter}>
-        <View style={styles.cardMeta}>
-          <Text style={styles.cardDuration}>{drill.duration_minutes} min</Text>
-          {totalCompletions > 0 && (
-            <Text style={styles.cardCount}>{totalCompletions}× réalisé</Text>
-          )}
-        </View>
-        <View style={styles.cardActions}>
-          {drill.youtube_url && (
-            <TouchableOpacity onPress={() => Linking.openURL(drill.youtube_url!)}>
-              <Text style={styles.youtubeLink}>Vidéo</Text>
-            </TouchableOpacity>
-          )}
-          <AppButton
-            label={doneToday ? 'Terminé' : 'Marquer fait'}
-            variant={doneToday ? 'secondary' : 'primary'}
-            onPress={onMarkDone}
-            disabled={doneToday}
-            style={styles.doneButton}
-          />
-        </View>
-      </View>
-    </AppCard>
-  );
-}
-
-function StatBadge({ value, label }: { value: string; label: string }) {
-  return (
-    <View style={styles.statBadge}>
-      <Text style={styles.statBadgeValue}>{value}</Text>
-      <Text style={styles.statBadgeLabel}>{label}</Text>
-    </View>
-  );
-}
-
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.background },
-  content: { paddingHorizontal: 16, paddingBottom: 110 },
-  statsColumn: { gap: 8 },
-  statBadge: { backgroundColor: Colors.surfaceAccent, borderRadius: 16, paddingHorizontal: 12, paddingVertical: 10, alignItems: 'center', borderWidth: 1, borderColor: Colors.borderStrong, minWidth: 64 },
-  statBadgeValue: { fontSize: 18, fontWeight: '800', color: Colors.text },
-  statBadgeLabel: { fontSize: 10, color: Colors.textDim, marginTop: 2 },
-  recommendBanner: { marginBottom: 12 },
-  recommendEyebrow: { fontSize: 12, color: Colors.accentBlue, fontWeight: '700', marginBottom: 8 },
-  recommendText: { fontSize: 15, color: Colors.text, lineHeight: 22, fontWeight: '700' },
-  filterScroll: { maxHeight: 46, marginBottom: 12 },
-  filterContent: { gap: 8, alignItems: 'center' },
-  filterChip: { paddingHorizontal: 16, paddingVertical: 9, borderRadius: 22, backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.border },
-  filterChipActive: { backgroundColor: Colors.surfaceAccent, borderColor: Colors.accentBlue },
-  filterChipText: { color: Colors.textMuted, fontSize: 12, fontWeight: '700' },
-  filterChipTextActive: { color: Colors.text },
-  card: { marginBottom: 12 },
-  cardDone: { borderColor: Colors.borderStrong },
-  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 },
-  cardTitle: { fontSize: 16, fontWeight: '700', color: Colors.text, flex: 1, marginRight: 8 },
-  diffBadge: { borderWidth: 1, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 },
-  diffText: { fontSize: 11, fontWeight: '600' },
-  cardDescription: { fontSize: 14, color: Colors.textMuted, lineHeight: 20 },
-  cardFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', marginTop: 14, gap: 12 },
-  cardMeta: { gap: 4 },
-  cardDuration: { fontSize: 13, color: Colors.textDim, fontWeight: '700' },
-  cardCount: { fontSize: 12, color: Colors.textDim },
-  cardActions: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  youtubeLink: { fontSize: 12, color: Colors.accentBlue, fontWeight: '700' },
-  doneButton: { minHeight: 40, paddingHorizontal: 14 },
-  emptyCard: { marginTop: 6 },
-  emptyTitle: { color: Colors.text, fontSize: 16, fontWeight: '800', marginBottom: 6 },
-  emptyText: { color: Colors.textMuted, fontSize: 14, lineHeight: 21 },
-});
+const createStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: colors.bg,
+    },
+    content: {
+      paddingHorizontal: Spacing.lg,
+    },
+    intro: {
+      gap: Spacing.sm,
+      marginBottom: Spacing.md,
+    },
+    introText: {
+      ...Typography.body,
+      color: colors.ink2,
+    },
+    streak: {
+      ...Typography.label,
+      color: colors.ink3,
+    },
+    list: {
+      gap: 10,
+    },
+    complete: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Spacing.xs,
+      marginTop: Spacing.md,
+    },
+    completeText: {
+      ...Typography.bodyStrong,
+      color: colors.green,
+    },
+    libraryToggle: {
+      marginTop: Spacing.sm,
+    },
+    library: {
+      gap: Spacing.sm,
+      marginTop: Spacing.xs,
+    },
+    sectionTitle: {
+      ...Typography.heading,
+      color: colors.ink,
+    },
+    emptyTitle: {
+      ...Typography.heading,
+      color: colors.ink,
+      marginBottom: 6,
+    },
+    emptyText: {
+      ...Typography.body,
+      color: colors.ink2,
+    },
+  });

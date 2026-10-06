@@ -2,7 +2,8 @@ import { useState } from 'react';
 import {
   View,
   Text,
-  TouchableOpacity,
+  Pressable,
+  ScrollView,
   StyleSheet,
   KeyboardAvoidingView,
   Platform,
@@ -10,16 +11,21 @@ import {
 } from 'react-native';
 import { Link, router } from 'expo-router';
 import * as Linking from 'expo-linking';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase } from '../../lib/supabase';
-import { Colors, PRIVACY_POLICY_URL, TERMS_OF_USE_URL } from '../../constants';
+import { Fonts, PRIVACY_POLICY_URL, TERMS_OF_USE_URL, Typography } from '../../constants';
+import type { ThemeColors } from '../../constants';
 import { openLegalUrl } from '../../lib/legal';
-import { DecorativeBackground } from '../../components/ui/DecorativeBackground';
+import { useThemedStyles } from '../../lib/theme';
+import { AuthHero } from '../../components/auth/AuthHero';
 import { AppCard } from '../../components/ui/AppCard';
 import { AppButton } from '../../components/ui/AppButton';
 import { AppInput } from '../../components/ui/AppInput';
 import { AppCheckbox } from '../../components/ui/AppCheckbox';
 
 export default function RegisterScreen() {
+  const insets = useSafeAreaInsets();
+  const styles = useThemedStyles(createStyles);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [acceptedLegal, setAcceptedLegal] = useState(false);
@@ -69,7 +75,7 @@ export default function RegisterScreen() {
         return;
       }
       Alert.alert(
-        'Vérifie ton email ✉️',
+        'Vérifie ton email',
         `Un lien de confirmation a été envoyé à ${normalizedEmail}. Clique dessus pour activer ton compte, puis connecte-toi.`,
         [{ text: 'OK', onPress: () => router.replace('/(auth)/login') }]
       );
@@ -83,20 +89,24 @@ export default function RegisterScreen() {
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
-      <DecorativeBackground />
-      <View style={styles.inner}>
-        <View style={styles.hero}>
-          <View style={styles.logoBadge}>
-            <Text style={styles.logoGlyph}>✦</Text>
-          </View>
-          <Text style={styles.logo}>Créer ton espace joueur</Text>
-          <Text style={styles.tagline}>
-            Active ton compte, configure ton profil et commence à construire un vrai historique golf.
-          </Text>
-        </View>
+      <ScrollView
+        contentContainerStyle={[
+          styles.scroll,
+          { paddingTop: insets.top + 24, paddingBottom: Math.max(insets.bottom, 16) + 24 },
+        ]}
+        keyboardShouldPersistTaps="handled"
+      >
+        <AuthHero
+          icon="sparkles"
+          compact
+          title="Créer ton espace joueur"
+          subtitle="Active ton compte, configure ton profil et commence à construire un vrai historique golf."
+        />
 
-        <AppCard accent="highlight" style={styles.formCard}>
-          <Text style={styles.formTitle}>Inscription</Text>
+        <AppCard style={styles.formCard}>
+          <Text style={styles.formTitle} accessibilityRole="header">
+            Inscription
+          </Text>
           <Text style={styles.formSubtitle}>
             Crée ton compte pour sauvegarder tes parties. Un email de confirmation peut t’être envoyé pour valider ton adresse.
           </Text>
@@ -170,108 +180,75 @@ export default function RegisterScreen() {
           />
 
           <Link href="/(auth)/login" asChild>
-            <TouchableOpacity style={styles.link}>
+            <Pressable style={styles.link} accessibilityRole="link">
               <Text style={styles.linkText}>
                 Déjà un compte ? <Text style={styles.linkBold}>Se connecter</Text>
               </Text>
-            </TouchableOpacity>
+            </Pressable>
           </Link>
         </AppCard>
-      </View>
+      </ScrollView>
     </KeyboardAvoidingView>
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.background,
-  },
-  inner: {
-    flex: 1,
-    justifyContent: 'center',
-    paddingHorizontal: 24,
-  },
-  hero: {
-    alignItems: 'center',
-    marginBottom: 24,
-  },
-  logoBadge: {
-    width: 68,
-    height: 68,
-    borderRadius: 34,
-    backgroundColor: Colors.accentBlueMuted,
-    borderWidth: 1,
-    borderColor: Colors.borderStrong,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 14,
-  },
-  logoGlyph: {
-    fontSize: 28,
-    color: Colors.accentBlue,
-  },
-  logo: {
-    fontSize: 30,
-    fontWeight: '900',
-    color: Colors.text,
-    textAlign: 'center',
-  },
-  tagline: {
-    fontSize: 15,
-    color: Colors.textMuted,
-    textAlign: 'center',
-    lineHeight: 22,
-    marginTop: 10,
-    paddingHorizontal: 20,
-  },
-  formCard: {
-    paddingVertical: 22,
-  },
-  formTitle: {
-    fontSize: 24,
-    fontWeight: '900',
-    color: Colors.text,
-  },
-  formSubtitle: {
-    fontSize: 14,
-    color: Colors.textMuted,
-    lineHeight: 21,
-    marginTop: 6,
-    marginBottom: 18,
-  },
-  aiDisclosure: {
-    marginBottom: 16,
-  },
-  aiDisclosureTitle: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: Colors.text,
-    marginBottom: 4,
-  },
-  aiDisclosureText: {
-    fontSize: 13,
-    color: Colors.textMuted,
-    lineHeight: 19,
-  },
-  primaryButton: {
-    marginTop: 6,
-  },
-  link: {
-    marginTop: 18,
-    alignItems: 'center',
-  },
-  linkText: {
-    color: Colors.textMuted,
-    fontSize: 14,
-  },
-  legalLink: {
-    color: Colors.accentBlue,
-    fontWeight: '700',
-    textDecorationLine: 'underline',
-  },
-  linkBold: {
-    color: Colors.accentBlue,
-    fontWeight: '800',
-  },
-});
+const createStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: colors.bg,
+    },
+    scroll: {
+      flexGrow: 1,
+      justifyContent: 'center',
+      paddingHorizontal: 24,
+    },
+    formCard: {
+      paddingVertical: 22,
+    },
+    formTitle: {
+      ...Typography.titleMd,
+      color: colors.ink,
+    },
+    formSubtitle: {
+      ...Typography.body,
+      color: colors.ink2,
+      marginTop: 6,
+      marginBottom: 18,
+    },
+    aiDisclosure: {
+      marginBottom: 12,
+    },
+    aiDisclosureTitle: {
+      ...Typography.bodyStrong,
+      color: colors.ink,
+      marginBottom: 4,
+    },
+    aiDisclosureText: {
+      ...Typography.body,
+      color: colors.ink2,
+    },
+    primaryButton: {
+      marginTop: 6,
+    },
+    link: {
+      minHeight: 44,
+      marginTop: 10,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    linkText: {
+      ...Typography.body,
+      color: colors.ink2,
+    },
+    legalLink: {
+      fontFamily: Fonts.sansBold,
+      color: colors.ink,
+      textDecorationLine: 'underline',
+    },
+    linkBold: {
+      fontFamily: Fonts.sansBold,
+      color: colors.ink,
+      textDecorationLine: 'underline',
+    },
+  });

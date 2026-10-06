@@ -1,5 +1,6 @@
 export * from './colors';
 export * from './design';
+export * from './theme';
 export * from './legal';
 
 export const HANDICAP_LEVELS = [

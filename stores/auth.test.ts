@@ -20,11 +20,39 @@ jest.mock('../lib/round-draft', () => ({
   clearRoundDraft: (userId: string) => mockClearRoundDraft(userId),
 }));
 
+jest.mock('@react-native-async-storage/async-storage', () =>
+  require('@react-native-async-storage/async-storage/jest/async-storage-mock')
+);
+
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { getCachedHoles, loadHolesForRounds, resetHolesData } from '../lib/holes-data';
+import { getRoundQueueStorageKey } from '../lib/round-save-queue';
 import { useAuthStore } from './auth';
+import { useBagStore } from './bag';
+import { useBadgesStore } from './badges';
+import { useMonthlyChallengeStore } from './monthly-challenge';
 import { useDrillsStore } from './drills';
+import { useRoundQueueStore } from './round-queue';
 import { useRoundsStore } from './rounds';
 
 type Result = { data: unknown; error: { message: string } | null };
+
+const CACHED_ROUND = { id: 'r1', holes: 18, par: 72, total_score: 90, putts: 34, gir: 4, fairways_hit: 6, penalties: 1 } as const;
+
+async function primeHolesCache() {
+  mockFrom.mockReturnValueOnce({ select: () => ({ in: () => Promise.resolve({ data: [], error: null }) }) });
+  await loadHolesForRounds([CACHED_ROUND]);
+  expect(getCachedHoles([CACHED_ROUND])).not.toBeNull();
+}
+
+async function primeRoundQueue(userId: string) {
+  const round = { client_request_id: 'req-1', played_at: '2026-10-05T10:00:00.000Z', holes: 9, total_score: 40, par: 36 };
+  const holes = Array.from({ length: 9 }, (_, index) => ({ hole_number: index + 1, par: 4, score: 4 }));
+
+  await useRoundQueueStore.getState().load(userId);
+  await expect(useRoundQueueStore.getState().enqueue(userId, { p_round: round, p_holes: holes } as any)).resolves.toBe('added');
+  expect(useRoundQueueStore.getState().entries).toHaveLength(1);
+}
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
@@ -69,7 +97,8 @@ const ONBOARDING_VALUES = {
   goal: 'enjoy',
 };
 
-beforeEach(() => {
+beforeEach(async () => {
+  await AsyncStorage.clear();
   jest.spyOn(console, 'warn').mockImplementation(() => {});
   jest.spyOn(console, 'info').mockImplementation(() => {});
   mockFrom.mockReset();
@@ -82,6 +111,11 @@ beforeEach(() => {
   mockResetPurchasesUser.mockReset();
   useRoundsStore.getState().reset();
   useDrillsStore.getState().reset();
+  useBagStore.getState().reset();
+  useBadgesStore.getState().reset();
+  useMonthlyChallengeStore.getState().reset();
+  useRoundQueueStore.getState().reset();
+  resetHolesData();
   useAuthStore.setState({
     session: null,
     user: null,
@@ -89,6 +123,7 @@ beforeEach(() => {
     loading: true,
     profileLoading: false,
     profileError: null,
+    passwordRecovery: false,
   });
 });
 
@@ -213,14 +248,53 @@ describe('setSession', () => {
     useAuthStore.getState().setSession(session('user-1'));
     useRoundsStore.setState({ rounds: [{ id: 'r1' } as any], initialized: true, loading: false });
     useDrillsStore.setState({ completions: [{ id: 'c1' } as any], recommendedCategories: ['putting'] });
+    useBagStore.setState({ userId: 'user-1', distances: { iron7: 140 }, loaded: true });
 
     useAuthStore.getState().setSession(session('user-2'));
 
     expect(useRoundsStore.getState().rounds).toEqual([]);
     expect(useRoundsStore.getState().initialized).toBe(false);
     expect(useDrillsStore.getState().completions).toEqual([]);
+    expect(useBagStore.getState()).toMatchObject({ userId: null, distances: {}, loaded: false });
     expect(useAuthStore.getState().profile).toBeNull();
     expect(useAuthStore.getState().profileLoading).toBe(true);
+  });
+
+  it('clears the earned badges and the celebration queue when another user signs in', () => {
+    useAuthStore.getState().setSession(session('user-1'));
+    useBadgesStore.setState({ userId: 'user-1', earned: { first_round: '2026-01-01T00:00:00Z' }, loaded: true, queue: ['first_round'] });
+
+    useAuthStore.getState().setSession(session('user-2'));
+
+    expect(useBadgesStore.getState()).toMatchObject({ userId: null, earned: {}, loaded: false, queue: [] });
+  });
+
+  it('clears the monthly challenge when another user signs in', () => {
+    useAuthStore.getState().setSession(session('user-1'));
+    useMonthlyChallengeStore.setState({ userId: 'user-1', month: '2026-10', challengeId: 'drills_putting', changeUsed: true, loaded: true, doneSeen: true });
+
+    useAuthStore.getState().setSession(session('user-2'));
+
+    expect(useMonthlyChallengeStore.getState()).toMatchObject({ userId: null, month: null, challengeId: null, changeUsed: false, loaded: false, doneSeen: null });
+  });
+
+  it('clears the queued rounds in memory when another user signs in, but keeps them stored for their owner', async () => {
+    useAuthStore.getState().setSession(session('user-1'));
+    await primeRoundQueue('user-1');
+
+    useAuthStore.getState().setSession(session('user-2'));
+
+    expect(useRoundQueueStore.getState()).toMatchObject({ userId: null, entries: [], loaded: false, flushing: false });
+    await expect(AsyncStorage.getItem(getRoundQueueStorageKey('user-1'))).resolves.not.toBeNull();
+  });
+
+  it('clears the cached hole rows when another user signs in', async () => {
+    useAuthStore.getState().setSession(session('user-1'));
+    await primeHolesCache();
+
+    useAuthStore.getState().setSession(session('user-2'));
+
+    expect(getCachedHoles([CACHED_ROUND])).toBeNull();
   });
 });
 
@@ -309,6 +383,7 @@ describe('signOut', () => {
     useAuthStore.setState({ profile: profile() });
     useRoundsStore.setState({ rounds: [{ id: 'r1' } as any], initialized: true, loading: false });
     useDrillsStore.setState({ completions: [{ id: 'c1' } as any], recommendedCategories: ['putting'] });
+    useBagStore.setState({ userId: 'user-1', distances: { iron7: 140 }, loaded: true });
   });
 
   it('signs out globally and clears every per-user cache', async () => {
@@ -328,6 +403,43 @@ describe('signOut', () => {
     expect(useRoundsStore.getState().initialized).toBe(false);
     expect(useDrillsStore.getState().completions).toEqual([]);
     expect(useDrillsStore.getState().recommendedCategories).toEqual([]);
+    expect(useBagStore.getState()).toMatchObject({ userId: null, distances: {}, loaded: false });
+  });
+
+  it('clears the earned badges and the celebration queue', async () => {
+    useBadgesStore.setState({ userId: 'user-1', earned: { first_round: '2026-01-01T00:00:00Z' }, loaded: true, queue: ['first_round'] });
+
+    await useAuthStore.getState().signOut();
+
+    expect(useBadgesStore.getState()).toMatchObject({ userId: null, earned: {}, loaded: false, queue: [] });
+  });
+
+  it('clears the monthly challenge', async () => {
+    useMonthlyChallengeStore.setState({ userId: 'user-1', month: '2026-10', challengeId: 'drills_putting', changeUsed: true, loaded: true, doneSeen: true });
+
+    await useAuthStore.getState().signOut();
+
+    expect(useMonthlyChallengeStore.getState()).toMatchObject({ userId: null, month: null, challengeId: null, changeUsed: false, loaded: false, doneSeen: null });
+  });
+
+  it('clears the queued rounds in memory, but keeps them stored for when the user comes back', async () => {
+    await primeRoundQueue('user-1');
+
+    await useAuthStore.getState().signOut();
+
+    expect(useRoundQueueStore.getState()).toMatchObject({ userId: null, entries: [], loaded: false, flushing: false });
+    await expect(AsyncStorage.getItem(getRoundQueueStorageKey('user-1'))).resolves.not.toBeNull();
+
+    await useRoundQueueStore.getState().load('user-1');
+    expect(useRoundQueueStore.getState().entries).toHaveLength(1);
+  });
+
+  it('clears the cached hole rows', async () => {
+    await primeHolesCache();
+
+    await useAuthStore.getState().signOut();
+
+    expect(getCachedHoles([CACHED_ROUND])).toBeNull();
   });
 
   it('falls back to a local sign-out when the global one fails', async () => {
@@ -363,5 +475,79 @@ describe('signOut', () => {
     mockClearRoundDraft.mockRejectedValue(new Error('storage unavailable'));
 
     await expect(useAuthStore.getState().signOut()).resolves.toBeUndefined();
+  });
+});
+
+describe('password recovery flag', () => {
+  it('starts off', () => {
+    expect(useAuthStore.getState().passwordRecovery).toBe(false);
+  });
+
+  it('turns on with the PASSWORD_RECOVERY event', () => {
+    useAuthStore.getState().setSession(session('user-1'), 'PASSWORD_RECOVERY');
+
+    expect(useAuthStore.getState().passwordRecovery).toBe(true);
+  });
+
+  it('survives the SIGNED_IN a PKCE exchange emits once the reset screen raised it', () => {
+    useAuthStore.getState().setPasswordRecovery(true);
+
+    useAuthStore.getState().setSession(session('user-1'), 'SIGNED_IN');
+    useAuthStore.getState().setSession(session('user-1'), 'USER_UPDATED');
+
+    expect(useAuthStore.getState().passwordRecovery).toBe(true);
+  });
+
+  it('survives a late initial-session event without a session between raising it and the sign-in', () => {
+    useAuthStore.getState().setPasswordRecovery(true);
+
+    useAuthStore.getState().setSession(null, 'INITIAL_SESSION');
+    useAuthStore.getState().setSession(null);
+
+    expect(useAuthStore.getState().passwordRecovery).toBe(true);
+
+    useAuthStore.getState().setSession(session('user-1'), 'SIGNED_IN');
+
+    expect(useAuthStore.getState().passwordRecovery).toBe(true);
+    expect(useAuthStore.getState().session).not.toBeNull();
+  });
+
+  it('is cleared when another user takes over the session', () => {
+    useAuthStore.getState().setSession(session('user-1'), 'PASSWORD_RECOVERY');
+
+    useAuthStore.getState().setSession(session('user-2'), 'SIGNED_IN');
+
+    expect(useAuthStore.getState().passwordRecovery).toBe(false);
+  });
+
+  it('is not raised by an ordinary sign-in', () => {
+    useAuthStore.getState().setSession(session('user-1'), 'SIGNED_IN');
+
+    expect(useAuthStore.getState().passwordRecovery).toBe(false);
+  });
+
+  it('is cleared explicitly once the password is updated', () => {
+    useAuthStore.getState().setSession(session('user-1'), 'PASSWORD_RECOVERY');
+
+    useAuthStore.getState().setPasswordRecovery(false);
+
+    expect(useAuthStore.getState().passwordRecovery).toBe(false);
+    expect(useAuthStore.getState().session).not.toBeNull();
+  });
+
+  it('is cleared when the session disappears with an explicit sign-out', () => {
+    useAuthStore.getState().setSession(session('user-1'), 'PASSWORD_RECOVERY');
+
+    useAuthStore.getState().setSession(null, 'SIGNED_OUT');
+
+    expect(useAuthStore.getState().passwordRecovery).toBe(false);
+  });
+
+  it('is cleared by signOut', async () => {
+    useAuthStore.getState().setSession(session('user-1'), 'PASSWORD_RECOVERY');
+
+    await useAuthStore.getState().signOut();
+
+    expect(useAuthStore.getState().passwordRecovery).toBe(false);
   });
 });

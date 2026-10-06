@@ -46,13 +46,7 @@ Variables client dans `.env.local` (publiques : elles sont embarquées dans l'ap
 
 > Les secrets serveur (Anthropic, webhook RevenueCat, etc.) se définissent uniquement avec `supabase secrets set`, jamais dans `.env.local` ni dans le bundle Expo. `SUPABASE_URL`, `SUPABASE_ANON_KEY` et `SUPABASE_SERVICE_ROLE_KEY` sont injectées automatiquement par Supabase dans les Edge Functions.
 
-`lib/env-check.ts` exporte `assertClientEnv()`, qui lève en développement une erreur explicite listant les variables client manquantes (en production, elle journalise seulement l'erreur). Pour l'activer, appelle-la dans `lib/supabase.ts` juste avant `createClient(...)` :
-
-```ts
-import { assertClientEnv } from './env-check';
-
-assertClientEnv();
-```
+`lib/env-check.ts` exporte `assertClientEnv()`, appelée au chargement de `lib/supabase.ts` avant `createClient(...)` : en développement, elle lève une erreur explicite listant les variables client manquantes ; en production, elle journalise seulement l'erreur. Les tests Jest définissent des valeurs factices dans `jest.setup.js`.
 
 ## Coach IA (Edge Function `ai-coach`)
 
@@ -126,6 +120,14 @@ Effet de chaque événement sur `subscriptions` :
 | `BILLING_ISSUE`, `SUBSCRIPTION_PAUSED`, `TEMPORARY_ENTITLEMENT_GRANT`, `TEST` et types inconnus | Ignorés (réponse 200) |
 
 Un `app_user_id` qui n'est pas un UUID (par exemple `$RCAnonymousID:...`) ou un compte supprimé est ignoré avec une réponse 200 : il n'y a rien à rattacher et RevenueCat ne doit pas réessayer. Un événement plus ancien que le dernier appliqué (`last_event_at`) est ignoré, de sorte qu'une `EXPIRATION` rejouée après un `RENEWAL` ne retire pas le Premium. Une erreur base de données renvoie 500 et RevenueCat réessaie.
+
+## Mot de passe oublié
+
+« Mot de passe oublié ? » sur l'écran de connexion envoie un lien (`supabase.auth.resetPasswordForEmail`) qui ouvre `app/reset-password.tsx`, où l'utilisateur choisit un nouveau mot de passe.
+
+- **URL de redirection** : dans Supabase, Authentication > URL Configuration > Redirect URLs, autoriser `fairwayiq://reset-password`. Le joker `fairwayiq://**` couvre cette URL et `fairwayiq://auth-callback`. Si l'URL n'est pas autorisée, Supabase redirige vers la Site URL et le lien n'ouvre pas l'app. Dans Expo Go, l'URL à autoriser est de la forme `exp://<ip>:8081/--/reset-password`.
+- **Même appareil** : le flux est en PKCE, donc le lien ne fonctionne que sur l'appareil qui l'a demandé, et seul le dernier email reçu reste valable.
+- **Limite d'envoi** : le serveur d'emails intégré de Supabase est limité à quelques emails par heure pour tout le projet, et Supabase espace aussi les demandes pour une même adresse (60 s par défaut). L'app affiche alors « Trop de demandes pour le moment ». Pour la production, configurer un SMTP personnalisé (Authentication > Emails > SMTP Settings).
 
 ## Lancer l'app
 

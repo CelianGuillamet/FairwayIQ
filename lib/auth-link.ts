@@ -23,6 +23,25 @@ export function readAuthCode(param: string | string[] | undefined): string | nul
   return typeof value === 'string' && CODE_PATTERN.test(value) ? value : null;
 }
 
+// Reading the stored verifier can reject (secure storage unavailable): the link then takes the
+// normal exchange path instead of leaving the screen on its spinner.
+export async function shouldResumePasswordRecovery(input: {
+  code: string | null;
+  hasSession: () => boolean;
+  hasPendingRecovery: () => Promise<boolean>;
+}) {
+  if (!input.code || input.hasSession()) {
+    return false;
+  }
+
+  try {
+    return await input.hasPendingRecovery();
+  } catch (error) {
+    console.warn('[auth] pending recovery check failed', { message: redactUrlForLogging(getErrorMessage(error)) });
+    return false;
+  }
+}
+
 // A PKCE code is only redeemable together with the verifier this device generated when it
 // started the flow, so links we did not initiate can never sign anyone in. We still skip the
 // request when there is no verifier, and never replace a session that is already active.

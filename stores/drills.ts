@@ -1,22 +1,32 @@
 import { create } from 'zustand';
 import { supabase } from '../lib/supabase';
 import { format, isToday, isYesterday, subDays } from 'date-fns';
+import {
+  getBestResult as selectBestResult,
+  getLastResult as selectLastResult,
+  getSuccessRate as selectSuccessRate,
+  parseResult,
+  type CompletionWithResult,
+  type DrillResult,
+} from '../lib/drill-results';
 
 const PAGE_SIZE = 500;
 const MAX_PAGES = 20;
 
-type Completion = {
+export type Completion = CompletionWithResult & {
   id: string;
-  drill_id: string;
-  completed_at: string;
 };
 
 type DrillsState = {
   completions: Completion[];
+  initialized: boolean;
   recommendedCategories: string[];
   fetchCompletions: () => Promise<void>;
-  markDone: (drillId: string, userId: string) => Promise<void>;
+  markDone: (drillId: string, userId: string, result?: DrillResult | null) => Promise<void>;
   isDoneToday: (drillId: string) => boolean;
+  getLastResult: (drillId: string) => DrillResult | null;
+  getBestResult: (drillId: string) => DrillResult | null;
+  getSuccessRate: (drillId: string) => number | null;
   getStreak: () => number;
   getTotalDone: () => number;
   setRecommendedCategories: (cats: string[]) => void;
@@ -26,9 +36,18 @@ type DrillsState = {
 // Bumped on reset(): a response that started before it belongs to a previous user and is dropped.
 let generation = 0;
 const pendingMarks = new Map<string, Promise<void>>();
+const completionListeners = new Set<(completion: Completion) => void>();
+
+export function onDrillCompleted(listener: (completion: Completion) => void) {
+  completionListeners.add(listener);
+  return () => {
+    completionListeners.delete(listener);
+  };
+}
 
 export const useDrillsStore = create<DrillsState>((set, get) => ({
   completions: [],
+  initialized: false,
   recommendedCategories: [],
 
   fetchCompletions: async () => {
@@ -66,10 +85,15 @@ export const useDrillsStore = create<DrillsState>((set, get) => ({
       }
     }
 
-    set({ completions: allCompletions });
+    set({ completions: allCompletions, initialized: true });
   },
 
-  markDone: (drillId, userId) => {
+  markDone: (drillId, userId, result = null) => {
+    const checked = result ? parseResult(result.made, result.attempts) : null;
+    if (result && !checked) {
+      return Promise.reject(new Error('Résultat invalide.'));
+    }
+
     const pendingKey = `${userId}:${drillId}`;
     const pending = pendingMarks.get(pendingKey);
     if (pending) {
@@ -80,7 +104,11 @@ export const useDrillsStore = create<DrillsState>((set, get) => ({
     const request = (async () => {
       const { data, error } = await supabase
         .from('drill_completions')
-        .insert({ drill_id: drillId, user_id: userId })
+        .insert(
+          checked
+            ? { drill_id: drillId, user_id: userId, result_made: checked.made, result_attempts: checked.attempts }
+            : { drill_id: drillId, user_id: userId }
+        )
         .select()
         .single();
 
@@ -90,6 +118,14 @@ export const useDrillsStore = create<DrillsState>((set, get) => ({
 
       if (data && requestGeneration === generation) {
         set({ completions: [data, ...get().completions] });
+        // The row is saved: a failing listener must not make the caller retry and duplicate it.
+        completionListeners.forEach((listener) => {
+          try {
+            listener(data);
+          } catch {
+            return;
+          }
+        });
       }
     })().finally(() => pendingMarks.delete(pendingKey));
 
@@ -102,6 +138,12 @@ export const useDrillsStore = create<DrillsState>((set, get) => ({
       c => c.drill_id === drillId && isToday(new Date(c.completed_at))
     );
   },
+
+  getLastResult: (drillId) => selectLastResult(drillId, get().completions),
+
+  getBestResult: (drillId) => selectBestResult(drillId, get().completions),
+
+  getSuccessRate: (drillId) => selectSuccessRate(drillId, get().completions),
 
   getStreak: () => {
     const completions = get().completions;
@@ -131,6 +173,6 @@ export const useDrillsStore = create<DrillsState>((set, get) => ({
 
   reset: () => {
     generation++;
-    set({ completions: [], recommendedCategories: [] });
+    set({ completions: [], initialized: false, recommendedCategories: [] });
   },
 }));

@@ -1,12 +1,14 @@
 import { useState } from 'react';
 import {
+  ActivityIndicator,
   Alert,
   KeyboardAvoidingView,
   Platform,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
-  TouchableOpacity,
+  View,
 } from 'react-native';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -14,13 +16,15 @@ import { openLegalUrl } from '../lib/legal';
 import { MANAGE_SUBSCRIPTION_URL } from '../lib/subscription';
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../stores/auth';
-import { Colors, GOALS, HANDICAP_LEVELS, PLAY_FREQUENCIES } from '../constants';
-import { DecorativeBackground } from '../components/ui/DecorativeBackground';
-import { AppCard } from '../components/ui/AppCard';
+import { GOALS, HANDICAP_LEVELS, PLAY_FREQUENCIES, Radius, Spacing, Typography } from '../constants';
+import type { ThemeColors } from '../constants';
+import { hapticWarning } from '../lib/haptics';
+import { useTheme, useThemedStyles } from '../lib/theme';
 import { AppInput } from '../components/ui/AppInput';
 import { AppButton } from '../components/ui/AppButton';
 import { ChoiceTile } from '../components/ui/ChoiceTile';
 import { PageHeader } from '../components/ui/PageHeader';
+import { TextAction } from '../components/ui/TextAction';
 
 const SAVE_ERROR_MESSAGE = 'Impossible d’enregistrer tes modifications pour le moment. Réessaie dans un instant.';
 const DELETE_ERROR_MESSAGE = 'La suppression du compte a échoué. Réessaie plus tard.';
@@ -28,6 +32,7 @@ const DELETE_ERROR_MESSAGE = 'La suppression du compte a échoué. Réessaie plu
 export default function EditProfileScreen() {
   const { profile, fetchProfile, signOut } = useAuthStore();
   const insets = useSafeAreaInsets();
+  const styles = useThemedStyles(createStyles);
 
   const [displayName, setDisplayName] = useState(profile?.display_name ?? '');
   const [handicap, setHandicap] = useState<number>(profile?.handicap ?? 36);
@@ -88,28 +93,34 @@ export default function EditProfileScreen() {
       [
         { text: 'Annuler', style: 'cancel' },
         { text: 'Gérer mon abonnement', onPress: () => void openLegalUrl(MANAGE_SUBSCRIPTION_URL) },
-        { text: 'Supprimer', style: 'destructive', onPress: () => void performDeleteAccount() },
+        {
+          text: 'Supprimer',
+          style: 'destructive',
+          onPress: () => {
+            hapticWarning();
+            void performDeleteAccount();
+          },
+        },
       ]
     );
   };
 
   return (
     <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <DecorativeBackground />
-      <ScrollView contentContainerStyle={[styles.content, { paddingTop: insets.top + 16 }]} keyboardShouldPersistTaps="handled">
+      <ScrollView
+        contentContainerStyle={[styles.content, { paddingTop: insets.top + Spacing.md, paddingBottom: insets.bottom + Spacing.xxl }]}
+        keyboardShouldPersistTaps="handled"
+      >
         <PageHeader
-          eyebrow="Profil"
           title="Modifier le profil"
           subtitle="Ajuste les réglages qui pilotent la personnalisation du produit."
-          trailing={(
-            <TouchableOpacity onPress={() => router.back()}>
-              <Text style={styles.closeText}>Fermer</Text>
-            </TouchableOpacity>
-          )}
+          trailing={<TextAction label="Fermer" tone="muted" onPress={() => router.back()} />}
         />
 
-        <AppCard style={styles.section}>
-          <Text style={styles.sectionLabel}>Identité</Text>
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle} accessibilityRole="header">
+            Identité
+          </Text>
           <AppInput
             label="Prénom"
             value={displayName}
@@ -117,43 +128,55 @@ export default function EditProfileScreen() {
             placeholder="Ton prénom"
             autoCapitalize="words"
           />
-        </AppCard>
+        </View>
 
-        <AppCard style={styles.section}>
-          <Text style={styles.sectionLabel}>Handicap</Text>
-          {HANDICAP_LEVELS.map((level) => (
-            <ChoiceTile
-              key={level.value}
-              label={level.label}
-              selected={handicap === level.value}
-              onPress={() => setHandicap(level.value)}
-            />
-          ))}
-        </AppCard>
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle} accessibilityRole="header">
+            Handicap
+          </Text>
+          <View accessibilityRole="radiogroup" accessibilityLabel="Handicap">
+            {HANDICAP_LEVELS.map((level) => (
+              <ChoiceTile
+                key={level.value}
+                label={level.label}
+                selected={handicap === level.value}
+                onPress={() => setHandicap(level.value)}
+              />
+            ))}
+          </View>
+        </View>
 
-        <AppCard style={styles.section}>
-          <Text style={styles.sectionLabel}>Fréquence de jeu</Text>
-          {PLAY_FREQUENCIES.map((frequency) => (
-            <ChoiceTile
-              key={frequency.value}
-              label={frequency.label}
-              selected={playFrequency === frequency.value}
-              onPress={() => setPlayFrequency(frequency.value)}
-            />
-          ))}
-        </AppCard>
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle} accessibilityRole="header">
+            Fréquence de jeu
+          </Text>
+          <View accessibilityRole="radiogroup" accessibilityLabel="Fréquence de jeu">
+            {PLAY_FREQUENCIES.map((frequency) => (
+              <ChoiceTile
+                key={frequency.value}
+                label={frequency.label}
+                selected={playFrequency === frequency.value}
+                onPress={() => setPlayFrequency(frequency.value)}
+              />
+            ))}
+          </View>
+        </View>
 
-        <AppCard style={styles.section}>
-          <Text style={styles.sectionLabel}>Objectif principal</Text>
-          {GOALS.map((currentGoal) => (
-            <ChoiceTile
-              key={currentGoal.value}
-              label={currentGoal.label}
-              selected={goal === currentGoal.value}
-              onPress={() => setGoal(currentGoal.value)}
-            />
-          ))}
-        </AppCard>
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle} accessibilityRole="header">
+            Objectif principal
+          </Text>
+          <View accessibilityRole="radiogroup" accessibilityLabel="Objectif principal">
+            {GOALS.map((currentGoal) => (
+              <ChoiceTile
+                key={currentGoal.value}
+                label={currentGoal.label}
+                selected={goal === currentGoal.value}
+                onPress={() => setGoal(currentGoal.value)}
+              />
+            ))}
+          </View>
+        </View>
 
         <AppButton
           label="Sauvegarder les modifications"
@@ -165,82 +188,106 @@ export default function EditProfileScreen() {
 
         <AppButton
           label="Annuler"
-          variant="secondary"
+          variant="ghost"
           onPress={() => router.back()}
         />
 
-        <AppCard style={styles.dangerSection}>
-          <Text style={styles.sectionLabel}>Zone dangereuse</Text>
+        <View style={styles.dangerSection}>
+          <Text style={styles.dangerTitle} accessibilityRole="header">
+            Zone dangereuse
+          </Text>
           <Text style={styles.dangerText}>
             La suppression de ton compte efface définitivement ton profil, tes rounds et tes diagnostics. Cette action est irréversible.
           </Text>
           <Text style={styles.dangerText}>
-            Elle n’annule pas un abonnement Premium Apple : annule-le toi-même pour ne plus être facturé.{' '}
-            <Text
-              style={styles.dangerLink}
-              accessibilityRole="link"
-              onPress={() => void openLegalUrl(MANAGE_SUBSCRIPTION_URL)}
-            >
-              Gérer mon abonnement
-            </Text>
+            Elle n’annule pas un abonnement Premium Apple : annule-le toi-même pour ne plus être facturé.
           </Text>
-          <AppButton
-            label="Supprimer mon compte"
-            variant="secondary"
-            onPress={handleDeleteAccount}
-            loading={deleting}
-            style={styles.dangerAction}
+          <TextAction
+            label="Gérer mon abonnement"
+            role="link"
+            underline
+            onPress={() => void openLegalUrl(MANAGE_SUBSCRIPTION_URL)}
+            accessibilityHint="Ouvre les réglages d’abonnement Apple"
           />
-        </AppCard>
+          <DangerButton label="Supprimer mon compte" onPress={handleDeleteAccount} loading={deleting} />
+        </View>
       </ScrollView>
     </KeyboardAvoidingView>
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.background,
-  },
-  content: {
-    paddingHorizontal: 24,
-    paddingBottom: 40,
-  },
-  closeText: {
-    color: Colors.textMuted,
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  section: {
-    marginBottom: 16,
-  },
-  sectionLabel: {
-    fontSize: 13,
-    fontWeight: '800',
-    color: Colors.textDim,
-    textTransform: 'uppercase',
-    letterSpacing: 0.8,
-    marginBottom: 12,
-  },
-  primaryAction: {
-    marginBottom: 10,
-  },
-  dangerSection: {
-    marginTop: 24,
-    borderColor: Colors.error,
-    borderWidth: 1,
-  },
-  dangerText: {
-    fontSize: 13,
-    color: Colors.textMuted,
-    lineHeight: 18,
-    marginBottom: 16,
-  },
-  dangerLink: {
-    color: Colors.text,
-    textDecorationLine: 'underline',
-  },
-  dangerAction: {
-    borderColor: Colors.error,
-  },
-});
+function DangerButton({ label, onPress, loading }: { label: string; onPress: () => void; loading: boolean }) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(createStyles);
+
+  return (
+    <Pressable
+      style={({ pressed }) => [styles.dangerButton, pressed && styles.pressed]}
+      onPress={onPress}
+      disabled={loading}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityState={{ disabled: loading, busy: loading }}
+    >
+      {loading ? <ActivityIndicator color={colors.error} /> : <Text style={styles.dangerButtonLabel}>{label}</Text>}
+    </Pressable>
+  );
+}
+
+const createStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: colors.bg,
+    },
+    content: {
+      paddingHorizontal: Spacing.lg,
+    },
+    section: {
+      marginBottom: Spacing.sm,
+    },
+    sectionTitle: {
+      ...Typography.heading,
+      color: colors.ink,
+      marginBottom: Spacing.sm,
+    },
+    primaryAction: {
+      marginTop: Spacing.xs,
+      marginBottom: Spacing.xs,
+    },
+    dangerSection: {
+      marginTop: Spacing.xl,
+      padding: 18,
+      gap: Spacing.xs,
+      borderRadius: Radius.xl,
+      borderWidth: 1,
+      borderColor: colors.error,
+      backgroundColor: colors.errorBg,
+    },
+    dangerTitle: {
+      ...Typography.heading,
+      color: colors.error,
+    },
+    dangerText: {
+      ...Typography.body,
+      color: colors.ink2,
+    },
+    dangerButton: {
+      minHeight: 52,
+      marginTop: Spacing.xs,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderRadius: Radius.lg,
+      borderWidth: 1.5,
+      borderColor: colors.error,
+    },
+    dangerButtonLabel: {
+      ...Typography.heading,
+      fontSize: 15,
+      lineHeight: 20,
+      color: colors.error,
+    },
+    pressed: {
+      opacity: 0.7,
+    },
+  });

@@ -1,16 +1,43 @@
-import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useEffect, useState, type ReactNode } from 'react';
+import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { useAuthStore } from '../../stores/auth';
 import { useRoundsStore } from '../../stores/rounds';
 import { useDrillsStore } from '../../stores/drills';
+import { useBadgesStore } from '../../stores/badges';
+import { useBagStore } from '../../stores/bag';
 import { useSubscriptionStore } from '../../stores/subscription';
-import { Colors, GOALS, PLAY_FREQUENCIES, Spacing, Typography } from '../../constants';
-import { DecorativeBackground } from '../../components/ui/DecorativeBackground';
-import { AppCard } from '../../components/ui/AppCard';
-import { AppButton } from '../../components/ui/AppButton';
+import {
+  GOALS,
+  Numerals,
+  PLAY_FREQUENCIES,
+  PRIVACY_POLICY_URL,
+  Spacing,
+  TERMS_OF_USE_URL,
+  Typography,
+} from '../../constants';
+import type { ThemeColors } from '../../constants';
+import { useTheme, useThemedStyles } from '../../lib/theme';
+import { capitalizeFirst, formatHandicapValue, formatSignedFr } from '../../lib/home';
+import { countClubs, formatClubCount } from '../../lib/bag';
+import { BADGES } from '../../lib/badges';
+import { hapticWarning } from '../../lib/haptics';
+import { openLegalUrl } from '../../lib/legal';
+import { ensureCompletionsLoaded, ensureRoundsLoaded } from '../../lib/ensure-loaded';
+import { MANAGE_SUBSCRIPTION_URL } from '../../lib/subscription';
+import {
+  describeSubscriptionPeriod,
+  fetchSubscriptionPeriod,
+  type SubscriptionPeriod,
+} from '../../lib/subscription-period';
 import { AppBadge } from '../../components/ui/AppBadge';
-import { PageHeader } from '../../components/ui/PageHeader';
+import { AppButton } from '../../components/ui/AppButton';
+import { AppCard } from '../../components/ui/AppCard';
+import { Icon } from '../../components/ui/Icon';
+import { TextAction } from '../../components/ui/TextAction';
+import { ThemePreferenceControl } from '../../components/ui/ThemePreferenceControl';
+import { StatsStrip } from '../../components/home/StatsStrip';
 import {
   getAveragePenaltyCount,
   getAverageScorePer18Holes,
@@ -19,218 +46,405 @@ import {
   getHandicapIndexCard,
 } from '../../lib/rounds';
 
+const PLACEHOLDER = '--';
+
 export default function ProfileScreen() {
-  const { profile, signOut } = useAuthStore();
-  const { rounds } = useRoundsStore();
-  const { getTotalDone, getStreak } = useDrillsStore();
+  const { profile, user, signOut } = useAuthStore();
+  const { rounds, initialized: roundsReady } = useRoundsStore();
+  const { getTotalDone, getStreak, initialized: drillsReady } = useDrillsStore();
+  const bagCount = useBagStore((state) => (state.loaded ? countClubs(state.distances) : null));
+  const loadBag = useBagStore((state) => state.load);
+  const trophyCount = useBadgesStore((state) => (state.loaded ? Object.keys(state.earned).length : null));
   const isPremium = useSubscriptionStore((state) => state.isPremium);
   const subscriptionLoading = useSubscriptionStore((state) => state.loading);
   const insets = useSafeAreaInsets();
+  const styles = useThemedStyles(createStyles);
+  const [period, setPeriod] = useState<SubscriptionPeriod | null>(null);
+  const userId = user?.id;
 
-  const goalLabel = GOALS.find((goal) => goal.value === profile?.goal)?.label ?? profile?.goal ?? '--';
-  const frequencyLabel = PLAY_FREQUENCIES.find((frequency) => frequency.value === profile?.play_frequency)?.label ?? '--';
+  useEffect(() => {
+    if (!isPremium || !userId) {
+      setPeriod(null);
+      return;
+    }
+
+    let active = true;
+
+    void fetchSubscriptionPeriod(userId).then((value) => {
+      if (active) setPeriod(value);
+    });
+
+    return () => {
+      active = false;
+    };
+  }, [isPremium, userId]);
+
+  useEffect(() => {
+    if (userId) void loadBag(userId);
+  }, [userId, loadBag]);
+
+  useEffect(() => {
+    if (userId && !roundsReady) void ensureRoundsLoaded();
+  }, [userId, roundsReady]);
+
+  useEffect(() => {
+    if (userId && !drillsReady) void ensureCompletionsLoaded();
+  }, [userId, drillsReady]);
+
+  const goalLabel = GOALS.find((goal) => goal.value === profile?.goal)?.label ?? profile?.goal ?? PLACEHOLDER;
+  const frequencyLabel = PLAY_FREQUENCIES.find((frequency) => frequency.value === profile?.play_frequency)?.label ?? PLACEHOLDER;
   const handicapIndexCard = getHandicapIndexCard(rounds);
   const bestRound = getBestRound(rounds);
   const averagePenaltyCount = getAveragePenaltyCount(rounds);
   const scoringAverage = getAverageScorePer18Holes(rounds);
   const averageToPar = getAverageScoreToParPer18Holes(rounds);
-  const subscriptionLabel = isPremium ? 'Premium actif' : subscriptionLoading ? '--' : 'Passer à Premium';
+  const { planLabel, until } = describeSubscriptionPeriod(period);
+  const displayName = profile?.display_name ?? 'Joueur';
 
   const handleSignOut = () => {
     Alert.alert('Déconnexion', 'Es-tu sûr de vouloir te déconnecter ?', [
       { text: 'Annuler', style: 'cancel' },
-      { text: 'Déconnecter', style: 'destructive', onPress: () => void signOut() },
+      {
+        text: 'Déconnecter',
+        style: 'destructive',
+        onPress: () => {
+          hapticWarning();
+          void signOut();
+        },
+      },
     ]);
   };
 
   return (
     <View style={styles.container}>
-      <DecorativeBackground />
-      <ScrollView contentContainerStyle={[styles.content, { paddingTop: insets.top + 16 }]}>
-        <PageHeader
-          eyebrow="Profil joueur"
-          title={profile?.display_name ?? 'Joueur'}
-          subtitle={`Handicap déclaré ${profile?.handicap ?? '--'} · ${frequencyLabel}`}
-          trailing={<AppBadge label="Profil" tone="primary" />}
-        />
-
-        <AppCard accent="highlight" style={styles.heroCard}>
-          <View style={styles.heroTop}>
-            <View style={styles.avatar}>
-              <Text style={styles.avatarText}>{profile?.display_name?.[0]?.toUpperCase() ?? '?'}</Text>
-            </View>
-            <View style={styles.heroMeta}>
-              <Text style={styles.heroName}>{profile?.display_name ?? 'Joueur'}</Text>
-              <Text style={styles.heroSub}>Objectif: {goalLabel}</Text>
-            </View>
+      <ScrollView contentContainerStyle={[styles.content, { paddingTop: insets.top + Spacing.md, paddingBottom: insets.bottom + Spacing.xl }]}>
+        <View style={styles.identity}>
+          <View style={styles.avatar} accessible={false} importantForAccessibility="no-hide-descendants">
+            <Text style={styles.avatarText}>{profile?.display_name?.[0]?.toUpperCase() ?? '?'}</Text>
           </View>
-
-          <View style={styles.heroActions}>
-            <AppButton label="Modifier le profil" variant="secondary" onPress={() => router.push('/edit-profile' as any)} style={styles.heroButton} />
-            <AppButton label="Voir Premium" onPress={() => router.push('/paywall' as any)} style={styles.heroButton} />
+          <View style={styles.identityCopy}>
+            <Text style={styles.name} accessibilityRole="header" numberOfLines={2}>
+              {displayName}
+            </Text>
+            <Text style={styles.identitySub}>Handicap déclaré {profile?.handicap ?? PLACEHOLDER}</Text>
           </View>
-        </AppCard>
-
-        <View style={styles.metricsGrid}>
-          <MetricCard label="Rounds" value={rounds.length.toString()} helper="historique" />
-          <MetricCard label={handicapIndexCard.label} value={handicapIndexCard.value} helper={handicapIndexCard.helper} />
-          <MetricCard label="Meilleur score" value={bestRound ? `${bestRound.total_score}` : '--'} helper={bestRound ? `${bestRound.total_score - bestRound.par > 0 ? '+' : ''}${bestRound.total_score - bestRound.par} · ${bestRound.holes} trous` : '—'} />
-          <MetricCard label="Streak drills" value={getStreak().toString()} helper="jours" />
         </View>
 
-        <AppCard style={styles.section}>
-          <Text style={styles.sectionTitle}>Repères de jeu</Text>
-          <InfoRow label="Score moyen (18 trous)" value={scoringAverage != null ? `${scoringAverage}` : '--'} />
-          <InfoRow label="Moyenne vs par (18 trous)" value={averageToPar != null ? `${averageToPar > 0 ? '+' : ''}${averageToPar}` : '--'} />
-          <InfoRow label="Pénalités moyennes (18 trous)" value={averagePenaltyCount != null ? `${averagePenaltyCount}` : '--'} />
-          <InfoRow label="Drills complétés" value={getTotalDone().toString()} />
-        </AppCard>
+        <StatsStrip
+          columns={4}
+          items={[
+            { label: 'Rounds', value: rounds.length.toString() },
+            { label: 'Index estimé', value: formatHandicapValue(handicapIndexCard.value) },
+            {
+              label: 'Meilleur score',
+              value: bestRound ? `${bestRound.total_score}` : PLACEHOLDER,
+            },
+            { label: 'Jours de série', value: getStreak().toString() },
+          ]}
+        />
 
-        <AppCard style={styles.section}>
-          <Text style={styles.sectionTitle}>Profil joueur</Text>
-          <InfoRow label="Objectif" value={goalLabel} />
-          <InfoRow label="Fréquence de jeu" value={frequencyLabel} />
-        </AppCard>
+        <Section title="Abonnement">
+          <AppCard>
+            {isPremium ? (
+              <>
+                <View style={styles.statusRow}>
+                  <Text style={styles.statusTitle}>Premium</Text>
+                  <AppBadge label="Actif" tone="good" icon="check" />
+                </View>
+                {planLabel || until ? (
+                  <Text style={styles.statusText}>
+                    {planLabel ? [planLabel, until].filter(Boolean).join(' · ') : capitalizeFirst(until ?? '')}
+                  </Text>
+                ) : null}
+                <TextAction
+                  label="Gérer mon abonnement"
+                  role="link"
+                  tone="muted"
+                  underline
+                  onPress={() => void openLegalUrl(MANAGE_SUBSCRIPTION_URL)}
+                  accessibilityHint="Ouvre les réglages d’abonnement Apple"
+                />
+              </>
+            ) : subscriptionLoading ? (
+              <Text style={styles.statusText}>Vérification de l’abonnement…</Text>
+            ) : (
+              <>
+                <View style={styles.statusRow}>
+                  <Text style={styles.statusTitle}>Gratuit</Text>
+                </View>
+                <Text style={styles.statusText}>
+                  Passe à Premium pour le débrief conversationnel et le coach IA étendu.
+                </Text>
+                <AppButton
+                  label="Voir Premium"
+                  variant="secondary"
+                  onPress={() => router.push('/paywall' as any)}
+                  style={styles.premiumButton}
+                />
+              </>
+            )}
+          </AppCard>
+        </Section>
 
-        <AppCard style={styles.section}>
-          <Text style={styles.sectionTitle}>Application</Text>
-          <InfoRow label="Abonnement" value={subscriptionLabel} accent />
-          <InfoRow label="Version" value="1.0.0" />
-        </AppCard>
+        <Section title="Profil de joueur">
+          <AppCard style={styles.listCard}>
+            <InfoRow label="Objectif" value={goalLabel} first />
+            <InfoRow label="Fréquence de jeu" value={frequencyLabel} />
+            <LinkRow label="Modifier le profil" onPress={() => router.push('/edit-profile' as any)} />
+          </AppCard>
+        </Section>
 
-        <AppButton label="Se déconnecter" variant="secondary" onPress={handleSignOut} style={styles.signOutButton} />
+        <Section title="Repères de jeu">
+          <AppCard style={styles.listCard}>
+            <InfoRow label="Score moyen (18 trous)" value={scoringAverage != null ? `${scoringAverage}`.replace('.', ',') : PLACEHOLDER} first />
+            <InfoRow label="Moyenne vs par (18 trous)" value={averageToPar != null ? formatSignedFr(averageToPar) : PLACEHOLDER} />
+            <InfoRow label="Pénalités moyennes (18 trous)" value={averagePenaltyCount != null ? `${averagePenaltyCount}`.replace('.', ',') : PLACEHOLDER} />
+            <InfoRow label="Exercices réalisés" value={getTotalDone().toString()} />
+          </AppCard>
+        </Section>
+
+        <Section title="Mon jeu">
+          <AppCard style={styles.listCard}>
+            <LinkRow
+              label="Mon sac"
+              value={bagCount != null ? formatClubCount(bagCount) : undefined}
+              first
+              onPress={() => router.push('/bag' as any)}
+            />
+            <LinkRow
+              label="Trophées"
+              value={trophyCount != null ? `${trophyCount} sur ${BADGES.length}` : undefined}
+              onPress={() => router.push('/trophies' as any)}
+            />
+          </AppCard>
+        </Section>
+
+        <Section title="Apparence">
+          <ThemePreferenceControl />
+          <Text style={styles.caption}>Auto suit le réglage de ton téléphone.</Text>
+        </Section>
+
+        <Section title="Rappels">
+          <AppCard style={styles.listCard}>
+            <LinkRow label="Notifications" first onPress={() => router.push('/notifications' as any)} />
+          </AppCard>
+        </Section>
+
+        <Section title="Informations légales">
+          <AppCard style={styles.listCard}>
+            <LinkRow
+              label="Conditions d’utilisation"
+              first
+              role="link"
+              onPress={() => void openLegalUrl(TERMS_OF_USE_URL)}
+            />
+            <LinkRow
+              label="Politique de confidentialité"
+              role="link"
+              onPress={() => void openLegalUrl(PRIVACY_POLICY_URL)}
+            />
+          </AppCard>
+        </Section>
+
+        <Section title="Données et confidentialité">
+          <AppCard style={styles.listCard}>
+            <LinkRow label="Exporter mes données" first onPress={() => router.push('/export-data' as any)} />
+          </AppCard>
+        </Section>
+
+        <Pressable
+          style={({ pressed }) => [styles.signOut, pressed && styles.pressed]}
+          onPress={handleSignOut}
+          accessibilityRole="button"
+          accessibilityLabel="Se déconnecter"
+        >
+          <Text style={styles.signOutLabel}>Se déconnecter</Text>
+        </Pressable>
+
+        <Text style={styles.version}>Version 1.0.0</Text>
       </ScrollView>
     </View>
   );
 }
 
-function MetricCard({ label, value, helper }: { label: string; value: string; helper: string }) {
-  return (
-    <AppCard style={styles.metricCard}>
-      <Text style={styles.metricValue}>{value}</Text>
-      <Text style={styles.metricLabel}>{label}</Text>
-      <Text style={styles.metricHelper}>{helper}</Text>
-    </AppCard>
-  );
-}
+function Section({ title, children }: { title: string; children: ReactNode }) {
+  const styles = useThemedStyles(createStyles);
 
-function InfoRow({ label, value, accent = false }: { label: string; value: string; accent?: boolean }) {
   return (
-    <View style={styles.infoRow}>
-      <Text style={styles.infoLabel}>{label}</Text>
-      <Text style={[styles.infoValue, accent && styles.infoValueAccent]}>{value}</Text>
+    <View style={styles.section}>
+      <Text style={styles.sectionTitle} accessibilityRole="header">
+        {title}
+      </Text>
+      {children}
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.background,
-  },
-  content: {
-    paddingBottom: 110,
-  },
-  heroCard: {
-    marginHorizontal: Spacing.md,
-    marginBottom: Spacing.md,
-  },
-  heroTop: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.md,
-  },
-  avatar: {
-    width: 78,
-    height: 78,
-    borderRadius: 39,
-    backgroundColor: Colors.text,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  avatarText: {
-    ...Typography.display,
-    color: Colors.background,
-  },
-  heroMeta: {
-    flex: 1,
-  },
-  heroName: {
-    ...Typography.titleMd,
-    color: Colors.text,
-  },
-  heroSub: {
-    ...Typography.body,
-    color: Colors.textMuted,
-    marginTop: 4,
-  },
-  heroActions: {
-    flexDirection: 'row',
-    gap: Spacing.sm,
-    marginTop: Spacing.md,
-  },
-  heroButton: {
-    flex: 1,
-  },
-  metricsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: Spacing.sm,
-    marginHorizontal: Spacing.md,
-    marginBottom: Spacing.md,
-  },
-  metricCard: {
-    flex: 1,
-    minWidth: '45%',
-  },
-  metricValue: {
-    ...Typography.display,
-    color: Colors.text,
-  },
-  metricLabel: {
-    ...Typography.label,
-    color: Colors.text,
-    marginTop: Spacing.xs,
-  },
-  metricHelper: {
-    ...Typography.caption,
-    color: Colors.textDim,
-    marginTop: 4,
-  },
-  section: {
-    marginHorizontal: Spacing.md,
-    marginBottom: Spacing.md,
-  },
-  sectionTitle: {
-    ...Typography.heading,
-    color: Colors.text,
-    marginBottom: Spacing.sm,
-  },
-  infoRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: Spacing.sm,
-    borderTopWidth: 1,
-    borderTopColor: Colors.border,
-    gap: Spacing.md,
-  },
-  infoLabel: {
-    ...Typography.body,
-    color: Colors.textMuted,
-    flex: 1,
-  },
-  infoValue: {
-    ...Typography.bodyStrong,
-    color: Colors.text,
-    textAlign: 'right',
-    flexShrink: 1,
-  },
-  infoValueAccent: {
-    color: Colors.warning,
-  },
-  signOutButton: {
-    marginHorizontal: Spacing.md,
-    marginTop: Spacing.xs,
-  },
-});
+function InfoRow({ label, value, first = false }: { label: string; value: string; first?: boolean }) {
+  const styles = useThemedStyles(createStyles);
+
+  return (
+    <View style={[styles.row, !first && styles.rowDivider]} accessible accessibilityLabel={`${label} : ${value}`}>
+      <Text style={styles.rowLabel}>{label}</Text>
+      <Text style={styles.rowValue}>{value}</Text>
+    </View>
+  );
+}
+
+function LinkRow({
+  label,
+  value,
+  onPress,
+  first = false,
+  role = 'button',
+}: {
+  label: string;
+  value?: string;
+  onPress: () => void;
+  first?: boolean;
+  role?: 'button' | 'link';
+}) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(createStyles);
+
+  return (
+    <Pressable
+      style={({ pressed }) => [styles.row, !first && styles.rowDivider, pressed && styles.pressed]}
+      onPress={onPress}
+      accessibilityRole={role}
+      accessibilityLabel={value ? `${label}, ${value}` : label}
+    >
+      <Text style={styles.linkLabel}>{label}</Text>
+      {value ? <Text style={styles.linkValue}>{value}</Text> : null}
+      <Icon name="chevron-right" size={20} color={colors.ink3} />
+    </Pressable>
+  );
+}
+
+const createStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: colors.bg,
+    },
+    content: {
+      paddingHorizontal: Spacing.lg,
+      gap: Spacing.xl,
+    },
+    identity: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Spacing.md,
+    },
+    avatar: {
+      width: 64,
+      height: 64,
+      borderRadius: 32,
+      backgroundColor: colors.ink,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    avatarText: {
+      ...Typography.title,
+      color: colors.onInk,
+    },
+    identityCopy: {
+      flex: 1,
+    },
+    name: {
+      ...Typography.title,
+      color: colors.ink,
+    },
+    identitySub: {
+      ...Typography.body,
+      color: colors.ink2,
+      marginTop: 2,
+    },
+    section: {
+      gap: Spacing.sm,
+    },
+    sectionTitle: {
+      ...Typography.heading,
+      color: colors.ink,
+    },
+    statusRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: Spacing.sm,
+    },
+    statusTitle: {
+      ...Typography.titleMd,
+      color: colors.ink,
+    },
+    statusText: {
+      ...Typography.body,
+      color: colors.ink2,
+      marginTop: Spacing.xxs,
+    },
+    premiumButton: {
+      marginTop: Spacing.md,
+    },
+    listCard: {
+      paddingVertical: 0,
+    },
+    row: {
+      minHeight: 52,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: Spacing.md,
+      paddingVertical: Spacing.xs,
+    },
+    rowDivider: {
+      borderTopWidth: 1,
+      borderTopColor: colors.line,
+    },
+    rowLabel: {
+      ...Typography.body,
+      color: colors.ink2,
+      flex: 1,
+    },
+    rowValue: {
+      ...Typography.bodyStrong,
+      ...Numerals,
+      color: colors.ink,
+      textAlign: 'right',
+      flexShrink: 1,
+    },
+    linkLabel: {
+      ...Typography.bodyStrong,
+      color: colors.ink,
+      flex: 1,
+    },
+    linkValue: {
+      ...Typography.body,
+      color: colors.ink2,
+      flexShrink: 1,
+      textAlign: 'right',
+    },
+    caption: {
+      ...Typography.caption,
+      color: colors.ink3,
+    },
+    signOut: {
+      minHeight: 48,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: Spacing.xs,
+    },
+    pressed: {
+      opacity: 0.6,
+    },
+    signOutLabel: {
+      ...Typography.bodyStrong,
+      color: colors.error,
+    },
+    version: {
+      ...Typography.caption,
+      color: colors.ink3,
+      textAlign: 'center',
+      marginTop: -Spacing.md,
+    },
+  });

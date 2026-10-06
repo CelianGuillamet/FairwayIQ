@@ -3,20 +3,26 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
+  Pressable,
+  ScrollView,
   StyleSheet,
   Text,
-  TouchableOpacity,
-  View,
 } from 'react-native';
 import { Link, router } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase } from '../../lib/supabase';
-import { Colors } from '../../constants';
-import { DecorativeBackground } from '../../components/ui/DecorativeBackground';
+import { Fonts, Spacing, Typography } from '../../constants';
+import type { ThemeColors } from '../../constants';
+import { useThemedStyles } from '../../lib/theme';
+import { AuthHero } from '../../components/auth/AuthHero';
 import { AppCard } from '../../components/ui/AppCard';
 import { AppButton } from '../../components/ui/AppButton';
 import { AppInput } from '../../components/ui/AppInput';
+import { TextAction } from '../../components/ui/TextAction';
 
 export default function LoginScreen() {
+  const insets = useSafeAreaInsets();
+  const styles = useThemedStyles(createStyles);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -66,18 +72,23 @@ export default function LoginScreen() {
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
-      <DecorativeBackground />
-      <View style={styles.inner}>
-        <View style={styles.hero}>
-          <View style={styles.logoBadge}>
-            <Text style={styles.logoGlyph}>⛳</Text>
-          </View>
-          <Text style={styles.logo}>FairwayIQ</Text>
-          <Text style={styles.tagline}>Le cockpit d’analyse golf, pensé comme un vrai produit premium.</Text>
-        </View>
+      <ScrollView
+        contentContainerStyle={[
+          styles.scroll,
+          { paddingTop: insets.top + 24, paddingBottom: Math.max(insets.bottom, 16) + 24 },
+        ]}
+        keyboardShouldPersistTaps="handled"
+      >
+        <AuthHero
+          icon="flag"
+          title="FairwayIQ"
+          subtitle="Le cockpit d’analyse golf, pensé comme un vrai produit premium."
+        />
 
-        <AppCard accent="highlight" style={styles.formCard}>
-          <Text style={styles.formTitle}>Connexion</Text>
+        <AppCard style={styles.formCard}>
+          <Text style={styles.formTitle} accessibilityRole="header">
+            Connexion
+          </Text>
           <Text style={styles.formSubtitle}>Retrouve tes rounds, tes stats et ton coach IA.</Text>
 
           <AppInput
@@ -99,6 +110,14 @@ export default function LoginScreen() {
             autoComplete="password"
           />
 
+          <TextAction
+            label="Mot de passe oublié ?"
+            tone="muted"
+            role="link"
+            onPress={() => router.push({ pathname: '/(auth)/forgot-password', params: { email: email.trim() } })}
+            style={styles.forgotLink}
+          />
+
           <AppButton
             label={loading ? 'Connexion...' : 'Se connecter'}
             onPress={handleLogin}
@@ -107,87 +126,62 @@ export default function LoginScreen() {
           />
 
           <Link href="/(auth)/register" asChild>
-            <TouchableOpacity style={styles.link}>
+            <Pressable style={styles.link} accessibilityRole="link">
               <Text style={styles.linkText}>
                 Pas encore de compte ? <Text style={styles.linkBold}>Créer un compte</Text>
               </Text>
-            </TouchableOpacity>
+            </Pressable>
           </Link>
         </AppCard>
-      </View>
+      </ScrollView>
     </KeyboardAvoidingView>
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.background,
-  },
-  inner: {
-    flex: 1,
-    justifyContent: 'center',
-    paddingHorizontal: 24,
-  },
-  hero: {
-    alignItems: 'center',
-    marginBottom: 24,
-  },
-  logoBadge: {
-    width: 68,
-    height: 68,
-    borderRadius: 34,
-    backgroundColor: Colors.primaryMuted,
-    borderWidth: 1,
-    borderColor: Colors.borderStrong,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 14,
-  },
-  logoGlyph: {
-    fontSize: 30,
-  },
-  logo: {
-    fontSize: 34,
-    fontWeight: '900',
-    color: Colors.text,
-  },
-  tagline: {
-    fontSize: 15,
-    color: Colors.textMuted,
-    textAlign: 'center',
-    lineHeight: 22,
-    marginTop: 10,
-    paddingHorizontal: 18,
-  },
-  formCard: {
-    paddingVertical: 22,
-  },
-  formTitle: {
-    fontSize: 24,
-    fontWeight: '900',
-    color: Colors.text,
-  },
-  formSubtitle: {
-    fontSize: 14,
-    color: Colors.textMuted,
-    lineHeight: 21,
-    marginTop: 6,
-    marginBottom: 18,
-  },
-  primaryButton: {
-    marginTop: 6,
-  },
-  link: {
-    marginTop: 18,
-    alignItems: 'center',
-  },
-  linkText: {
-    color: Colors.textMuted,
-    fontSize: 14,
-  },
-  linkBold: {
-    color: Colors.accentBlue,
-    fontWeight: '800',
-  },
-});
+const createStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: colors.bg,
+    },
+    scroll: {
+      flexGrow: 1,
+      justifyContent: 'center',
+      paddingHorizontal: 24,
+    },
+    formCard: {
+      paddingVertical: 22,
+    },
+    formTitle: {
+      ...Typography.titleMd,
+      color: colors.ink,
+    },
+    formSubtitle: {
+      ...Typography.body,
+      color: colors.ink2,
+      marginTop: 6,
+      marginBottom: 18,
+    },
+    forgotLink: {
+      alignSelf: 'flex-end',
+      marginTop: -Spacing.xs,
+    },
+    primaryButton: {
+      marginTop: 6,
+    },
+    link: {
+      minHeight: 44,
+      marginTop: 10,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    linkText: {
+      ...Typography.body,
+      color: colors.ink2,
+    },
+    linkBold: {
+      fontFamily: Fonts.sansBold,
+      color: colors.ink,
+      textDecorationLine: 'underline',
+    },
+  });

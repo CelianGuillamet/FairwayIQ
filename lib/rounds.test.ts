@@ -11,6 +11,7 @@ import {
   getHandicapIndexEstimate,
   getScorecardProgress,
   getScoreToParTrend,
+  hasRecordedHoleDetails,
 } from './rounds';
 import type { Round, RoundDraftHole } from '../types';
 
@@ -478,5 +479,53 @@ describe('getScoreToParTrend', () => {
     const rounds = [...makeDatedRounds([10, 10]), ...makeDatedRounds([3, 3, 3, 5], { holes: 9 })];
 
     expect(getScoreToParTrend(rounds)).toEqual({ holes: 9, delta: 2 });
+  });
+});
+
+describe('hasRecordedHoleDetails (heuristic: putts other than 2, a green hit or a fairway hit on at least one hole)', () => {
+  it('is false for a card that still holds the new-hole defaults', () => {
+    expect(hasRecordedHoleDetails(createDefaultScorecard(18))).toBe(false);
+  });
+
+  it('is false for a card where only the scores were tapped', () => {
+    const scorecard = createDefaultScorecard(18).map((hole) => ({ ...hole, score: hole.par + 1, completed: true }));
+
+    expect(hasRecordedHoleDetails(scorecard)).toBe(false);
+  });
+
+  it('is false for a full card played with 2 putts everywhere and no green or fairway hit, which cannot be told from the defaults', () => {
+    const scorecard = Array.from({ length: 18 }, (_, index) => makeHole({ hole_number: index + 1, putts: 2, gir: false, fairway_hit: false }));
+
+    expect(hasRecordedHoleDetails(scorecard)).toBe(false);
+  });
+
+  it('is true as soon as one hole has other than 2 putts', () => {
+    const base = createDefaultScorecard(18);
+
+    expect(hasRecordedHoleDetails([{ ...base[0], putts: 3 }, ...base.slice(1)])).toBe(true);
+    expect(hasRecordedHoleDetails([{ ...base[0], putts: 1 }, ...base.slice(1)])).toBe(true);
+    expect(hasRecordedHoleDetails([{ ...base[0], putts: 0 }, ...base.slice(1)])).toBe(true);
+  });
+
+  it('is true as soon as one green is hit', () => {
+    const base = createDefaultScorecard(18);
+
+    expect(hasRecordedHoleDetails([...base.slice(0, 5), { ...base[5], gir: true }, ...base.slice(6)])).toBe(true);
+  });
+
+  it('is true as soon as one fairway is hit', () => {
+    const base = createDefaultScorecard(18);
+
+    expect(hasRecordedHoleDetails([{ ...base[0], fairway_hit: true }, ...base.slice(1)])).toBe(true);
+  });
+
+  it('does not take missing values for entries', () => {
+    expect(hasRecordedHoleDetails([{ putts: null, gir: null, fairway_hit: null }, {}])).toBe(false);
+  });
+
+  it('is false without any hole', () => {
+    expect(hasRecordedHoleDetails([])).toBe(false);
+    expect(hasRecordedHoleDetails(null)).toBe(false);
+    expect(hasRecordedHoleDetails(undefined)).toBe(false);
   });
 });

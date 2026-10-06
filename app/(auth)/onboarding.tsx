@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import {
   View,
   Text,
-  TouchableOpacity,
+  Pressable,
   StyleSheet,
   ScrollView,
   Alert,
@@ -12,48 +12,47 @@ import {
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuthStore } from '../../stores/auth';
-import { Colors, HANDICAP_LEVELS, PLAY_FREQUENCIES, GOALS } from '../../constants';
-import { requestNotificationPermissions, scheduleWeeklyNotifications } from '../../lib/notifications';
-import { DecorativeBackground } from '../../components/ui/DecorativeBackground';
+import { HANDICAP_LEVELS, PLAY_FREQUENCIES, GOALS, Radius, Typography } from '../../constants';
+import type { ThemeColors } from '../../constants';
+import { useTheme, useThemedStyles } from '../../lib/theme';
 import { AppCard } from '../../components/ui/AppCard';
 import { AppButton } from '../../components/ui/AppButton';
 import { AppInput } from '../../components/ui/AppInput';
 import { ChoiceTile } from '../../components/ui/ChoiceTile';
+import { Icon, type IconName } from '../../components/ui/Icon';
 
 
 const STEPS = ['name', 'level', 'frequency', 'goal'] as const;
 type Step = typeof STEPS[number];
 
-const STEP_CONTENT: Record<Step, { eyebrow: string; title: string; subtitle: string; icon: string }> = {
+const STEP_CONTENT: Record<Step, { title: string; subtitle: string; icon: IconName }> = {
   name: {
-    eyebrow: 'Étape 1',
     title: 'Présente-toi',
     subtitle: 'On personnalise les messages, le ton et les recommandations dès le départ.',
-    icon: '✦',
+    icon: 'user',
   },
   level: {
-    eyebrow: 'Étape 2',
     title: 'Calibrons ton niveau',
     subtitle: 'Un handicap approximatif suffit pour adapter les diagnostics et les drills.',
-    icon: '🏌️',
+    icon: 'flag',
   },
   frequency: {
-    eyebrow: 'Étape 3',
     title: 'Comprendre ton rythme',
     subtitle: 'La fréquence de jeu permet de proposer un coaching réaliste et tenable.',
-    icon: '◔',
+    icon: 'clock',
   },
   goal: {
-    eyebrow: 'Étape 4',
     title: 'Choisir le bon cap',
     subtitle: 'On priorisera ensuite les leviers les plus utiles pour ton jeu.',
-    icon: '◎',
+    icon: 'target',
   },
 };
 
 export default function OnboardingScreen() {
   const { user, completeOnboarding, signOut } = useAuthStore();
   const insets = useSafeAreaInsets();
+  const { colors } = useTheme();
+  const styles = useThemedStyles(createStyles);
   const [step, setStep] = useState<Step>('name');
   const [displayName, setDisplayName] = useState('');
   const [handicap, setHandicap] = useState<number | null>(null);
@@ -62,7 +61,6 @@ export default function OnboardingScreen() {
   const [loading, setLoading] = useState(false);
 
   const currentIndex = STEPS.indexOf(step);
-  const progress = (currentIndex + 1) / STEPS.length;
   const stepContent = STEP_CONTENT[step];
 
   const selectedSummary = useMemo(() => ({
@@ -101,8 +99,6 @@ export default function OnboardingScreen() {
         return;
       }
 
-      const granted = await requestNotificationPermissions();
-      if (granted) await scheduleWeeklyNotifications();
       router.replace('/paywall' as any);
     } catch (error: any) {
       Alert.alert('Erreur', error?.message ?? 'Impossible d’enregistrer ton profil.');
@@ -116,7 +112,6 @@ export default function OnboardingScreen() {
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
-      <DecorativeBackground />
       <ScrollView
         contentContainerStyle={[styles.scroll, { paddingTop: insets.top + 16 }]}
         keyboardShouldPersistTaps="handled"
@@ -124,8 +119,19 @@ export default function OnboardingScreen() {
         <View style={styles.topRow}>
           <View style={styles.progressWrap}>
             <Text style={styles.progressLabel}>Configuration joueur</Text>
-            <View style={styles.progressTrack}>
-              <View style={[styles.progressFill, { width: `${progress * 100}%` }]} />
+            <View
+              style={styles.progressTrack}
+              accessible
+              accessibilityRole="progressbar"
+              accessibilityLabel={`Étape ${currentIndex + 1} sur ${STEPS.length}`}
+              accessibilityValue={{ min: 1, max: STEPS.length, now: currentIndex + 1 }}
+            >
+              {STEPS.map((item, index) => (
+                <View
+                  key={item}
+                  style={[styles.progressSegment, index <= currentIndex && styles.progressSegmentDone]}
+                />
+              ))}
             </View>
             <Text style={styles.progressText}>
               Étape {currentIndex + 1} / {STEPS.length}
@@ -133,20 +139,26 @@ export default function OnboardingScreen() {
           </View>
 
           {currentIndex === 0 ? (
-            <TouchableOpacity style={styles.signOutLink} onPress={signOut}>
+            <Pressable
+              style={styles.signOutLink}
+              onPress={signOut}
+              accessibilityRole="button"
+              accessibilityLabel="Se déconnecter"
+            >
               <Text style={styles.signOutLinkText}>Se déconnecter</Text>
-            </TouchableOpacity>
+            </Pressable>
           ) : null}
         </View>
 
-        <AppCard accent="highlight" style={styles.heroCard}>
+        <View style={styles.hero}>
           <View style={styles.heroBadge}>
-            <Text style={styles.heroBadgeText}>{stepContent.icon}</Text>
+            <Icon name={stepContent.icon} size={24} color={colors.ink} />
           </View>
-          <Text style={styles.heroEyebrow}>{stepContent.eyebrow}</Text>
-          <Text style={styles.heroTitle}>{stepContent.title}</Text>
+          <Text style={styles.heroTitle} accessibilityRole="header">
+            {stepContent.title}
+          </Text>
           <Text style={styles.heroSubtitle}>{stepContent.subtitle}</Text>
-        </AppCard>
+        </View>
 
         <AppCard style={styles.stepCard}>
           {step === 'name' ? (
@@ -196,7 +208,9 @@ export default function OnboardingScreen() {
         </AppCard>
 
         <AppCard accent="soft" style={styles.summaryCard}>
-          <Text style={styles.summaryTitle}>Résumé du profil</Text>
+          <Text style={styles.summaryTitle} accessibilityRole="header">
+            Résumé du profil
+          </Text>
           <SummaryRow label="Joueur" value={displayName.trim() || 'À définir'} />
           <SummaryRow label="Niveau" value={selectedSummary.handicap} />
           <SummaryRow label="Fréquence" value={selectedSummary.frequency} />
@@ -226,144 +240,133 @@ export default function OnboardingScreen() {
 }
 
 function SummaryRow({ label, value }: { label: string; value: string }) {
+  const styles = useThemedStyles(createStyles);
+
   return (
-    <View style={styles.summaryRow}>
+    <View style={styles.summaryRow} accessible accessibilityLabel={`${label} : ${value}`}>
       <Text style={styles.summaryLabel}>{label}</Text>
       <Text style={styles.summaryValue}>{value}</Text>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.background,
-  },
-  scroll: {
-    flexGrow: 1,
-    paddingHorizontal: 20,
-    paddingBottom: 24,
-  },
-  topRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 12,
-    marginBottom: 18,
-  },
-  progressWrap: {
-    flex: 1,
-  },
-  progressLabel: {
-    color: Colors.text,
-    fontSize: 14,
-    fontWeight: '800',
-    marginBottom: 8,
-  },
-  progressTrack: {
-    height: 8,
-    borderRadius: 999,
-    backgroundColor: Colors.surface,
-    overflow: 'hidden',
-  },
-  progressFill: {
-    height: '100%',
-    backgroundColor: Colors.text,
-    borderRadius: 999,
-  },
-  progressText: {
-    color: Colors.textDim,
-    fontSize: 12,
-    marginTop: 8,
-  },
-  signOutLink: {
-    paddingTop: 2,
-  },
-  signOutLinkText: {
-    color: Colors.textDim,
-    fontSize: 13,
-  },
-  heroCard: {
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  heroBadge: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: Colors.surfaceElevated,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 14,
-  },
-  heroBadgeText: {
-    color: Colors.text,
-    fontSize: 24,
-    fontWeight: '800',
-  },
-  heroEyebrow: {
-    color: Colors.textDim,
-    fontSize: 12,
-    fontWeight: '800',
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-    marginBottom: 6,
-  },
-  heroTitle: {
-    color: Colors.text,
-    fontSize: 28,
-    fontWeight: '900',
-    textAlign: 'center',
-  },
-  heroSubtitle: {
-    color: Colors.textMuted,
-    fontSize: 15,
-    lineHeight: 22,
-    textAlign: 'center',
-    marginTop: 10,
-  },
-  stepCard: {
-    marginBottom: 16,
-  },
-  summaryCard: {
-    marginBottom: 12,
-  },
-  summaryTitle: {
-    color: Colors.text,
-    fontSize: 15,
-    fontWeight: '800',
-    marginBottom: 12,
-  },
-  summaryRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 10,
-    borderTopWidth: 1,
-    borderTopColor: Colors.border,
-  },
-  summaryLabel: {
-    color: Colors.textMuted,
-    fontSize: 14,
-  },
-  summaryValue: {
-    color: Colors.text,
-    fontSize: 14,
-    fontWeight: '700',
-    flexShrink: 1,
-    textAlign: 'right',
-    paddingLeft: 12,
-  },
-  footer: {
-    flexDirection: 'row',
-    paddingHorizontal: 20,
-    paddingTop: 16,
-    gap: 12,
-    backgroundColor: Colors.background,
-  },
-  secondaryAction: {
-    flex: 1,
-  },
-  primaryAction: {
-    flex: 2,
-  },
-});
+const createStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: colors.bg,
+    },
+    scroll: {
+      flexGrow: 1,
+      paddingHorizontal: 20,
+      paddingBottom: 24,
+    },
+    topRow: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: 12,
+      marginBottom: 24,
+    },
+    progressWrap: {
+      flex: 1,
+    },
+    progressLabel: {
+      ...Typography.label,
+      color: colors.ink2,
+      marginBottom: 8,
+    },
+    progressTrack: {
+      flexDirection: 'row',
+      gap: 5,
+    },
+    progressSegment: {
+      flex: 1,
+      height: 6,
+      borderRadius: 3,
+      backgroundColor: colors.sunk,
+    },
+    progressSegmentDone: {
+      backgroundColor: colors.green,
+    },
+    progressText: {
+      ...Typography.caption,
+      color: colors.ink3,
+      marginTop: 8,
+    },
+    signOutLink: {
+      minHeight: 44,
+      justifyContent: 'center',
+    },
+    signOutLinkText: {
+      ...Typography.label,
+      color: colors.ink2,
+      textDecorationLine: 'underline',
+    },
+    hero: {
+      marginBottom: 20,
+    },
+    heroBadge: {
+      width: 48,
+      height: 48,
+      borderRadius: Radius.md,
+      backgroundColor: colors.sunk,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginBottom: 16,
+    },
+    heroTitle: {
+      ...Typography.title,
+      color: colors.ink,
+    },
+    heroSubtitle: {
+      ...Typography.body,
+      color: colors.ink2,
+      marginTop: 8,
+    },
+    stepCard: {
+      marginBottom: 16,
+    },
+    summaryCard: {
+      marginBottom: 12,
+    },
+    summaryTitle: {
+      ...Typography.heading,
+      color: colors.ink,
+      marginBottom: 12,
+    },
+    summaryRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      minHeight: 44,
+      paddingVertical: 10,
+      borderTopWidth: 1,
+      borderTopColor: colors.line,
+    },
+    summaryLabel: {
+      ...Typography.body,
+      color: colors.ink2,
+    },
+    summaryValue: {
+      ...Typography.bodyStrong,
+      color: colors.ink,
+      flexShrink: 1,
+      textAlign: 'right',
+      paddingLeft: 12,
+    },
+    footer: {
+      flexDirection: 'row',
+      paddingHorizontal: 20,
+      paddingTop: 16,
+      gap: 12,
+      backgroundColor: colors.bg,
+      borderTopWidth: 1,
+      borderTopColor: colors.line,
+    },
+    secondaryAction: {
+      flex: 1,
+    },
+    primaryAction: {
+      flex: 2,
+    },
+  });

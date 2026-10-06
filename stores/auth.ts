@@ -1,11 +1,17 @@
 import { create } from 'zustand';
-import type { Session, User } from '@supabase/supabase-js';
+import type { AuthChangeEvent, Session, User } from '@supabase/supabase-js';
 import { supabase, clearStoredAuthSession } from '../lib/supabase';
+import { nextPasswordRecovery } from '../lib/recovery-session';
 import { resetPurchasesUser } from '../lib/purchases';
+import { resetHolesData } from '../lib/holes-data';
 import { clearRoundDraft } from '../lib/round-draft';
 import type { Profile } from '../types';
 import { useRoundsStore } from './rounds';
 import { useDrillsStore } from './drills';
+import { useBagStore } from './bag';
+import { useBadgesStore } from './badges';
+import { useMonthlyChallengeStore } from './monthly-challenge';
+import { useRoundQueueStore } from './round-queue';
 
 export type OnboardingValues = Pick<Profile, 'display_name' | 'handicap' | 'play_frequency' | 'goal'>;
 
@@ -16,7 +22,9 @@ type AuthState = {
   loading: boolean;
   profileLoading: boolean;
   profileError: string | null;
-  setSession: (session: Session | null) => void;
+  passwordRecovery: boolean;
+  setSession: (session: Session | null, event?: AuthChangeEvent) => void;
+  setPasswordRecovery: (value: boolean) => void;
   setProfile: (profile: Profile | null) => void;
   fetchProfile: () => Promise<void>;
   completeOnboarding: (values: OnboardingValues) => Promise<'saved' | 'already_complete'>;
@@ -30,6 +38,11 @@ let profileSequence = 0;
 function resetUserCaches() {
   useRoundsStore.getState().reset();
   useDrillsStore.getState().reset();
+  useBagStore.getState().reset();
+  useBadgesStore.getState().reset();
+  useMonthlyChallengeStore.getState().reset();
+  useRoundQueueStore.getState().reset();
+  resetHolesData();
 }
 
 async function endAuthSession() {
@@ -62,8 +75,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   loading: true,
   profileLoading: false,
   profileError: null,
+  passwordRecovery: false,
 
-  setSession: (session) => {
+  setSession: (session, event) => {
     const prevUserId = get().user?.id;
     const nextUserId = session?.user?.id ?? null;
     const shouldResetProfile = !session || prevUserId !== nextUserId;
@@ -79,8 +93,18 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       loading: false,
       profileLoading: !!session && shouldResetProfile,
       profileError: shouldResetProfile ? null : get().profileError,
+      passwordRecovery: nextPasswordRecovery(
+        get().passwordRecovery,
+        event,
+        !!session,
+        !!prevUserId && prevUserId !== nextUserId
+      ),
     });
   },
+
+  // A PKCE exchange emits SIGNED_IN rather than PASSWORD_RECOVERY, so the reset screen raises this
+  // itself before exchanging, otherwise the sign-in redirect would send the user home first.
+  setPasswordRecovery: (passwordRecovery) => set({ passwordRecovery }),
 
   setProfile: (profile) => {
     profileSequence++;
@@ -201,6 +225,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       loading: false,
       profileLoading: false,
       profileError: null,
+      passwordRecovery: false,
     });
   },
 }));

@@ -1,3 +1,5 @@
+import type { FontVariant } from 'react-native';
+
 export const Spacing = {
   xxs: 4,
   xs: 8,
@@ -11,36 +13,55 @@ export const Spacing = {
 } as const;
 
 export const Radius = {
-  sm: 4,
-  md: 6,
-  lg: 8,
-  xl: 10,
-  xxl: 14,
+  sm: 8,
+  md: 12,
+  lg: 16,
+  xl: 20,
   full: 999,
 } as const;
 
+export const Fonts = {
+  serif: 'Newsreader_500Medium',
+  serifSemiBold: 'Newsreader_600SemiBold',
+  sans: 'HankenGrotesk_400Regular',
+  sansMedium: 'HankenGrotesk_500Medium',
+  sansSemiBold: 'HankenGrotesk_600SemiBold',
+  sansBold: 'HankenGrotesk_700Bold',
+} as const;
+
+export const Numerals = {
+  fontVariant: ['lining-nums', 'tabular-nums'] as FontVariant[],
+} as const;
+
 export const Typography = {
-  display: { fontSize: 40, lineHeight: 42, fontWeight: '800' as const, letterSpacing: -0.8 },
-  title: { fontSize: 30, lineHeight: 34, fontWeight: '800' as const, letterSpacing: -0.5 },
-  titleMd: { fontSize: 22, lineHeight: 27, fontWeight: '700' as const, letterSpacing: -0.3 },
-  heading: { fontSize: 18, lineHeight: 23, fontWeight: '700' as const, letterSpacing: -0.1 },
-  body: { fontSize: 15, lineHeight: 22, fontWeight: '400' as const },
-  bodyStrong: { fontSize: 15, lineHeight: 22, fontWeight: '600' as const },
-  label: { fontSize: 13, lineHeight: 18, fontWeight: '600' as const },
-  caption: { fontSize: 12, lineHeight: 16, fontWeight: '500' as const },
+  numeralXL: {
+    fontFamily: Fonts.serif,
+    fontSize: 72,
+    lineHeight: 76,
+    letterSpacing: -1.4,
+    fontVariant: Numerals.fontVariant,
+  },
+  display: { fontFamily: Fonts.serif, fontSize: 40, lineHeight: 44, letterSpacing: -0.4 },
+  title: { fontFamily: Fonts.serif, fontSize: 28, lineHeight: 32, letterSpacing: -0.3 },
+  titleMd: { fontFamily: Fonts.serif, fontSize: 24, lineHeight: 28, letterSpacing: -0.24 },
+  heading: { fontFamily: Fonts.sansBold, fontSize: 17, lineHeight: 22 },
+  body: { fontFamily: Fonts.sans, fontSize: 15, lineHeight: 22 },
+  bodyStrong: { fontFamily: Fonts.sansSemiBold, fontSize: 15, lineHeight: 22 },
+  label: { fontFamily: Fonts.sansSemiBold, fontSize: 13, lineHeight: 18 },
+  caption: { fontFamily: Fonts.sansMedium, fontSize: 12, lineHeight: 16 },
 } as const;
 
 export const Shadows = {
   card: {
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.16,
-    shadowRadius: 12,
-    elevation: 2,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0,
+    shadowRadius: 0,
+    elevation: 0,
   },
   elevated: {
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.2,
-    shadowRadius: 18,
-    elevation: 4,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 2,
   },
 } as const;

@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
-import { Colors } from '../constants';
-import { supabase, hasPkceCodeVerifier } from '../lib/supabase';
-import { completeAuthCallback, type AuthCallbackOutcome } from '../lib/auth-link';
+import { Typography } from '../constants';
+import type { ThemeColors } from '../constants';
+import { useTheme, useThemedStyles } from '../lib/theme';
+import { supabase, hasPkceCodeVerifier, hasPendingPasswordRecovery } from '../lib/supabase';
+import { completeAuthCallback, readAuthCode, shouldResumePasswordRecovery, type AuthCallbackOutcome } from '../lib/auth-link';
 import { useAuthStore } from '../stores/auth';
-import { DecorativeBackground } from '../components/ui/DecorativeBackground';
 import { AppCard } from '../components/ui/AppCard';
 import { AppButton } from '../components/ui/AppButton';
 
@@ -32,15 +33,17 @@ function getMessage(outcome: AuthCallbackOutcome | null) {
 
 export default function AuthCallbackScreen() {
   const { code } = useLocalSearchParams<{ code?: string | string[] }>();
-  const { session, loading } = useAuthStore();
+  const { session, loading, passwordRecovery } = useAuthStore();
+  const { colors } = useTheme();
+  const styles = useThemedStyles(createStyles);
   const [outcome, setOutcome] = useState<AuthCallbackOutcome | null>(null);
   const handledCode = useRef<string | string[] | undefined | null>(null);
 
   useEffect(() => {
-    if (!loading && session) {
+    if (!loading && session && !passwordRecovery) {
       router.replace('/');
     }
-  }, [loading, session]);
+  }, [loading, session, passwordRecovery]);
 
   useEffect(() => {
     if (loading || handledCode.current === code) {
@@ -48,11 +51,27 @@ export default function AuthCallbackScreen() {
     }
     handledCode.current = code;
 
-    void completeAuthCallback(code, {
-      hasSession: () => !!useAuthStore.getState().session,
-      hasCodeVerifier: hasPkceCodeVerifier,
-      exchange: (authCode) => supabase.auth.exchangeCodeForSession(authCode),
-    }).then(setOutcome);
+    void (async () => {
+      const validCode = readAuthCode(code);
+      const resumeRecovery = await shouldResumePasswordRecovery({
+        code: validCode,
+        hasSession: () => !!useAuthStore.getState().session,
+        hasPendingRecovery: hasPendingPasswordRecovery,
+      });
+
+      if (validCode && resumeRecovery) {
+        router.replace({ pathname: '/reset-password', params: { code: validCode } });
+        return;
+      }
+
+      setOutcome(
+        await completeAuthCallback(code, {
+          hasSession: () => !!useAuthStore.getState().session,
+          hasCodeVerifier: hasPkceCodeVerifier,
+          exchange: (authCode) => supabase.auth.exchangeCodeForSession(authCode),
+        })
+      );
+    })();
   }, [loading, code]);
 
   const { title, subtitle } = getMessage(outcome);
@@ -60,14 +79,15 @@ export default function AuthCallbackScreen() {
 
   return (
     <View style={styles.container}>
-      <DecorativeBackground />
-      <AppCard accent="highlight" style={styles.card}>
-        {waiting ? <ActivityIndicator size="large" color={Colors.text} /> : null}
-        <Text style={styles.title}>{title}</Text>
+      <AppCard style={styles.card}>
+        {waiting ? <ActivityIndicator size="large" color={colors.ink} accessibilityLabel="Chargement" /> : null}
+        <Text style={styles.title} accessibilityRole="header">
+          {title}
+        </Text>
         <Text style={styles.subtitle}>{subtitle}</Text>
         <AppButton
           label="Aller à la connexion"
-          variant="secondary"
+          variant={waiting ? 'secondary' : 'primary'}
           onPress={() => router.replace('/(auth)/login')}
           style={styles.button}
         />
@@ -76,33 +96,33 @@ export default function AuthCallbackScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.background,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 24,
-  },
-  card: {
-    width: '100%',
-    alignItems: 'center',
-  },
-  title: {
-    color: Colors.text,
-    fontSize: 20,
-    fontWeight: '800',
-    marginTop: 14,
-  },
-  subtitle: {
-    color: Colors.textMuted,
-    fontSize: 14,
-    textAlign: 'center',
-    lineHeight: 20,
-    marginTop: 12,
-  },
-  button: {
-    marginTop: 18,
-    width: '100%',
-  },
-});
+const createStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: colors.bg,
+      justifyContent: 'center',
+      alignItems: 'center',
+      paddingHorizontal: 24,
+    },
+    card: {
+      width: '100%',
+      alignItems: 'center',
+    },
+    title: {
+      ...Typography.titleMd,
+      color: colors.ink,
+      textAlign: 'center',
+      marginTop: 14,
+    },
+    subtitle: {
+      ...Typography.body,
+      color: colors.ink2,
+      textAlign: 'center',
+      marginTop: 12,
+    },
+    button: {
+      marginTop: 18,
+      width: '100%',
+    },
+  });

@@ -1,39 +1,92 @@
-import { StyleSheet, Text, View } from 'react-native';
+import type { ReactNode } from 'react';
+import {
+  Platform,
+  Pressable,
+  StyleSheet,
+  View,
+  type GestureResponderEvent,
+  type StyleProp,
+  type ViewStyle,
+} from 'react-native';
 import { Tabs } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Colors, Radius } from '../../constants';
+import { Fonts } from '../../constants';
+import { Icon, type IconName } from '../../components/ui/Icon';
+import { useTheme } from '../../lib/theme';
+
+const TAB_BAR_HEIGHT = 56;
+
+type TabBarButtonProps = {
+  children: ReactNode;
+  style?: StyleProp<ViewStyle>;
+  onPress?: (event: GestureResponderEvent) => void;
+  onLongPress?: ((event: GestureResponderEvent) => void) | null;
+  testID?: string;
+  'aria-label'?: string;
+  'aria-selected'?: boolean;
+};
+
+function TabBarButton({
+  children,
+  style,
+  onPress,
+  onLongPress,
+  testID,
+  'aria-label': label,
+  'aria-selected': selected = false,
+}: TabBarButtonProps) {
+  const { colors } = useTheme();
+
+  return (
+    <Pressable
+      onPress={onPress}
+      onLongPress={onLongPress}
+      testID={testID}
+      accessibilityRole={Platform.OS === 'ios' ? 'button' : 'tab'}
+      accessibilityLabel={label}
+      accessibilityState={{ selected }}
+      style={[style, styles.button]}
+    >
+      {selected ? (
+        <View pointerEvents="none" style={styles.indicatorSlot}>
+          <View style={[styles.indicator, { backgroundColor: colors.ink }]} />
+        </View>
+      ) : null}
+      {children}
+    </Pressable>
+  );
+}
+
+function tabIcon(name: IconName) {
+  return function TabIcon({ color, focused }: { color: string; focused: boolean }) {
+    return <Icon name={name} size={22} color={color} strokeWidth={focused ? 2 : 1.75} />;
+  };
+}
 
 export default function TabsLayout() {
   const insets = useSafeAreaInsets();
+  const { colors } = useTheme();
+  const bottomInset = Math.max(insets.bottom, 6);
 
   return (
     <Tabs
       screenOptions={{
         headerShown: false,
+        sceneStyle: { backgroundColor: colors.bg },
         tabBarStyle: {
-          position: 'absolute',
-          left: 16,
-          right: 16,
-          bottom: 12,
-          backgroundColor: Colors.surface,
-          borderTopColor: Colors.borderStrong,
+          backgroundColor: colors.bg,
+          borderTopColor: colors.line,
           borderTopWidth: 1,
-          borderRadius: Radius.xxl,
-          height: 72 + insets.bottom,
-          paddingTop: 8,
-          paddingBottom: Math.max(insets.bottom, 10),
-          paddingHorizontal: 8,
-          shadowColor: Colors.black,
-          shadowOffset: { width: 0, height: 16 },
-          shadowOpacity: 0.28,
-          shadowRadius: 24,
-          elevation: 10,
+          height: TAB_BAR_HEIGHT + bottomInset,
+          paddingBottom: bottomInset,
+          elevation: 0,
+          shadowOpacity: 0,
         },
-        tabBarActiveBackgroundColor: Colors.surfaceAccent,
-        tabBarActiveTintColor: Colors.text,
-        tabBarInactiveTintColor: Colors.textDim,
-        tabBarLabelStyle: { fontSize: 11, fontWeight: '800', marginTop: 2, letterSpacing: 0.2 },
-        tabBarItemStyle: { borderRadius: 18, marginHorizontal: 2 },
+        tabBarActiveTintColor: colors.ink,
+        tabBarInactiveTintColor: colors.ink3,
+        tabBarAllowFontScaling: false,
+        tabBarLabelStyle: { fontFamily: Fonts.sansSemiBold, fontSize: 12, lineHeight: 16 },
+        tabBarButton: (props) => <TabBarButton {...props} />,
       }}
     >
       <Tabs.Screen
@@ -41,9 +94,7 @@ export default function TabsLayout() {
         options={{
           title: 'Accueil',
           tabBarAccessibilityLabel: 'Accueil',
-          tabBarIcon: ({ color, focused }) => (
-            <TabIcon type="home" color={color} focused={focused} />
-          ),
+          tabBarIcon: tabIcon('home'),
         }}
       />
       <Tabs.Screen
@@ -51,19 +102,15 @@ export default function TabsLayout() {
         options={{
           title: 'Score',
           tabBarAccessibilityLabel: 'Score',
-          tabBarIcon: ({ color, focused }) => (
-            <TabIcon type="score" color={color} focused={focused} />
-          ),
+          tabBarIcon: tabIcon('flag'),
         }}
       />
       <Tabs.Screen
         name="drills"
         options={{
-          title: 'Drills',
-          tabBarAccessibilityLabel: 'Drills',
-          tabBarIcon: ({ color, focused }) => (
-            <TabIcon type="drills" color={color} focused={focused} />
-          ),
+          title: 'Exercices',
+          tabBarAccessibilityLabel: 'Exercices',
+          tabBarIcon: tabIcon('target'),
         }}
       />
       <Tabs.Screen
@@ -71,149 +118,28 @@ export default function TabsLayout() {
         options={{
           title: 'Profil',
           tabBarAccessibilityLabel: 'Profil',
-          tabBarIcon: ({ color, focused }) => (
-            <TabIcon type="profile" color={color} focused={focused} />
-          ),
+          tabBarIcon: tabIcon('user'),
         }}
       />
     </Tabs>
   );
 }
 
-function TabIcon({
-  type,
-  color,
-  focused,
-}: {
-  type: 'home' | 'score' | 'drills' | 'profile';
-  color: string;
-  focused: boolean;
-}) {
-  if (type === 'home') {
-    return (
-      <View style={stylesIcon.iconBox}>
-        <View style={[stylesIcon.homeRoof, { borderBottomColor: color }]} />
-        <View
-          style={[
-            stylesIcon.homeBase,
-            { borderColor: color },
-            focused && { backgroundColor: color },
-          ]}
-        />
-      </View>
-    );
-  }
-
-  if (type === 'score') {
-    return (
-      <View style={stylesIcon.iconBox}>
-        <View style={[stylesIcon.flagPole, { backgroundColor: color }]} />
-        <View
-          style={[
-            stylesIcon.flag,
-            { borderColor: color },
-            focused && { backgroundColor: color },
-          ]}
-        />
-      </View>
-    );
-  }
-
-  if (type === 'drills') {
-    return (
-      <View style={stylesIcon.iconBox}>
-        <View style={[stylesIcon.targetOuter, { borderColor: color }]}>
-          <View style={[stylesIcon.targetInner, { backgroundColor: focused ? color : 'transparent', borderColor: color }]} />
-        </View>
-      </View>
-    );
-  }
-
-  return (
-    <View style={stylesIcon.iconBox}>
-      <View
-        style={[
-          stylesIcon.profileHead,
-          { borderColor: color },
-          focused && { backgroundColor: color },
-        ]}
-      />
-      <View style={[stylesIcon.profileBody, { borderColor: color }]} />
-    </View>
-  );
-}
-
-const stylesIcon = StyleSheet.create({
-  iconBox: {
-    width: 22,
-    height: 20,
-    alignItems: 'center',
+const styles = StyleSheet.create({
+  button: {
     justifyContent: 'center',
   },
-  homeRoof: {
-    width: 0,
-    height: 0,
-    borderLeftWidth: 7,
-    borderRightWidth: 7,
-    borderBottomWidth: 7,
-    borderLeftColor: 'transparent',
-    borderRightColor: 'transparent',
-    marginBottom: 1,
-  },
-  homeBase: {
-    width: 14,
-    height: 9,
-    borderWidth: 1.6,
-    borderTopWidth: 0,
-    borderBottomLeftRadius: 4,
-    borderBottomRightRadius: 4,
-  },
-  flagPole: {
+  indicatorSlot: {
     position: 'absolute',
-    left: 5,
-    top: 1,
-    width: 1.8,
-    height: 18,
-    borderRadius: 999,
+    top: -1,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
   },
-  flag: {
-    position: 'absolute',
-    left: 7,
-    top: 2,
-    width: 10,
-    height: 7,
-    borderWidth: 1.6,
-    borderLeftWidth: 0,
-    borderTopRightRadius: 3,
+  indicator: {
+    width: 28,
+    height: 3,
+    borderBottomLeftRadius: 3,
     borderBottomRightRadius: 3,
-  },
-  targetOuter: {
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-    borderWidth: 1.6,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  targetInner: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    borderWidth: 1.4,
-  },
-  profileHead: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    borderWidth: 1.6,
-    marginBottom: 2,
-  },
-  profileBody: {
-    width: 15,
-    height: 8,
-    borderWidth: 1.6,
-    borderTopLeftRadius: 8,
-    borderTopRightRadius: 8,
-    borderBottomWidth: 0,
   },
 });
